@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoodFood Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .login-screen { display: flex; }
+    .dashboard { display: none; }
+    .dashboard.active { display: block; }
+    .login-screen.hidden { display: none; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-screen min-h-screen items-center justify-center">
+    <div class="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md mx-4">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">MoodFood Admin</h1>
+        <p class="text-gray-500 mt-2">Sign in to view analytics and manage waitlist</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+          <input type="text" id="username" required
+            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <input type="password" id="password" required
+            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none">
+        </div>
+        <button type="submit" 
+          class="w-full bg-gradient-to-r from-orange-500 to-purple-500 text-white font-medium py-3 rounded-xl hover:opacity-90 transition-opacity">
+          Sign In
+        </button>
+      </form>
+
+      <p id="loginError" class="text-red-500 text-sm mt-4 text-center hidden"></p>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="dashboard">
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-purple-500 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+              </svg>
+            </div>
+            <span class="text-xl font-bold text-gray-900">MoodFood Admin</span>
+          </div>
+          <button onclick="logout()" class="text-gray-500 hover:text-gray-700 font-medium">
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-2xl shadow-sm">
+          <div class="text-sm text-gray-500 mb-1">Total Waitlist</div>
+          <div id="waitlistCount" class="text-3xl font-bold text-gray-900">-</div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-sm">
+          <div class="text-sm text-gray-500 mb-1">Quiz Completions</div>
+          <div id="quizCount" class="text-3xl font-bold text-gray-900">-</div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-sm">
+          <div class="text-sm text-gray-500 mb-1">Page Views</div>
+          <div id="pageViews" class="text-3xl font-bold text-gray-900">-</div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-sm">
+          <div class="text-sm text-gray-500 mb-1">Quiz Started</div>
+          <div id="quizStarted" class="text-3xl font-bold text-gray-900">-</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-2xl shadow-sm mb-6">
+        <div class="border-b border-gray-200">
+          <nav class="flex space-x-8 px-6">
+            <button onclick="showTab('analytics')" id="tab-analytics" 
+              class="tab-btn py-4 px-1 border-b-2 border-orange-500 text-orange-600 font-medium">
+              Analytics
+            </button>
+            <button onclick="showTab('waitlist')" id="tab-waitlist"
+              class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium">
+              Waitlist
+            </button>
+          </nav>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="panel-analytics" class="tab-panel p-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">Event Breakdown</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700 rounded-l-lg">Event Name</th>
+                  <th class="text-right px-4 py-3 text-sm font-medium text-gray-700 rounded-r-lg">Count</th>
+                </tr>
+              </thead>
+              <tbody id="eventsTable" class="divide-y divide-gray-100">
+                <!-- Events will be inserted here -->
+              </tbody>
+            </table>
+          </div>
+
+          <h2 class="text-lg font-semibold text-gray-900 mb-4 mt-8">Daily Stats (Last 7 Days)</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700 rounded-l-lg">Date</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700">Event</th>
+                  <th class="text-right px-4 py-3 text-sm font-medium text-gray-700 rounded-r-lg">Count</th>
+                </tr>
+              </thead>
+              <tbody id="dailyStatsTable" class="divide-y divide-gray-100">
+                <!-- Daily stats will be inserted here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Waitlist Tab -->
+        <div id="panel-waitlist" class="tab-panel p-6 hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700 rounded-l-lg">Name</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700">Email</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700">City</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700">Cuisine</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-gray-700 rounded-r-lg">Joined</th>
+                </tr>
+              </thead>
+              <tbody id="waitlistTable" class="divide-y divide-gray-100">
+                <!-- Waitlist entries will be inserted here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let authCredentials = '';
+
+    // Login form handler
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      
+      authCredentials = 'Basic ' + btoa(username + ':' + password);
+      
+      // Test authentication
+      try {
+        const response = await fetch('/api/admin/analytics', {
+          headers: { 'Authorization': authCredentials }
+        });
+        
+        if (response.ok) {
+          document.getElementById('loginScreen').classList.add('hidden');
+          document.getElementById('dashboard').classList.add('active');
+          loadData();
+        } else {
+          document.getElementById('loginError').textContent = 'Invalid credentials';
+          document.getElementById('loginError').classList.remove('hidden');
+        }
+      } catch (error) {
+        document.getElementById('loginError').textContent = 'Failed to connect to server';
+        document.getElementById('loginError').classList.remove('hidden');
+      }
+    });
+
+    // Logout
+    function logout() {
+      authCredentials = '';
+      document.getElementById('loginScreen').classList.remove('hidden');
+      document.getElementById('dashboard').classList.remove('active');
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+    }
+
+    // Tab switching
+    function showTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-orange-500', 'text-orange-600');
+        btn.classList.add('border-transparent', 'text-gray-500');
+      });
+      document.getElementById(`tab-${tab}`).classList.remove('border-transparent', 'text-gray-500');
+      document.getElementById(`tab-${tab}`).classList.add('border-orange-500', 'text-orange-600');
+      
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+      document.getElementById(`panel-${tab}`).classList.remove('hidden');
+      
+      if (tab === 'waitlist') {
+        loadWaitlist();
+      }
+    }
+
+    // Load analytics data
+    async function loadData() {
+      try {
+        const response = await fetch('/api/admin/analytics', {
+          headers: { 'Authorization': authCredentials }
+        });
+        const data = await response.json();
+        
+        // Update stats
+        document.getElementById('waitlistCount').textContent = data.waitlistCount;
+        document.getElementById('quizCount').textContent = data.quizCompletions;
+        
+        // Find specific events
+        const pageViews = data.events.find(e => e.event_name === 'landing_page_viewed');
+        const quizStarted = data.events.find(e => e.event_name === 'quiz_started');
+        
+        document.getElementById('pageViews').textContent = pageViews ? pageViews.count : 0;
+        document.getElementById('quizStarted').textContent = quizStarted ? quizStarted.count : 0;
+        
+        // Populate events table
+        const eventsTable = document.getElementById('eventsTable');
+        eventsTable.innerHTML = data.events.map(e => `
+          <tr>
+            <td class="px-4 py-3 text-sm text-gray-900">${e.event_name}</td>
+            <td class="px-4 py-3 text-sm text-gray-600 text-right">${e.count}</td>
+          </tr>
+        `).join('');
+        
+        // Populate daily stats
+        const dailyStatsTable = document.getElementById('dailyStatsTable');
+        dailyStatsTable.innerHTML = data.dailyStats.map(s => `
+          <tr>
+            <td class="px-4 py-3 text-sm text-gray-900">${new Date(s.date).toLocaleDateString()}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${s.event_name}</td>
+            <td class="px-4 py-3 text-sm text-gray-600 text-right">${s.count}</td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      }
+    }
+
+    // Load waitlist data
+    async function loadWaitlist() {
+      try {
+        const response = await fetch('/api/admin/waitlist', {
+          headers: { 'Authorization': authCredentials }
+        });
+        const data = await response.json();
+        
+        const waitlistTable = document.getElementById('waitlistTable');
+        waitlistTable.innerHTML = data.data.map(w => `
+          <tr>
+            <td class="px-4 py-3 text-sm text-gray-900">${w.name}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${w.email}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${w.city}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${w.cuisine || '-'}</td>
+            <td class="px-4 py-3 text-sm text-gray-500">${new Date(w.created_at).toLocaleDateString()}</td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Failed to load waitlist:', error);
+      }
+    }
+  </script>
+</body>
+</html>
