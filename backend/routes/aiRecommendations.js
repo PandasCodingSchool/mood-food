@@ -6,7 +6,7 @@ const router = express.Router();
 // External AI Service configuration
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const AI_SERVICE_KEY = process.env.AI_SERVICE_KEY;
-const AI_TIMEOUT = 10000; // 10 seconds
+const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS || "30000"); // 30s default, handles cold starts
 
 /**
  * POST /api/ai-recommendations
