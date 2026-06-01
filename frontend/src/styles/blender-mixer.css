@@ -20,11 +20,11 @@
   border-radius: 50%;
   background: conic-gradient(
     from 0deg,
-    #fb923c 0deg,
-    #e879f9 90deg,
-    #f472b6 180deg,
-    #fdba74 270deg,
-    #fb923c 360deg
+    #2dd4bf 0deg,
+    #818cf8 90deg,
+    #6366f1 180deg,
+    #5eead4 270deg,
+    #2dd4bf 360deg
   );
   opacity: 0.85;
   animation: blender-liquid-spin 1.4s linear infinite;
@@ -35,7 +35,7 @@
   position: absolute;
   inset: 18%;
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #fde68a 0%, #e879f9 45%, #ea580c 100%);
+  background: radial-gradient(circle at 40% 35%, #99f6e4 0%, #818cf8 45%, #0d9488 100%);
   animation: blender-liquid-spin 0.9s linear infinite reverse;
 }
 

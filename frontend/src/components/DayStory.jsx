@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { STORY_BEATS, STORY_COLD_OPEN } from '../constants/storyBeats';
 import { computeMoodFromStory } from '../utils/storyEngine';
 import StoryScene from './StoryScene';
+import { MoodIcon, StoryIcon } from './icons/Icon';
 import { trackEvent } from '../utils/analytics';
 
 const SEGMENTS = ['Morning', 'Lunch', 'Evening'];
@@ -92,7 +93,9 @@ function DayStory({ onComplete, onBack }) {
         <div className="max-w-lg mx-auto">
           <div className="bg-white rounded-3xl shadow-xl p-8 text-center animate-fade-in">
             <p className="text-sm font-medium text-primary-600 mb-2">Your day in a nutshell</p>
-            <div className="text-7xl mb-4">{reveal.moodEmoji}</div>
+            <div className="mb-4 flex justify-center">
+              <MoodIcon mood={reveal.moodIcon} size={80} />
+            </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">Feeling {reveal.moodLabel}</h2>
             <p className="text-gray-600 mb-8">{reveal.storySummary}</p>
             <button type="button" onClick={handleContinueToFollowUp} className="btn-primary w-full text-lg py-4 group">
@@ -173,7 +176,9 @@ function DayStory({ onComplete, onBack }) {
                 onClick={() => handleChoice(choice.id)}
                 className="flex items-center gap-4 w-full p-4 rounded-2xl border-2 border-gray-200 hover:border-primary-400 hover:bg-primary-50/50 text-left transition-all"
               >
-                <span className="text-2xl flex-shrink-0">{choice.emoji}</span>
+                <span className="flex-shrink-0">
+                  <StoryIcon name={choice.icon} size={40} />
+                </span>
                 <span className="font-medium text-gray-900">{choice.label}</span>
               </button>
             ))}

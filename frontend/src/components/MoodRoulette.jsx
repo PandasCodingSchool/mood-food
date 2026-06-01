@@ -9,17 +9,18 @@ import {
   randomSpinRotation,
 } from '../utils/rouletteEngine';
 import { trackEvent } from '../utils/analytics';
+import { BlendMoodIcons, MoodIcon } from './icons/Icon';
 
 const SPIN_MS = 2800;
 
 function MoodWheel({ rotation, spinning }) {
   const colors = [
-    '#fef08a',
-    '#bfdbfe',
-    '#fecaca',
-    '#e9d5ff',
-    '#bbf7d0',
-    '#fed7aa',
+    '#ccfbf1',
+    '#e0e7ff',
+    '#fecdd3',
+    '#c7d2fe',
+    '#a7f3d0',
+    '#99f6e4',
   ];
 
   return (
@@ -68,17 +69,22 @@ function MoodWheel({ rotation, spinning }) {
             const midAngle = ((i + 0.5) * SLICE_DEG - 90) * (Math.PI / 180);
             const tx = 100 + 62 * Math.cos(midAngle);
             const ty = 100 + 62 * Math.sin(midAngle);
+            const iconSize = 28;
             return (
-              <text
+              <foreignObject
                 key={`label-${mood.value}`}
-                x={tx}
-                y={ty}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize="22"
+                x={tx - iconSize / 2}
+                y={ty - iconSize / 2}
+                width={iconSize}
+                height={iconSize}
               >
-                {mood.emoji}
-              </text>
+                <div
+                  xmlns="http://www.w3.org/1999/xhtml"
+                  className="flex h-full w-full items-center justify-center"
+                >
+                  <MoodIcon mood={mood.icon ?? mood.value} size={iconSize} />
+                </div>
+              </foreignObject>
             );
           })}
         </svg>
@@ -197,18 +203,17 @@ function MoodRoulette({ onComplete, onBack }) {
           </button>
           <div className="bg-white rounded-3xl shadow-xl p-8 animate-fade-in">
             <p className="text-sm font-medium text-secondary-600 mb-2">Your spin blend</p>
-            <div className="text-7xl mb-4">{blendResult.resultEmoji}</div>
+            <div className="mb-4 flex justify-center">
+              <MoodIcon mood={blendResult.resultIcon} size={80} className="animate-emoji-morph" />
+            </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">{blendResult.blendName}</h2>
             <p className="text-gray-600 mb-4">{blendResult.tagline}</p>
-            <div className="flex justify-center gap-2 text-2xl mb-2 flex-wrap">
-              {blendResult.inputMoods.map((m) => (
-                <span key={m.value} title={m.label}>
-                  {m.emoji}
-                </span>
-              ))}
-              <span className="text-gray-400">→</span>
-              <span>{blendResult.resultEmoji}</span>
-            </div>
+            <BlendMoodIcons
+              inputMoods={blendResult.inputMoods}
+              resultIcon={blendResult.resultIcon}
+              size={40}
+              className="mb-2"
+            />
             {spins.map((s, i) => {
               const between = formatBetweenLabel(s);
               return between ? (

@@ -4,40 +4,38 @@ function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gray-900 text-white py-12">
+    <footer className="bg-slate-900 text-white py-12 font-sans">
       <div className="section-container">
         <div className="grid md:grid-cols-4 gap-8 mb-8">
-          {/* Brand */}
           <div className="col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
                 <UtensilsCrossed className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-bold">MoodFood</span>
+              <span className="text-xl font-bold text-primary-300 tracking-tight">MoodFood</span>
             </div>
-            <p className="text-gray-400 max-w-sm mb-6">
+            <p className="text-slate-400 max-w-sm mb-6">
               Helping you decide what to eat in under 2 minutes. Personalized food recommendations based on your mood, cravings, and preferences.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-400 hover:text-white transition-colors" aria-label="Twitter">
                 <Twitter className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-400 hover:text-white transition-colors" aria-label="Instagram">
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-400 hover:text-white transition-colors" aria-label="LinkedIn">
                 <Linkedin className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-400 hover:text-white transition-colors" aria-label="GitHub">
                 <Github className="w-5 h-5" />
               </a>
             </div>
           </div>
 
-          {/* Links */}
           <div>
             <h4 className="font-semibold mb-4">Product</h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2 text-slate-400">
               <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
               <li><a href="#benefits" className="hover:text-white transition-colors">Benefits</a></li>
               <li><a href="#waitlist" className="hover:text-white transition-colors">Join Waitlist</a></li>
@@ -47,7 +45,7 @@ function Footer() {
 
           <div>
             <h4 className="font-semibold mb-4">Company</h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2 text-slate-400">
               <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
               <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
               <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
@@ -56,11 +54,11 @@ function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between">
-          <p className="text-gray-400 text-sm mb-4 md:mb-0">
+        <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row items-center justify-between">
+          <p className="text-slate-400 text-sm mb-4 md:mb-0">
             © {currentYear} MoodFood. All rights reserved.
           </p>
-          <p className="text-gray-400 text-sm flex items-center">
+          <p className="text-slate-400 text-sm flex items-center">
             Made with <Heart className="w-4 h-4 mx-1 text-red-500 fill-current" /> for food lovers everywhere
           </p>
         </div>

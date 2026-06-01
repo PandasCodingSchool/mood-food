@@ -1,6 +1,5 @@
 import {
   MOOD_DIMENSIONS,
-  MOOD_EMOJIS,
   MOOD_OPTIONS,
   getMoodByValue,
 } from '../constants/moods';
@@ -86,27 +85,28 @@ export function getBlendNameAndTagline(averaged) {
 /**
  * Build blend display from an averaged dimension vector.
  * @param {{ energy: number, valence: number, social: number }} averaged
- * @param {{ inputMoods?: Array<{ value: string, label?: string, emoji?: string }> }} [meta]
+ * @param {{ inputMoods?: Array<{ value: string, label?: string, icon?: string }> }} [meta]
  */
 export function blendFromDimensionVectors(averaged, meta = {}) {
   if (!averaged) return null;
 
   const resultMoodSlug = resolveNearestMood(averaged);
   const { blendName, tagline } = getBlendNameAndTagline(averaged);
+  const resultMood = getMoodByValue(resultMoodSlug);
 
   const inputMoods = (meta.inputMoods || []).map((m) => {
     const full = getMoodByValue(m.value);
     return {
       value: m.value,
       label: m.label ?? full?.label ?? m.value,
-      emoji: m.emoji ?? full?.emoji ?? MOOD_EMOJIS[m.value],
+      icon: m.icon ?? full?.icon ?? m.value,
     };
   });
 
   return {
     inputMoods,
     resultMoodSlug,
-    resultEmoji: MOOD_EMOJIS[resultMoodSlug],
+    resultIcon: resultMood?.icon ?? resultMoodSlug,
     blendName,
     tagline,
   };
@@ -129,7 +129,7 @@ export function blendMoods(moodA, moodB) {
     inputMoods: inputMoods.map((m) => ({
       value: m.value,
       label: m.label,
-      emoji: m.emoji,
+      icon: m.icon,
     })),
   });
 }

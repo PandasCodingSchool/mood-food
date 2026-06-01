@@ -56,20 +56,26 @@ app.get("/api/health", async (req, res) => {
 app.post("/api/waitlist", async (req, res) => {
   const { name, email, city, cuisine } = req.body;
 
-  if (!name || !email || !city) {
-    return res
-      .status(400)
-      .json({ error: "Name, email, and city are required" });
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
   }
+
+  const resolvedName = (name && String(name).trim()) || "Waitlist";
+  const resolvedCity = (city && String(city).trim()) || "Not specified";
 
   try {
     const result = await query(
       "INSERT INTO waitlist (name, email, city, cuisine) VALUES ($1, $2, $3, $4) RETURNING *",
-      [name, email, city, cuisine || null],
+      [resolvedName, email, resolvedCity, cuisine || null],
     );
     res.status(201).json({
       success: true,
-      data: result.rows[0] || { name, email, city, cuisine },
+      data: result.rows[0] || {
+        name: resolvedName,
+        email,
+        city: resolvedCity,
+        cuisine,
+      },
     });
   } catch (error) {
     if (

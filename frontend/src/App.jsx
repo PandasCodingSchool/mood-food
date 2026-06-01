@@ -13,6 +13,7 @@ import Waitlist from './components/Waitlist'
 import Footer from './components/Footer'
 import Navbar from './components/Navbar'
 import { trackEvent } from './utils/analytics'
+import { isWaitlistJoined } from './utils/waitlist'
 
 async function recordQuizCompletion(results) {
   try {
@@ -38,10 +39,13 @@ function App() {
   const [gameContext, setGameContext] = useState(null)
   const [blenderSlots, setBlenderSlots] = useState(null)
   const [blenderRestore, setBlenderRestore] = useState(null)
+  const [waitlistJoined, setWaitlistJoined] = useState(() => isWaitlistJoined())
 
   useEffect(() => {
     trackEvent('landing_page_viewed')
   }, [])
+
+  const handleWaitlistJoined = () => setWaitlistJoined(true)
 
   const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
@@ -173,7 +177,13 @@ function App() {
   const isOverlay = view !== 'home'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+    <div
+      className={`min-h-screen ${
+        view === 'home'
+          ? 'landing-page bg-gradient-to-b from-[rgb(var(--color-primary-50))] via-white to-[rgb(var(--color-secondary-50))]'
+          : 'bg-slate-50'
+      }`}
+    >
       <Navbar onOpenPlay={handleOpenPlayHub} onStartQuiz={handleStartQuiz} />
 
       {view === 'quiz' ? (
@@ -203,11 +213,16 @@ function App() {
       ) : view === 'recommendations' && quizResults ? (
         <Recommendations results={quizResults} onBack={handleBackToHome} />
       ) : (
-        <main>
-          <Hero onOpenPlayHub={handleOpenPlayHub} onStartQuiz={handleStartQuiz} />
+        <main className="landing-page">
+          <Hero
+            onOpenPlayHub={handleOpenPlayHub}
+            onStartQuiz={handleStartQuiz}
+            waitlistJoined={waitlistJoined}
+            onWaitlistJoined={handleWaitlistJoined}
+          />
           <HowItWorks />
           <Benefits />
-          <Waitlist />
+          <Waitlist joined={waitlistJoined} onJoined={handleWaitlistJoined} />
         </main>
       )}
 

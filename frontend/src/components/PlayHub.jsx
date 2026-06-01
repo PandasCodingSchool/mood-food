@@ -10,7 +10,7 @@ const MODES = [
     hook: 'Live a mini day — we read your mood from your choices.',
     time: '~45 sec',
     icon: BookOpen,
-    color: 'from-amber-400 to-orange-500',
+    color: 'from-primary-400 to-primary-600',
   },
   {
     id: 'roulette',
@@ -18,7 +18,7 @@ const MODES = [
     hook: 'Spin twice, blend your moods, chase a meal.',
     time: '~30 sec',
     icon: CircleDot,
-    color: 'from-violet-400 to-purple-600',
+    color: 'from-secondary-400 to-secondary-600',
   },
   {
     id: 'blender',
@@ -26,7 +26,7 @@ const MODES = [
     hook: 'Drag two moods into the jar and mix your vibe.',
     time: '~1 min',
     icon: Blend,
-    color: 'from-fuchsia-400 to-secondary-500',
+    color: 'from-teal-400 to-primary-700',
   },
   {
     id: 'quiz',

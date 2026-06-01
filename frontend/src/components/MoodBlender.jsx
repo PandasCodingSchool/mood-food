@@ -15,6 +15,7 @@ import { MOOD_OPTIONS } from '../constants/moods';
 import { blendMoods } from '../utils/blendEngine';
 import { trackEvent } from '../utils/analytics';
 import BlenderMixerAnimation from './BlenderMixerAnimation';
+import { BlendMoodIcons, MoodIcon } from './icons/Icon';
 
 const SLOT_IDS = ['slot-a', 'slot-b'];
 const BLEND_DURATION_MS = 3400;
@@ -45,7 +46,7 @@ function DraggableMoodChip({ mood, inTray = true }) {
       } ${isDragging ? 'opacity-40 shadow-lg scale-95' : 'shadow-md hover:shadow-lg hover:scale-105'}`}
       title={mood.label}
     >
-      {mood.emoji}
+      <MoodIcon mood={mood.icon ?? mood.value} size={40} />
     </div>
   );
 }
@@ -71,7 +72,7 @@ function DropSlot({ slotId, moodSlug, onClear, poured }) {
         <span className="text-xs text-primary-500 font-medium animate-pulse">In blender</span>
       ) : mood ? (
         <>
-          <span className="text-4xl md:text-5xl transition-transform">{mood.emoji}</span>
+          <MoodIcon mood={mood.icon ?? mood.value} size={48} className="transition-transform" />
           <button
             type="button"
             onClick={(e) => {
@@ -96,8 +97,8 @@ function DropSlot({ slotId, moodSlug, onClear, poured }) {
   );
 }
 
-/** Jar interior: pour emojis → CSS spinning mixer → reveal result */
-function JarMixingInterior({ emojiA, emojiB, blendPhase, resultEmoji, morphKey }) {
+/** Jar interior: pour mood icons → CSS spinning mixer → reveal result */
+function JarMixingInterior({ iconA, iconB, blendPhase, resultIcon, morphKey }) {
   const isPour = blendPhase === 'pour';
   const isMix = blendPhase === 'mix';
   const isReveal = blendPhase === 'reveal';
@@ -109,18 +110,23 @@ function JarMixingInterior({ emojiA, emojiB, blendPhase, resultEmoji, morphKey }
       style={{ top: '26%', width: '52%', height: '46%' }}
     >
       <div
-        className="relative w-full h-full overflow-hidden rounded-b-[42%] rounded-t-xl border-x-[3px] border-b-[3px] border-secondary-500/50 shadow-inner bg-gradient-to-b from-purple-100/40 to-orange-100/30"
+        className="relative w-full h-full overflow-hidden rounded-b-[42%] rounded-t-xl border-x-[3px] border-b-[3px] border-secondary-500/50 shadow-inner bg-gradient-to-b from-primary-100/40 to-secondary-100/30"
       >
         {showLiquid && !isMix && (
           <div className="absolute inset-0 bg-gradient-to-br from-primary-400/50 via-secondary-500/40 to-primary-500/40" />
         )}
 
-        {/* Pour only: emojis drop in, then vanish when mix starts */}
-        {isPour && emojiA && emojiB && (
+        {/* Pour only: icons drop in, then vanish when mix starts */}
+        {isPour && iconA && iconB && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="absolute text-3xl md:text-4xl animate-pour-in-left opacity-90">{emojiA}</span>
-            <span className="absolute text-3xl md:text-4xl animate-pour-in-right opacity-90" style={{ animationDelay: '0.1s' }}>
-              {emojiB}
+            <span className="absolute animate-pour-in-left opacity-90">
+              <MoodIcon mood={iconA} size={40} />
+            </span>
+            <span
+              className="absolute animate-pour-in-right opacity-90"
+              style={{ animationDelay: '0.1s' }}
+            >
+              <MoodIcon mood={iconB} size={40} />
             </span>
           </div>
         )}
@@ -128,11 +134,11 @@ function JarMixingInterior({ emojiA, emojiB, blendPhase, resultEmoji, morphKey }
         {/* Mix phase: pure CSS rotating impeller + liquid */}
         {isMix && <BlenderMixerAnimation active />}
 
-        {/* Reveal: final blended emoji */}
-        {isReveal && resultEmoji && (
+        {/* Reveal: final blended mood icon */}
+        {isReveal && resultIcon && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/10">
-            <span key={morphKey} className="text-5xl md:text-6xl animate-emoji-pop drop-shadow-lg z-10">
-              {resultEmoji}
+            <span key={morphKey} className="animate-emoji-pop drop-shadow-lg z-10">
+              <MoodIcon mood={resultIcon} size={56} />
             </span>
           </div>
         )}
@@ -141,7 +147,7 @@ function JarMixingInterior({ emojiA, emojiB, blendPhase, resultEmoji, morphKey }
   );
 }
 
-function BlenderIllustration({ isShaking, isBlending, blendPhase, emojiA, emojiB, resultEmoji, morphKey }) {
+function BlenderIllustration({ isShaking, isBlending, blendPhase, iconA, iconB, resultIcon, morphKey }) {
   return (
     <div
       className={`relative mx-auto w-52 sm:w-56 md:w-64 lg:w-72 ${isShaking ? 'animate-blender-shake' : ''}`}
@@ -169,7 +175,7 @@ function BlenderIllustration({ isShaking, isBlending, blendPhase, emojiA, emojiB
         <defs>
           <linearGradient id="jarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#f0abfc" stopOpacity={isBlending ? '0.25' : '0.35'} />
-            <stop offset="100%" stopColor="#fdba74" stopOpacity={isBlending ? '0.2' : '0.25'} />
+            <stop offset="100%" stopColor="#5eead4" stopOpacity={isBlending ? '0.2' : '0.25'} />
           </linearGradient>
           <clipPath id="jarClip">
             <path d="M 58 98 L 58 182 Q 58 196 100 196 Q 142 196 142 182 L 142 98 Z" />
@@ -191,7 +197,7 @@ function BlenderIllustration({ isShaking, isBlending, blendPhase, emojiA, emojiB
             </rect>
           </g>
         )}
-        <circle cx="158" cy="152" r="9" fill="#f97316" stroke="#ea580c" strokeWidth="2">
+        <circle cx="158" cy="152" r="9" fill="#14b8a6" stroke="#0d9488" strokeWidth="2">
           {isBlending && (
             <animateTransform
               attributeName="transform"
@@ -205,12 +211,12 @@ function BlenderIllustration({ isShaking, isBlending, blendPhase, emojiA, emojiB
         </circle>
       </svg>
 
-      {isBlending && emojiA && emojiB && (
+      {isBlending && iconA && iconB && (
         <JarMixingInterior
-          emojiA={emojiA}
-          emojiB={emojiB}
+          iconA={iconA}
+          iconB={iconB}
           blendPhase={blendPhase}
-          resultEmoji={resultEmoji}
+          resultIcon={resultIcon}
           morphKey={morphKey}
         />
       )}
@@ -227,7 +233,7 @@ function BlenderIllustration({ isShaking, isBlending, blendPhase, emojiA, emojiB
                 animationDelay: `${i * 0.25}s`,
               }}
             >
-              💨
+              <span className="block w-3 h-3 rounded-full bg-gray-300/80" />
             </span>
           ))}
         </div>
@@ -285,8 +291,8 @@ function MoodBlender({ onComplete, onBack, initialSlots = null, initialBlendResu
 
   const moodA = MOOD_OPTIONS.find((m) => m.value === slots['slot-a']);
   const moodB = MOOD_OPTIONS.find((m) => m.value === slots['slot-b']);
-  const emojiA = moodA?.emoji;
-  const emojiB = moodB?.emoji;
+  const iconA = moodA?.icon ?? moodA?.value;
+  const iconB = moodB?.icon ?? moodB?.value;
 
   const clearBlendTimeouts = () => {
     timeoutsRef.current.forEach(clearTimeout);
@@ -402,16 +408,17 @@ function MoodBlender({ onComplete, onBack, initialSlots = null, initialBlendResu
           </button>
           <div className="bg-white rounded-3xl shadow-xl p-8 md:p-10 animate-fade-in">
             <p className="text-sm font-medium text-primary-600 mb-2">Your blend</p>
-            <div className="text-7xl mb-4 animate-emoji-morph">{blendResult.resultEmoji}</div>
+            <div className="mb-4 flex justify-center animate-emoji-morph">
+              <MoodIcon mood={blendResult.resultIcon} size={80} />
+            </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">{blendResult.blendName}</h2>
             <p className="text-gray-600 mb-6">{blendResult.tagline}</p>
-            <div className="flex justify-center gap-3 mb-8 text-2xl">
-              {blendResult.inputMoods.map((m) => (
-                <span key={m.value} title={m.label}>{m.emoji}</span>
-              ))}
-              <span className="text-gray-400">→</span>
-              <span>{blendResult.resultEmoji}</span>
-            </div>
+            <BlendMoodIcons
+              inputMoods={blendResult.inputMoods}
+              resultIcon={blendResult.resultIcon}
+              size={40}
+              className="mb-8"
+            />
             <button type="button" onClick={handleFindFood} className="btn-primary w-full text-lg py-4 group mb-3">
               Find food for this vibe
               <ArrowRight className="w-5 h-5 ml-2 inline group-hover:translate-x-1 transition-transform" />
@@ -454,7 +461,7 @@ function MoodBlender({ onComplete, onBack, initialSlots = null, initialBlendResu
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Mix your moods</h2>
           <p className="text-gray-600">
-            {isMorphing ? statusText : 'Drag two emojis into the slots, then hit Blend.'}
+            {isMorphing ? statusText : 'Drag two moods into the slots, then hit Blend.'}
           </p>
         </div>
 
@@ -476,11 +483,11 @@ function MoodBlender({ onComplete, onBack, initialSlots = null, initialBlendResu
                   isShaking={isBlending}
                   isBlending={isBlending}
                   blendPhase={blendPhase}
-                  emojiA={emojiA}
-                  emojiB={emojiB}
-                  resultEmoji={
+                  iconA={iconA}
+                  iconB={iconB}
+                  resultIcon={
                     blendPhase === 'reveal'
-                      ? pendingResultRef.current?.resultEmoji
+                      ? pendingResultRef.current?.resultIcon
                       : null
                   }
                   morphKey={morphKey}
@@ -534,8 +541,8 @@ function MoodBlender({ onComplete, onBack, initialSlots = null, initialBlendResu
 
           <DragOverlay>
             {activeDrag ? (
-              <div className="text-4xl p-4 rounded-2xl bg-white shadow-2xl border-2 border-primary-300">
-                {activeDrag.emoji}
+              <div className="p-4 rounded-2xl bg-white shadow-2xl border-2 border-primary-300">
+                <MoodIcon mood={activeDrag.icon ?? activeDrag.value} size={44} />
               </div>
             ) : null}
           </DragOverlay>

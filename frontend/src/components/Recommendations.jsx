@@ -1,7 +1,8 @@
 import { ArrowLeft, RefreshCw, MapPin, Star, Share2, Heart } from 'lucide-react';
 import { getRecommendations } from '../utils/recommendationEngine';
 import { trackEvent } from '../utils/analytics';
-import { MOOD_EMOJIS } from '../constants/moods';
+import { getMoodByValue } from '../constants/moods';
+import Icon, { BlendMoodIcons, MoodIcon } from './icons/Icon';
 import { useState } from 'react';
 
 function Recommendations({ results, onBack }) {
@@ -44,7 +45,7 @@ function Recommendations({ results, onBack }) {
     setLikedItems(newLiked);
   };
 
-  const displayEmoji = blend?.resultEmoji || MOOD_EMOJIS[results.mood] || '😊';
+  const displayIcon = blend?.resultIcon || getMoodByValue(results.mood)?.icon || results.mood;
   const moodMeta = results.mood?.charAt(0).toUpperCase() + results.mood?.slice(1);
   const displayMoodLabel = blend
     ? blend.blendName
@@ -78,7 +79,7 @@ function Recommendations({ results, onBack }) {
 
           <div className="text-center">
             <div className="inline-flex items-center space-x-2 bg-primary-100 rounded-full px-4 py-2 mb-4">
-              <span className="text-2xl">{displayEmoji}</span>
+              <MoodIcon mood={displayIcon} size={32} />
               <span className="font-medium text-primary-800 capitalize">
                 {displayMoodLabel}
               </span>
@@ -89,9 +90,13 @@ function Recommendations({ results, onBack }) {
               </p>
             )}
             {blend?.inputMoods?.length > 0 && results.source !== 'story' && (
-              <p className="text-xs text-gray-500 mb-2">
-                Blended from {blend.inputMoods.map((m) => m.emoji).join(' + ')} → {blend.resultEmoji}
-              </p>
+              <div className="flex justify-center mb-2">
+                <BlendMoodIcons
+                  inputMoods={blend.inputMoods}
+                  resultIcon={blend.resultIcon}
+                  size={28}
+                />
+              </div>
             )}
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
               Your Personalized Recommendations
@@ -111,7 +116,7 @@ function Recommendations({ results, onBack }) {
             >
               <div className="h-48 bg-gradient-to-br from-primary-400 to-secondary-500 relative">
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-6xl">🍽️</span>
+                  <Icon category="food" name="plate" size={72} />
                 </div>
                 <div className="absolute top-4 right-4 flex space-x-2">
                   <button

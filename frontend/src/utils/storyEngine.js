@@ -60,7 +60,7 @@ export function computeMoodFromStory(choiceIds) {
   return {
     moodSlug,
     moodLabel: mood?.label ?? moodSlug,
-    moodEmoji: mood?.emoji ?? '😊',
+    moodIcon: mood?.icon ?? 'happy',
     storySummary: summary,
     vector,
   };

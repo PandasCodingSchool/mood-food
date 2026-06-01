@@ -4,18 +4,8 @@
  * @typedef {Object} StoryChoice
  * @property {string} id
  * @property {string} label
- * @property {string} emoji
+ * @property {string} icon — key in assets/icons/story/
  * @property {MoodDeltas} deltas
- */
-
-/**
- * @typedef {Object} StoryBeat
- * @property {string} id
- * @property {string} segmentLabel
- * @property {'morning' | 'lunch' | 'evening'} scene
- * @property {string} narrative
- * @property {StoryChoice[]} choices
- * @property {number} [weight]
  */
 
 export const STORY_COLD_OPEN = {
@@ -23,7 +13,7 @@ export const STORY_COLD_OPEN = {
   subtitle: "Make a few quick choices — we'll read your mood from how it unfolds.",
 };
 
-/** @type {StoryBeat[]} */
+/** @type {import('./storyBeats').StoryBeat[]} */
 export const STORY_BEATS = [
   {
     id: 'morning',
@@ -35,19 +25,19 @@ export const STORY_BEATS = [
       {
         id: 'morning_coffee',
         label: 'Grab coffee and power through',
-        emoji: '☕',
+        icon: 'morning_coffee',
         deltas: { energy: 0.12, valence: 0.05, social: 0.05 },
       },
       {
         id: 'morning_snooze',
         label: 'Snooze once — you need the sleep',
-        emoji: '😴',
+        icon: 'morning_snooze',
         deltas: { energy: -0.1, valence: 0.02, social: -0.05 },
       },
       {
         id: 'morning_skip',
         label: 'Skip breakfast, dive into inbox',
-        emoji: '📧',
+        icon: 'morning_skip',
         deltas: { energy: 0.05, valence: -0.08, social: -0.08 },
       },
     ],
@@ -62,19 +52,19 @@ export const STORY_BEATS = [
       {
         id: 'lunch_team',
         label: 'Team lunch — good energy at the table',
-        emoji: '🍽️',
+        icon: 'lunch_team',
         deltas: { energy: 0.08, valence: 0.15, social: 0.2 },
       },
       {
         id: 'lunch_desk',
         label: 'Eat at desk between calls',
-        emoji: '💻',
+        icon: 'lunch_desk',
         deltas: { energy: -0.05, valence: -0.05, social: -0.1 },
       },
       {
         id: 'lunch_skip',
         label: 'Skip lunch — too much to finish',
-        emoji: '⏭️',
+        icon: 'lunch_skip',
         deltas: { energy: -0.12, valence: -0.12, social: -0.05 },
       },
     ],
@@ -89,19 +79,19 @@ export const STORY_BEATS = [
       {
         id: 'evening_treat',
         label: 'Treat yourself — you earned it',
-        emoji: '🎉',
+        icon: 'evening_treat',
         deltas: { energy: 0.1, valence: 0.2, social: 0.1 },
       },
       {
         id: 'evening_couch',
         label: 'Couch, show, something easy',
-        emoji: '🛋️',
+        icon: 'evening_couch',
         deltas: { energy: -0.15, valence: 0.1, social: -0.1 },
       },
       {
         id: 'evening_still',
         label: 'Still finishing work — dinner can wait',
-        emoji: '😰',
+        icon: 'evening_still',
         deltas: { energy: 0.05, valence: -0.15, social: -0.05 },
       },
     ],

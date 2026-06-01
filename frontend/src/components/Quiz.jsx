@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { trackEvent } from '../utils/analytics';
 import { QUIZ_QUESTIONS } from '../constants/moods';
+import { MoodIcon, QuizOptionIcon } from './icons/Icon';
 
 function Quiz({
   onComplete,
@@ -81,7 +82,7 @@ function Quiz({
 
           {blendContext && (
             <div className="inline-flex items-center gap-2 bg-secondary-50 border border-secondary-200 rounded-full px-4 py-2 mb-4 text-sm">
-              <span className="text-lg">{blendContext.resultEmoji}</span>
+              <MoodIcon mood={blendContext.resultIcon} size={28} />
               <span className="font-medium text-secondary-800">
                 Your blend: {blendContext.blendName}
               </span>
@@ -135,7 +136,9 @@ function Quiz({
                     : 'border-gray-200 hover:border-primary-300'
                 }`}
               >
-                <span className="text-4xl mb-3 block">{option.emoji}</span>
+                <span className="mb-3 flex justify-center">
+                  <QuizOptionIcon questionKey={question.key} option={option} size={48} />
+                </span>
                 <span className="font-semibold text-gray-900 block mb-1">
                   {option.label}
                 </span>

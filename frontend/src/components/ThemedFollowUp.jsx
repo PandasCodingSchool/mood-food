@@ -4,9 +4,9 @@ import {
   CRAVING_OPTIONS,
   BUDGET_OPTIONS,
   PREFERENCE_OPTIONS,
-  MOOD_EMOJIS,
   getMoodByValue,
 } from '../constants/moods';
+import { FollowUpOptionIcon, MoodIcon } from './icons/Icon';
 import { FOLLOW_UP_COPY, FOLLOW_UP_STEPS } from '../constants/followUpCopy';
 import { trackEvent } from '../utils/analytics';
 
@@ -35,7 +35,7 @@ function ThemedFollowUp({
   const progress = ((step + 1) / FOLLOW_UP_STEPS.length) * 100;
 
   const moodMeta = getMoodByValue(mood);
-  const contextEmoji = blendContext?.resultEmoji || moodMeta?.emoji || MOOD_EMOJIS[mood] || '😊';
+  const contextIcon = blendContext?.resultIcon || moodMeta?.icon || mood;
   const contextLabel = blendContext?.blendName || moodMeta?.label || mood;
 
   const handleSelect = (value) => {
@@ -92,7 +92,7 @@ function ThemedFollowUp({
 
         <div className="sticky top-16 z-10 mb-6 flex flex-col items-center gap-2">
           <div className="inline-flex items-center gap-2 bg-white/90 backdrop-blur border border-gray-200 rounded-full px-4 py-2 shadow-sm text-sm">
-            <span className="text-lg">{contextEmoji}</span>
+            <MoodIcon mood={contextIcon} size={28} />
             <span className="font-medium text-gray-800">{contextLabel}</span>
           </div>
           {storySummary && source === 'story' && (
@@ -137,7 +137,9 @@ function ThemedFollowUp({
                 onClick={() => handleSelect(option.value)}
                 className="p-5 rounded-2xl border-2 border-gray-200 hover:border-primary-300 hover:scale-[1.02] transition-all text-center"
               >
-                <span className="text-3xl mb-2 block">{option.emoji}</span>
+                <span className="mb-2 flex justify-center">
+                  <FollowUpOptionIcon field={current.field} option={option} size={44} />
+                </span>
                 <span className="font-semibold text-gray-900 block text-sm">{option.label}</span>
                 {option.subtitle && (
                   <span className="text-xs text-gray-500 mt-1 block">{option.subtitle}</span>
