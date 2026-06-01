@@ -1,6 +1,7 @@
 import { ArrowLeft, RefreshCw, MapPin, Star, Share2, Heart } from 'lucide-react';
 import { getRecommendations } from '../utils/recommendationEngine';
 import { trackEvent } from '../utils/analytics';
+import { MOOD_EMOJIS } from '../constants/moods';
 import { useState } from 'react';
 
 function Recommendations({ results, onBack }) {
@@ -8,6 +9,7 @@ function Recommendations({ results, onBack }) {
     getRecommendations(results.mood, results.craving, results.budget, results.preference)
   );
   const [likedItems, setLikedItems] = useState(new Set());
+  const blend = results.blendContext;
 
   const handleRefresh = () => {
     trackEvent('recommendation_refreshed', results);
@@ -16,14 +18,17 @@ function Recommendations({ results, onBack }) {
 
   const handleShare = (item) => {
     trackEvent('recommendation_shared', { food: item.name });
+    const moodLabel = blend
+      ? blend.blendName
+      : results.storySummary || results.mood;
     if (navigator.share) {
       navigator.share({
         title: `Try ${item.name}!`,
-        text: `MoodFood recommended ${item.name} for my ${results.mood} mood!`,
+        text: `MoodFood recommended ${item.name} for my ${moodLabel} vibe!`,
         url: window.location.href,
       });
     } else {
-      navigator.clipboard.writeText(`Try ${item.name}! Recommended by MoodFood for ${results.mood} mood.`);
+      navigator.clipboard.writeText(`Try ${item.name}! Recommended by MoodFood for ${moodLabel}.`);
       alert('Copied to clipboard!');
     }
   };
@@ -39,21 +44,31 @@ function Recommendations({ results, onBack }) {
     setLikedItems(newLiked);
   };
 
-  const moodEmojis = {
-    happy: '😊',
-    tired: '😴',
-    stressed: '😰',
-    celebrating: '🥳',
-    relaxed: '😌',
-    adventurous: '🤩',
-  };
+  const displayEmoji = blend?.resultEmoji || MOOD_EMOJIS[results.mood] || '😊';
+  const moodMeta = results.mood?.charAt(0).toUpperCase() + results.mood?.slice(1);
+  const displayMoodLabel = blend
+    ? blend.blendName
+    : `Feeling ${moodMeta || results.mood}`;
+
+  const sourceLine = (() => {
+    if (results.source === 'story' && results.storySummary) {
+      return results.storySummary;
+    }
+    if (blend?.tagline) {
+      return blend.tagline;
+    }
+    if (results.source === 'roulette') {
+      return 'Spun from your double mood blend';
+    }
+    return null;
+  })();
 
   return (
     <div className="min-h-screen pt-20 pb-10 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <button
+            type="button"
             onClick={onBack}
             className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
           >
@@ -63,11 +78,21 @@ function Recommendations({ results, onBack }) {
 
           <div className="text-center">
             <div className="inline-flex items-center space-x-2 bg-primary-100 rounded-full px-4 py-2 mb-4">
-              <span className="text-2xl">{moodEmojis[results.mood] || '😊'}</span>
+              <span className="text-2xl">{displayEmoji}</span>
               <span className="font-medium text-primary-800 capitalize">
-                Feeling {results.mood}
+                {displayMoodLabel}
               </span>
             </div>
+            {sourceLine && (
+              <p className="text-sm text-secondary-600 mb-2 max-w-md mx-auto">
+                {sourceLine}
+              </p>
+            )}
+            {blend?.inputMoods?.length > 0 && results.source !== 'story' && (
+              <p className="text-xs text-gray-500 mb-2">
+                Blended from {blend.inputMoods.map((m) => m.emoji).join(' + ')} → {blend.resultEmoji}
+              </p>
+            )}
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
               Your Personalized Recommendations
             </h2>
@@ -77,7 +102,6 @@ function Recommendations({ results, onBack }) {
           </div>
         </div>
 
-        {/* Recommendations */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           {recommendations.map((item, index) => (
             <div
@@ -85,13 +109,13 @@ function Recommendations({ results, onBack }) {
               className="bg-white rounded-3xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              {/* Image placeholder with gradient */}
               <div className="h-48 bg-gradient-to-br from-primary-400 to-secondary-500 relative">
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-6xl">🍽️</span>
                 </div>
                 <div className="absolute top-4 right-4 flex space-x-2">
                   <button
+                    type="button"
                     onClick={() => handleLike(item)}
                     className={`p-2 rounded-full transition-colors ${
                       likedItems.has(item.id)
@@ -102,6 +126,7 @@ function Recommendations({ results, onBack }) {
                     <Heart className={`w-5 h-5 ${likedItems.has(item.id) ? 'fill-current' : ''}`} />
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleShare(item)}
                     className="p-2 bg-white/80 text-gray-600 rounded-full hover:bg-white transition-colors"
                   >
@@ -146,7 +171,7 @@ function Recommendations({ results, onBack }) {
                     <MapPin className="w-4 h-4" />
                     <span>{item.budgetType}</span>
                   </div>
-                  <button className="text-primary-600 font-medium text-sm hover:text-primary-700 transition-colors">
+                  <button type="button" className="text-primary-600 font-medium text-sm hover:text-primary-700 transition-colors">
                     Find Nearby →
                   </button>
                 </div>
@@ -155,9 +180,9 @@ function Recommendations({ results, onBack }) {
           ))}
         </div>
 
-        {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
+            type="button"
             onClick={handleRefresh}
             className="btn-secondary flex items-center"
           >
@@ -165,6 +190,7 @@ function Recommendations({ results, onBack }) {
             Get New Recommendations
           </button>
           <button
+            type="button"
             onClick={onBack}
             className="btn-primary flex items-center"
           >

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS quiz_completions (
   craving VARCHAR(50) NOT NULL,
   budget VARCHAR(50) NOT NULL,
   preference VARCHAR(50) NOT NULL,
+  source VARCHAR(50) DEFAULT 'quiz',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

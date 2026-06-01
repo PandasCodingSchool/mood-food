@@ -1,6 +1,6 @@
 import { UtensilsCrossed } from 'lucide-react';
 
-function Navbar({ onStartQuiz }) {
+function Navbar({ onOpenPlay, onStartQuiz }) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
       <div className="section-container">
@@ -21,8 +21,15 @@ function Navbar({ onStartQuiz }) {
             <a href="#benefits" className="text-gray-600 hover:text-primary-600 transition-colors">
               Benefits
             </a>
-            <button onClick={onStartQuiz} className="btn-primary">
-              Find My Meal
+            <button type="button" onClick={onOpenPlay} className="btn-primary">
+              Play
+            </button>
+            <button
+              type="button"
+              onClick={onStartQuiz}
+              className="text-sm text-gray-600 hover:text-primary-600 font-medium"
+            >
+              Quick quiz
             </button>
           </div>
         </div>

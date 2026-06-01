@@ -108,12 +108,12 @@ app.post("/api/analytics", async (req, res) => {
 
 // Quiz completion tracking
 app.post("/api/quiz-complete", async (req, res) => {
-  const { mood, craving, budget, preference } = req.body;
+  const { mood, craving, budget, preference, source = "quiz" } = req.body;
 
   try {
     await query(
-      "INSERT INTO quiz_completions (mood, craving, budget, preference) VALUES ($1, $2, $3, $4)",
-      [mood, craving, budget, preference],
+      "INSERT INTO quiz_completions (mood, craving, budget, preference, source) VALUES ($1, $2, $3, $4, $5)",
+      [mood, craving, budget, preference, source],
     );
     res.status(201).json({ success: true });
   } catch (error) {

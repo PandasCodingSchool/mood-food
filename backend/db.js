@@ -52,8 +52,16 @@ export async function initDb() {
         craving VARCHAR(50) NOT NULL,
         budget VARCHAR(50) NOT NULL,
         preference VARCHAR(50) NOT NULL,
+        source VARCHAR(50) DEFAULT 'quiz',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
+      try {
+        await db.query(
+          `ALTER TABLE quiz_completions ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'quiz'`,
+        );
+      } catch {
+        // column may already exist on older deployments
+      }
       await db.query(
         `CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(event_name)`,
       );
@@ -103,9 +111,17 @@ export async function initDb() {
         craving TEXT NOT NULL,
         budget TEXT NOT NULL,
         preference TEXT NOT NULL,
+        source TEXT DEFAULT 'quiz',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    try {
+      await db.exec(
+        `ALTER TABLE quiz_completions ADD COLUMN source TEXT DEFAULT 'quiz'`,
+      );
+    } catch {
+      // column may already exist
+    }
   }
 
   dbInitialized = true;
