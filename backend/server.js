@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { initDb, getDb, isPostgres } from "./db.js";
+import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 
 dotenv.config();
 
@@ -16,6 +17,9 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// AI Recommendations route
+app.use("/api/ai-recommendations", aiRecommendationsRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {

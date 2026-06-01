@@ -1,20 +1,64 @@
-import { ArrowLeft, RefreshCw, MapPin, Star, Share2, Heart } from 'lucide-react';
-import { getRecommendations } from '../utils/recommendationEngine';
+import { ArrowLeft, RefreshCw, MapPin, Star, Share2, Heart, Loader2, Sparkles } from 'lucide-react';
+import { fetchRecommendations } from '../services/aiRecommendations';
 import { trackEvent } from '../utils/analytics';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { QuizResults, Recommendation } from '../types';
 
-function Recommendations({ results, onBack }) {
-  const [recommendations, setRecommendations] = useState(
-    getRecommendations(results.mood, results.craving, results.budget, results.preference)
-  );
-  const [likedItems, setLikedItems] = useState(new Set());
+const moodEmojis: Record<string, string> = {
+  happy: '😊',
+  tired: '😴',
+  stressed: '😰',
+  celebrating: '🎉',
+  relaxed: '😌',
+  adventurous: '🤩',
+};
+
+interface RecommendationsProps {
+  results: QuizResults;
+  onBack: () => void;
+}
+
+function Recommendations({ results, onBack }: RecommendationsProps) {
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadRecommendations();
+  }, []);
+
+  const loadRecommendations = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      trackEvent('recommendations_requested', results);
+      const data = await fetchRecommendations(results);
+      
+      setRecommendations(data.recommendations);
+      setSource(data.source);
+      
+      trackEvent('recommendations_received', {
+        source: data.source,
+        count: data.recommendations.length,
+      });
+    } catch (err) {
+      console.error('Failed to load recommendations:', err);
+      setError('Could not load recommendations. Please try again.');
+      trackEvent('recommendations_error', { error: (err as Error).message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRefresh = () => {
     trackEvent('recommendation_refreshed', results);
-    setRecommendations(getRecommendations(results.mood, results.craving, results.budget, results.preference));
+    loadRecommendations();
   };
 
-  const handleShare = (item) => {
+  const handleShare = (item: Recommendation) => {
     trackEvent('recommendation_shared', { food: item.name });
     if (navigator.share) {
       navigator.share({
@@ -22,36 +66,26 @@ function Recommendations({ results, onBack }) {
         text: `MoodFood recommended ${item.name} for my ${results.mood} mood!`,
         url: window.location.href,
       });
-    } else {
-      navigator.clipboard.writeText(`Try ${item.name}! Recommended by MoodFood for ${results.mood} mood.`);
-      alert('Copied to clipboard!');
     }
   };
 
-  const handleLike = (item) => {
-    const newLiked = new Set(likedItems);
-    if (newLiked.has(item.id)) {
-      newLiked.delete(item.id);
-    } else {
-      newLiked.add(item.id);
-      trackEvent('recommendation_liked', { food: item.name });
-    }
-    setLikedItems(newLiked);
-  };
-
-  const moodEmojis = {
-    happy: '😊',
-    tired: '😴',
-    stressed: '😰',
-    celebrating: '🥳',
-    relaxed: '😌',
-    adventurous: '🤩',
+  const handleLike = (item: Recommendation) => {
+    setLikedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(item.id)) {
+        newSet.delete(item.id);
+        trackEvent('recommendation_unliked', { food: item.name });
+      } else {
+        newSet.add(item.id);
+        trackEvent('recommendation_liked', { food: item.name });
+      }
+      return newSet;
+    });
   };
 
   return (
     <div className="min-h-screen pt-20 pb-10 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <button
             onClick={onBack}
@@ -77,15 +111,56 @@ function Recommendations({ results, onBack }) {
           </div>
         </div>
 
-        {/* Recommendations */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          {recommendations.map((item, index) => (
+        {source && (
+          <div className="text-center mb-6">
+            <span
+              className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium ${
+                source === 'ai-service'
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'bg-orange-100 text-orange-700'
+              }`}
+            >
+              {source === 'ai-service' ? (
+                <>
+                  <Sparkles className="w-3 h-3" />
+                  <span>AI Powered</span>
+                </>
+              ) : (
+                <>
+                  <span>Smart Fallback</span>
+                </>
+              )}
+            </span>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="w-12 h-12 text-primary-500 animate-spin mb-4" />
+            <p className="text-gray-600">Cooking up personalized recommendations...</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="text-center py-12 bg-red-50 rounded-2xl">
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={loadRecommendations}
+              className="px-6 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            {recommendations.map((item, index) => (
             <div
               key={item.id}
               className="bg-white rounded-3xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              {/* Image placeholder with gradient */}
               <div className="h-48 bg-gradient-to-br from-primary-400 to-secondary-500 relative">
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-6xl">🍽️</span>
@@ -130,17 +205,6 @@ function Recommendations({ results, onBack }) {
                   {item.why}
                 </p>
 
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {item.tags.map((tag, i) => (
-                    <span
-                      key={i}
-                      className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-1 text-gray-500 text-sm">
                     <MapPin className="w-4 h-4" />
@@ -154,15 +218,16 @@ function Recommendations({ results, onBack }) {
             </div>
           ))}
         </div>
+        )}
 
-        {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
             onClick={handleRefresh}
-            className="btn-secondary flex items-center"
+            disabled={loading}
+            className={`btn-secondary flex items-center ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <RefreshCw className="w-5 h-5 mr-2" />
-            Get New Recommendations
+            <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Loading...' : 'Get New Recommendations'}
           </button>
           <button
             onClick={onBack}
