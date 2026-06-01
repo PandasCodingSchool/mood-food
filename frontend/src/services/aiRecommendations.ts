@@ -1,4 +1,9 @@
-import type { QuizResults, AIRequestContext, RecommendationResponse, GameData } from '../types';
+import type {
+  QuizResults,
+  AIRequestContext,
+  RecommendationResponse,
+  GameData,
+} from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -8,9 +13,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
  */
 export async function fetchRecommendations(
   quizResults: QuizResults,
-  gameData: GameData | null = null
+  gameData: GameData | null = null,
+  refresh = false,
 ): Promise<RecommendationResponse> {
-  const context = buildRequestContext(quizResults, gameData);
+  const context = buildRequestContext(quizResults, gameData, refresh);
 
   try {
     const response = await fetch(`${API_BASE_URL}/ai-recommendations`, {
@@ -25,14 +31,15 @@ export async function fetchRecommendations(
       throw new Error(`API error: ${response.status}`);
     }
 
-    const data = await response.json() as RecommendationResponse;
+    const data = (await response.json()) as RecommendationResponse;
 
     return {
-      success: true,
-      source: data.source,
-      recommendations: normalizeRecommendations(data.recommendations),
-      insights: data.insights || null,
-      responseTime: data.responseTime,
+      ...data,
+      recommendations: (data.recommendations || []).map((rec, i) => ({
+        ...rec,
+        id: rec.id || `rec_${i}`,
+        dish: rec.dish || { name: "", cuisine: "" },
+      })),
     };
   } catch (error) {
     console.error("Failed to fetch recommendations:", error);
@@ -43,10 +50,17 @@ export async function fetchRecommendations(
 /**
  * Build request context from quiz results
  */
-function buildRequestContext(quizResults: QuizResults, gameData: GameData | null): AIRequestContext {
+function buildRequestContext(
+  quizResults: QuizResults,
+  gameData: GameData | null,
+  refresh = false,
+): AIRequestContext {
   const { mood, craving, budget, preference } = quizResults;
 
-  const budgetMap: Record<string, { min: number; max: number; currency: string }> = {
+  const budgetMap: Record<
+    string,
+    { min: number; max: number; currency: string }
+  > = {
     budget: { min: 0, max: 300, currency: "INR" },
     moderate: { min: 300, max: 800, currency: "INR" },
     splurge: { min: 800, max: 2000, currency: "INR" },
@@ -55,7 +69,13 @@ function buildRequestContext(quizResults: QuizResults, gameData: GameData | null
   const now = new Date();
   const hour = now.getHours();
   const timeOfDay =
-    hour < 11 ? "morning" : hour < 15 ? "afternoon" : hour < 19 ? "evening" : "night";
+    hour < 11
+      ? "morning"
+      : hour < 15
+        ? "afternoon"
+        : hour < 19
+          ? "evening"
+          : "night";
 
   return {
     userContext: {
@@ -71,7 +91,9 @@ function buildRequestContext(quizResults: QuizResults, gameData: GameData | null
       },
       situational: {
         timeOfDay,
-        dayOfWeek: ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][now.getDay()],
+        dayOfWeek: ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
+          now.getDay()
+        ],
         budget: budgetMap[budget] || budgetMap.moderate,
         timeAvailable: 30,
         deliveryPreferred: true,
@@ -89,6 +111,9 @@ function buildRequestContext(quizResults: QuizResults, gameData: GameData | null
       diversity: "medium",
       includeExplanations: true,
       includeAlternatives: false,
+      ...(refresh && {
+        temperature: parseFloat((0.5 + Math.random() * 0.5).toFixed(2)),
+      }),
     },
   };
 }
@@ -106,60 +131,6 @@ function estimateEnergyLevel(mood: string): number {
     adventurous: 9,
   };
   return energyMap[mood] || 5;
-}
-
-interface APIRecommendation {
-  id?: string;
-  name?: string;
-  dish?: {
-    name: string;
-    cuisine: string;
-    category?: string;
-    tags?: string[];
-  };
-  cuisine?: string;
-  category?: string;
-  tags?: string[];
-  aiReasoning?: {
-    moodMatch?: string;
-    contextFit?: string;
-    psychologicalHook?: string;
-  } | null;
-  reason?: string;
-  practicalDetails?: {
-    estimatedPrice?: number;
-    preparationTime?: number;
-    healthScore?: number;
-  };
-  price?: number;
-  prepTime?: number;
-  healthScore?: number;
-  budgetType?: string;
-  confidence?: number;
-}
-
-/**
- * Normalize recommendations to consistent format
- */
-function normalizeRecommendations(recommendations: APIRecommendation[]) {
-  return recommendations.map((rec, index) => ({
-    id: rec.id || `rec_${index}`,
-    name: rec.dish?.name || rec.name || '',
-    cuisine: rec.dish?.cuisine || rec.cuisine || "Mixed",
-    category: rec.dish?.category || rec.category || "general",
-    tags: rec.dish?.tags || rec.tags || [],
-    why:
-      rec.aiReasoning?.psychologicalHook ||
-      rec.aiReasoning?.moodMatch ||
-      rec.reason ||
-      "Perfect for your mood",
-    price: rec.practicalDetails?.estimatedPrice || rec.price || 0,
-    prepTime: rec.practicalDetails?.preparationTime || rec.prepTime || 20,
-    healthScore: rec.practicalDetails?.healthScore || rec.healthScore || 5,
-    budgetType: rec.budgetType || "Casual Dining",
-    aiReasoning: rec.aiReasoning || null,
-    confidence: rec.confidence || 0.8,
-  }));
 }
 
 export default { fetchRecommendations };

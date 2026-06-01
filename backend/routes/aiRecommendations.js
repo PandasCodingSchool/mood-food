@@ -4,7 +4,7 @@ import { getRecommendations } from "../utils/recommendationEngine.js";
 const router = express.Router();
 
 // External AI Service configuration
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL;
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const AI_SERVICE_KEY = process.env.AI_SERVICE_KEY;
 const AI_TIMEOUT = 10000; // 10 seconds
 
@@ -15,59 +15,60 @@ const AI_TIMEOUT = 10000; // 10 seconds
  * Falls back to rule-based engine on failure
  */
 router.post("/", async (req, res) => {
-  const startTime = Date.now();
   const body = req.body;
 
   // Extract basic quiz data for fallback
   const { mood, craving, budget, preference } = extractQuizData(body);
 
+  // Build contract-compliant snake_case request for AI service
+  const aiRequest = buildAiRequest(body);
+  console.log(aiRequest);
+
   // Try external AI service first
   if (AI_SERVICE_URL) {
     try {
-      const aiResponse = await fetchAIService(body);
-      const responseTime = Date.now() - startTime;
-
-      return res.json({
-        success: true,
-        source: "ai-service",
-        responseTime,
-        recommendations: aiResponse.recommendations || [],
-        insights: aiResponse.insights || null,
-        serviceMeta: aiResponse.meta || null,
-      });
+      const aiResponse = await fetchAIService(aiRequest);
+      // AI service returns contract-compliant snake_case response — pass through
+      return res.json(aiResponse);
     } catch (error) {
       console.log("AI service failed, using fallback:", error.message);
     }
   }
 
-  // Fallback to rule-based
+  // Fallback to rule-based — shaped to match contract
   const fallbackRecs = getRecommendations(mood, craving, budget, preference);
 
   return res.json({
-    success: true,
-    source: "fallback",
+    success: false,
     recommendations: fallbackRecs.map((rec, index) => ({
       id: `fb_${index}`,
       rank: index + 1,
       confidence: 0.75,
       dish: {
+        id: rec.id || `fb_dish_${index}`,
         name: rec.name,
         cuisine: rec.cuisine,
         category: rec.category || "general",
         tags: rec.tags || [],
       },
-      aiReasoning: {
-        moodMatch: `Matches ${mood} mood`,
-        contextFit: `Fits ${budget} budget and ${craving} craving`,
-        psychologicalHook: rec.reason || "Satisfies your craving",
+      image_url: rec.image_url || null,
+      ai_reasoning: {
+        mood_match: `Matches ${mood} mood`,
+        context_fit: `Fits ${budget} budget and ${craving} craving`,
+        psychological_hook: rec.reason || "Satisfies your craving",
       },
-      practicalDetails: {
-        estimatedPrice: rec.price || 0,
-        preparationTime: rec.prepTime || 20,
-        healthScore: rec.healthScore || 5,
+      practical_details: {
+        estimated_price: rec.price || 0,
+        preparation_time: rec.prepTime || 20,
+        calories: rec.calories || 0,
+        health_score: rec.healthScore || 5,
       },
+      restaurant: null,
+      alternatives: [],
+      pairing_suggestions: [],
     })),
     insights: null,
+    error: "AI unavailable — showing top-rated fallbacks.",
   });
 });
 
@@ -87,7 +88,12 @@ async function fetchAIService(context) {
     headers["Authorization"] = `Bearer ${AI_SERVICE_KEY}`;
   }
 
-  const response = await fetch(AI_SERVICE_URL, {
+  console.log(
+    "Calling AI service:",
+    AI_SERVICE_URL + "/api/ai-recommendations",
+  );
+
+  const response = await fetch(AI_SERVICE_URL + "/api/ai-recommendations", {
     method: "POST",
     headers,
     body: JSON.stringify(context),
@@ -101,6 +107,82 @@ async function fetchAIService(context) {
   }
 
   return await response.json();
+}
+
+/**
+ * Build contract-compliant snake_case request body for AI service.
+ * Maps frontend camelCase fields to the FE-API-CONTRACT schema.
+ */
+function buildAiRequest(body) {
+  const ctx = body?.userContext || {};
+  const game = ctx?.gameData || {};
+  const prefs = ctx?.preferences || {};
+  const sit = ctx?.situational || {};
+  const cfg = body?.recommendationConfig || {};
+
+  const user_context = {
+    mood: {
+      primary: ctx?.mood?.primary || game?.mood || "happy",
+      ...(ctx?.mood?.energyLevel != null && {
+        energy_level: ctx.mood.energyLevel,
+      }),
+      ...(ctx?.mood?.socialContext && {
+        social_context:
+          ctx.mood.socialContext === "alone" ? "solo" : ctx.mood.socialContext,
+      }),
+    },
+    ...(Object.keys(prefs).length && {
+      preferences: {
+        cuisine_types: prefs.cuisineTypes || [],
+        dietary_restrictions: prefs.dietaryRestrictions || [],
+        allergies: prefs.allergies || [],
+        ...(prefs.spiceTolerance && { spice_tolerance: prefs.spiceTolerance }),
+      },
+    }),
+    ...(Object.keys(sit).length && {
+      situational: {
+        ...(sit.timeOfDay && {
+          time_of_day: sit.timeOfDay === "night" ? "late_night" : sit.timeOfDay,
+        }),
+        ...(sit.dayOfWeek && { day_of_week: sit.dayOfWeek }),
+        ...(sit.weather && { weather: sit.weather }),
+        ...(sit.budget && {
+          budget: {
+            max: sit.budget.max,
+            min: sit.budget.min,
+            currency: sit.budget.currency,
+          },
+        }),
+        ...(sit.timeAvailable != null && { time_available: sit.timeAvailable }),
+        ...(sit.deliveryPreferred != null && {
+          delivery_preferred: sit.deliveryPreferred,
+        }),
+      },
+    }),
+    ...(Object.keys(game).length && {
+      game_data: {
+        selections: game.selections || [],
+        swipes: game.swipes || [],
+        ...(game.sliderValues && {
+          slider_values: {
+            adventurous: game.sliderValues.adventurous,
+            health_conscious: game.sliderValues.healthConscious,
+            spicy: game.sliderValues.spicy,
+          },
+        }),
+      },
+    }),
+  };
+
+  const recommendation_config = {
+    count: cfg.count ?? 3,
+    diversity: cfg.diversity ?? "medium",
+    include_explanations: cfg.includeExplanations ?? true,
+    include_alternatives: cfg.includeAlternatives ?? true,
+    ...(cfg.temperature != null && { temperature: cfg.temperature }),
+  };
+
+  return { user_context, recommendation_config };
 }
 
 /**

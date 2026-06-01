@@ -14,29 +14,63 @@ export interface GameData {
 
 export interface Recommendation {
   id: string;
-  name: string;
-  cuisine: string;
-  category?: string;
-  tags?: string[];
-  why: string;
-  price?: number;
-  prepTime?: number;
-  healthScore?: number;
-  budgetType?: string;
-  aiReasoning?: {
-    moodMatch?: string;
-    contextFit?: string;
-    psychologicalHook?: string;
-  } | null;
+  rank?: number;
   confidence?: number;
+  dish: {
+    id?: string;
+    name: string;
+    cuisine: string;
+    category?: string;
+    tags?: string[];
+  };
+  image_url?: string | null;
+  ai_reasoning?: {
+    mood_match?: string;
+    context_fit?: string;
+    psychological_hook?: string;
+    nostalgia_factor?: string;
+  } | null;
+  practical_details?: {
+    estimated_price?: number;
+    preparation_time?: number;
+    calories?: number;
+    health_score?: number;
+  } | null;
+  restaurant?: {
+    name?: string;
+    rating?: number;
+    distance_km?: number;
+    delivery_time_min?: number;
+    is_open?: boolean;
+  } | null;
+  alternatives?: Array<{
+    dish_id: string;
+    type: "healthier_swap" | "budget_swap";
+    name: string;
+    reason: string;
+  }>;
+  pairing_suggestions?: Array<{
+    type: "drink" | "dessert" | "side";
+    name: string;
+    reason: string;
+  }>;
 }
 
 export interface RecommendationResponse {
   success: boolean;
-  source: 'ai-service' | 'fallback';
+  source?: "ai-service" | "fallback";
   recommendations: Recommendation[];
-  insights?: unknown;
-  responseTime?: number;
+  insights?: {
+    detected_mood_profile?: string;
+    preference_evolution?: string;
+  } | null;
+  ai_metadata?: {
+    model_used?: string;
+    tokens_used?: number;
+    response_time_s?: number;
+    cache_hit?: boolean;
+  } | null;
+  error?: string;
 }
 
 export interface UserContext {
