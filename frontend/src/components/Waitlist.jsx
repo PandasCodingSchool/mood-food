@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Mail, User, MapPin, Utensils, CheckCircle, Loader2 } from 'lucide-react';
+import AnimateIn from './AnimateIn';
 import { trackEvent } from '../utils/analytics';
+import {
+  isWaitlistJoined,
+  markWaitlistJoined,
+  submitWaitlist,
+} from '../utils/waitlist';
 
-function Waitlist() {
+function Waitlist({ joined: joinedProp, onJoined }) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -13,31 +19,28 @@ function Waitlist() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (joinedProp || isWaitlistJoined()) {
+      setIsSubmitted(true);
+    }
+  }, [joinedProp]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
 
-    trackEvent('waitlist_join_attempted', formData);
+    trackEvent('waitlist_join_attempted', { ...formData, entry: 'full_form' });
 
     try {
-      const response = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        trackEvent('waitlist_joined', formData);
-        setIsSubmitted(true);
-      } else {
-        throw new Error('Failed to join waitlist');
-      }
+      await submitWaitlist(formData);
+      trackEvent('waitlist_joined', { ...formData, entry: 'full_form' });
+      markWaitlistJoined();
+      setIsSubmitted(true);
+      onJoined?.();
     } catch (err) {
-      setError('Something went wrong. Please try again.');
-      trackEvent('waitlist_error', { error: err.message });
+      setError(err.message || 'Something went wrong. Please try again.');
+      trackEvent('waitlist_error', { entry: 'full_form', error: err.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -52,51 +55,48 @@ function Waitlist() {
 
   if (isSubmitted) {
     return (
-      <section id="waitlist" className="py-20 bg-gradient-to-br from-primary-600 to-secondary-600">
+      <section id="waitlist" className="py-16 bg-secondary-50/30 border-t border-secondary-200">
         <div className="section-container">
-          <div className="max-w-xl mx-auto text-center text-white">
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="w-10 h-10 text-white" />
+          <AnimateIn variant="scale" className="max-w-lg mx-auto text-center surface p-8 border-secondary-200">
+            <div className="w-14 h-14 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-success-pop">
+              <CheckCircle className="w-8 h-8 text-primary-600" />
             </div>
-            <h2 className="text-3xl font-bold mb-4">
-              You are on the list!
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              You&apos;re on the list
             </h2>
-            <p className="text-white/80 text-lg">
-              Thanks for joining our waitlist. We will notify you as soon as we launch in your city.
+            <p className="text-slate-600 font-sans">
+              Thanks for joining. We&apos;ll notify you when we launch in your city.
             </p>
-          </div>
+          </AnimateIn>
         </div>
       </section>
     );
   }
 
   return (
-    <section id="waitlist" className="py-20 bg-gradient-to-br from-primary-600 to-secondary-600">
+    <section id="waitlist" className="py-16 bg-secondary-50/30 border-t border-secondary-200">
       <div className="section-container">
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center text-white mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Join the Waitlist
+        <div className="max-w-lg mx-auto">
+          <AnimateIn className="mb-8 md:text-left text-center">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              Complete your signup
             </h2>
-            <p className="text-white/80 text-lg">
-              Be the first to know when we launch in your city. Get early access and exclusive perks.
+            <p className="text-slate-600 text-sm font-sans">
+              Add your name and city so we can personalize your launch invite.
             </p>
-          </div>
+          </AnimateIn>
 
-          <form
-            onSubmit={handleSubmit}
-            className="bg-white rounded-3xl p-8 md:p-10 shadow-2xl"
-          >
+          <AnimateIn delay={100} variant="slide-up">
+          <form onSubmit={handleSubmit} className="surface p-6 md:p-8 border-2 border-primary-100 shadow-sm bg-white">
             {error && (
               <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl text-sm">
                 {error}
               </div>
             )}
 
-            <div className="grid md:grid-cols-2 gap-6 mb-6">
-              {/* Name */}
+            <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   <User className="w-4 h-4 inline mr-2" />
                   Name *
                 </label>
@@ -106,14 +106,13 @@ function Waitlist() {
                   required
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white"
                   placeholder="Your name"
                 />
               </div>
 
-              {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   <Mail className="w-4 h-4 inline mr-2" />
                   Email *
                 </label>
@@ -123,14 +122,13 @@ function Waitlist() {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white"
                   placeholder="you@example.com"
                 />
               </div>
 
-              {/* City */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   <MapPin className="w-4 h-4 inline mr-2" />
                   City *
                 </label>
@@ -140,22 +138,21 @@ function Waitlist() {
                   required
                   value={formData.city}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white"
                   placeholder="Your city"
                 />
               </div>
 
-              {/* Favorite Cuisine */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   <Utensils className="w-4 h-4 inline mr-2" />
-                  Favorite Cuisine (Optional)
+                  Favorite cuisine (optional)
                 </label>
                 <select
                   name="cuisine"
                   value={formData.cuisine}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none bg-white"
                 >
                   <option value="">Select cuisine</option>
                   <option value="italian">Italian</option>
@@ -174,7 +171,7 @@ function Waitlist() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full btn-primary py-4 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full btn-primary py-3.5 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>
@@ -182,14 +179,15 @@ function Waitlist() {
                   Joining...
                 </>
               ) : (
-                'Join Waitlist'
+                'Join waitlist'
               )}
             </button>
 
-            <p className="text-center text-gray-500 text-sm mt-4">
+            <p className="text-center text-slate-500 text-xs mt-4">
               We respect your privacy. No spam, ever.
             </p>
           </form>
+          </AnimateIn>
         </div>
       </div>
     </section>

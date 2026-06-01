@@ -1,27 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Teal + indigo — single source of truth (avoids stale Tailwind palette cache) */
+    --color-primary-50: 240 253 250;
+    --color-primary-100: 204 251 241;
+    --color-primary-200: 153 246 228;
+    --color-primary-300: 94 234 212;
+    --color-primary-400: 45 212 191;
+    --color-primary-500: 20 184 166;
+    --color-primary-600: 13 148 136;
+    --color-primary-700: 15 118 110;
+    --color-primary-800: 17 94 89;
+    --color-primary-900: 19 78 74;
+
+    --color-secondary-50: 238 242 255;
+    --color-secondary-100: 224 231 255;
+    --color-secondary-200: 199 210 254;
+    --color-secondary-300: 165 180 252;
+    --color-secondary-400: 129 140 248;
+    --color-secondary-500: 99 102 241;
+    --color-secondary-600: 79 70 229;
+    --color-secondary-700: 67 56 202;
+    --color-secondary-800: 55 48 163;
+    --color-secondary-900: 49 46 129;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
   body {
-    @apply antialiased text-gray-900 bg-white;
+    @apply antialiased font-sans text-slate-800 bg-slate-50;
+  }
+
+  /* Landing page typography — clearly distinct from system UI */
+  .landing-page {
+    font-family: 'Figtree', system-ui, sans-serif;
+  }
+
+  .landing-page h1,
+  .landing-page h2,
+  .landing-page h3 {
+    font-family: 'Figtree', system-ui, sans-serif;
+    @apply tracking-tight text-slate-900 font-bold;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-primary-600 rounded-full hover:bg-primary-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5;
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white rounded-full transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5;
+    background-color: rgb(var(--color-primary-600));
   }
-  
+
+  .btn-primary:hover {
+    background-color: rgb(var(--color-primary-700));
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-white border-2 rounded-full transition-all duration-200;
+    color: rgb(var(--color-primary-800));
+    border-color: rgb(var(--color-primary-200));
+  }
+
+  .btn-outline:hover {
+    border-color: rgb(var(--color-primary-400));
+    background-color: rgb(var(--color-primary-50));
+  }
+
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 text-base font-medium text-primary-700 bg-primary-50 rounded-full hover:bg-primary-100 transition-all duration-200;
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-medium rounded-full transition-all duration-200;
+    color: rgb(var(--color-secondary-700));
+    background-color: rgb(var(--color-secondary-50));
   }
-  
+
+  .btn-secondary:hover {
+    background-color: rgb(var(--color-secondary-100));
+  }
+
   .card {
-    @apply bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300;
+    @apply bg-white rounded-2xl border border-primary-100/80 p-6 hover:shadow-md hover:border-primary-200 transition-all duration-300;
   }
-  
+
+  .surface {
+    @apply bg-white border border-primary-100 rounded-2xl;
+  }
+
+  .text-accent {
+    @apply text-primary-600;
+  }
+
   .section-container {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .landing-hero-bg {
+    background: linear-gradient(
+      to bottom right,
+      rgb(var(--color-primary-50)),
+      white,
+      rgb(var(--color-secondary-50))
+    );
+  }
+
+  .app-navbar {
+    border-bottom-color: rgb(var(--color-primary-200) / 0.8);
+  }
+
+  .app-navbar__logo {
+    background-color: rgb(var(--color-primary-600));
+    box-shadow: 0 1px 2px rgb(var(--color-primary-600) / 0.3);
+  }
+
+  .app-navbar__logo:hover {
+    background-color: rgb(var(--color-primary-700));
+  }
+
+  .app-navbar__brand {
+    color: rgb(var(--color-primary-800));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-soft-pulse,
+  .animate-success-pop,
+  .animate-bounce-slow {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
