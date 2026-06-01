@@ -47,14 +47,17 @@ function Hero({ onStartQuiz }) {
             </span>
           </div>
 
-          {/* Headline */}
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-gray-900 mb-6 leading-tight animate-slide-up tracking-tight">
-            Stop Spending{' '}
-            <span className="bg-gradient-to-r from-primary-500 via-orange-500 to-secondary-500 bg-clip-text text-transparent">
-              30 Minutes
-            </span>
+          {/* Headline — word-by-word reveal */}
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-gray-900 mb-6 leading-tight tracking-tight" style={{ perspective: '600px' }}>
+            {['Stop', 'Spending'].map((word, i) => (
+              <span key={i} className="hero-word mr-[0.25em]" style={{ animationDelay: `${i * 0.1}s` }}>{word}</span>
+            ))}
+            <span className="hero-word bg-gradient-to-r from-primary-500 via-orange-500 to-secondary-500 bg-clip-text text-transparent mr-[0.25em]" style={{ animationDelay: '0.2s' }}>30</span>
+            <span className="hero-word bg-gradient-to-r from-primary-500 via-orange-500 to-secondary-500 bg-clip-text text-transparent" style={{ animationDelay: '0.3s' }}>Minutes</span>
             <br />
-            Deciding What To Eat.
+            {['Deciding', 'What', 'To', 'Eat.'].map((word, i) => (
+              <span key={i} className="hero-word mr-[0.25em]" style={{ animationDelay: `${0.45 + i * 0.1}s` }}>{word}</span>
+            ))}
           </h1>
 
           {/* Subheadline */}

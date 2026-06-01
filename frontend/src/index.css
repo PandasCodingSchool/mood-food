@@ -126,3 +126,22 @@
 .glow-ring {
   animation: glow-pulse 1.2s ease-in-out infinite;
 }
+
+@keyframes word-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) rotateX(40deg);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotateX(0deg);
+    filter: blur(0);
+  }
+}
+
+.hero-word {
+  display: inline-block;
+  opacity: 0;
+  animation: word-reveal 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
