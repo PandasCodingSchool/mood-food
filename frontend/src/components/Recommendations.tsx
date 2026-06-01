@@ -81,8 +81,13 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
         count: data.recommendations.length,
       });
     } catch (err) {
-      setError("Could not load recommendations. Please try again.");
-      trackEvent("recommendations_error", { error: (err as Error).message });
+      const msg = (err as Error).message;
+      setError(
+        msg.startsWith("You've")
+          ? msg
+          : "Could not load recommendations. Please try again.",
+      );
+      trackEvent("recommendations_error", { error: msg });
     } finally {
       setLoading(false);
     }
@@ -425,6 +430,51 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             })}
           </div>
         )}
+
+        {/* Alternatives strip */}
+        {!loading &&
+          !error &&
+          (() => {
+            const allAlts = recommendations.flatMap((r) =>
+              (r.alternatives || []).map((a) => ({
+                ...a,
+                fromDish: r.dish.name,
+              })),
+            );
+            if (allAlts.length === 0) return null;
+            return (
+              <div className="mb-8">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  You might also like
+                </h3>
+                <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+                  {allAlts.map((alt, i) => (
+                    <div
+                      key={i}
+                      className="snap-start flex-shrink-0 w-52 bg-white rounded-2xl shadow-md p-4 border border-gray-100 hover:shadow-lg transition-shadow"
+                    >
+                      <span
+                        className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${alt.type === "healthier_swap" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}
+                      >
+                        {alt.type === "healthier_swap"
+                          ? "🥦 Healthier"
+                          : "💰 Budget Pick"}
+                      </span>
+                      <p className="font-semibold text-gray-900 text-sm leading-tight mb-1">
+                        {alt.name}
+                      </p>
+                      <p className="text-xs text-gray-500 leading-snug">
+                        {alt.reason}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1.5">
+                        Instead of {alt.fromDish}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
         {/* Bottom actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

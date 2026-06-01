@@ -1,63 +1,115 @@
-import { ArrowRight, Sparkles, Clock, Smile } from 'lucide-react';
+import { ArrowRight, Sparkles, Clock, Smile, Star } from 'lucide-react';
+
+const PARTICLES = [
+  { emoji: '🍕', left: '8%',  delay: '0s',   dur: '12s', size: '2rem' },
+  { emoji: '🍜', left: '18%', delay: '2s',   dur: '15s', size: '1.6rem' },
+  { emoji: '🥗', left: '30%', delay: '4s',   dur: '11s', size: '1.8rem' },
+  { emoji: '🌮', left: '44%', delay: '1s',   dur: '13s', size: '2.2rem' },
+  { emoji: '🍣', left: '58%', delay: '3.5s', dur: '14s', size: '1.5rem' },
+  { emoji: '🍔', left: '70%', delay: '0.5s', dur: '10s', size: '2rem' },
+  { emoji: '🥘', left: '80%', delay: '2.5s', dur: '16s', size: '1.7rem' },
+  { emoji: '🍰', left: '90%', delay: '1.5s', dur: '12s', size: '1.6rem' },
+];
 
 function Hero({ onStartQuiz }) {
   return (
     <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute top-20 right-0 w-96 h-96 bg-primary-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-secondary-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
-      
+      {/* Animated background blobs */}
+      <div className="blob-drift absolute top-16 right-[-4rem] w-[32rem] h-[32rem] bg-primary-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40" style={{ animationDelay: '0s' }} />
+      <div className="blob-drift absolute bottom-[-4rem] left-[-4rem] w-[32rem] h-[32rem] bg-secondary-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30" style={{ animationDelay: '3s' }} />
+      <div className="blob-drift absolute top-1/2 left-1/3 w-64 h-64 bg-yellow-200 rounded-full mix-blend-multiply filter blur-3xl opacity-25" style={{ animationDelay: '6s' }} />
+
+      {/* Floating food particles */}
+      {PARTICLES.map((p, i) => (
+        <span
+          key={i}
+          className="particle select-none"
+          style={{
+            left: p.left,
+            bottom: '-2rem',
+            fontSize: p.size,
+            animationDuration: p.dur,
+            animationDelay: p.delay,
+          }}
+        >
+          {p.emoji}
+        </span>
+      ))}
+
       <div className="section-container relative z-10">
         <div className="max-w-4xl mx-auto text-center">
           {/* Badge */}
-          <div className="inline-flex items-center space-x-2 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full px-4 py-2 mb-8 animate-fade-in">
+          <div className="inline-flex items-center space-x-2 bg-white/90 backdrop-blur-sm border border-primary-100 shadow-sm rounded-full px-4 py-2 mb-8 animate-fade-in">
             <Sparkles className="w-4 h-4 text-primary-500" />
-            <span className="text-sm font-medium text-gray-700">
-              AI-Powered Food Recommendations
+            <span className="text-sm font-semibold text-primary-700">AI-Powered Food Recommendations</span>
+            <span className="flex items-center gap-0.5 text-yellow-500 text-xs ml-1">
+              <Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" />
             </span>
           </div>
-          
+
           {/* Headline */}
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight animate-slide-up">
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-gray-900 mb-6 leading-tight animate-slide-up tracking-tight">
             Stop Spending{' '}
-            <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary-500 via-orange-500 to-secondary-500 bg-clip-text text-transparent">
               30 Minutes
-            </span>{' '}
+            </span>
+            <br />
             Deciding What To Eat.
           </h1>
-          
+
           {/* Subheadline */}
-          <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            Get personalized food recommendations in under{' '}
-            <span className="font-semibold text-primary-600">2 minutes</span>{' '}
-            based on your mood, cravings, and preferences.
+          <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto animate-slide-up leading-relaxed" style={{ animationDelay: '0.1s' }}>
+            Tell us your mood. Get{' '}
+            <span className="font-bold text-primary-600">AI-curated meal picks</span>{' '}
+            in under 2 minutes — no decision fatigue, just deliciousness.
           </p>
-          
-          {/* Stats */}
-          <div className="flex flex-wrap justify-center gap-6 mb-12 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full px-4 py-2">
-              <Clock className="w-5 h-5 text-primary-500" />
+
+          {/* Stat pills */}
+          <div className="flex flex-wrap justify-center gap-3 mb-12 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-full px-4 py-2">
+              <Clock className="w-4 h-4 text-primary-500" />
               <span className="text-sm font-medium text-gray-700">Under 2 min</span>
             </div>
-            <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full px-4 py-2">
-              <Smile className="w-5 h-5 text-secondary-500" />
-              <span className="text-sm font-medium text-gray-700">Mood-based</span>
+            <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-full px-4 py-2">
+              <Smile className="w-4 h-4 text-secondary-500" />
+              <span className="text-sm font-medium text-gray-700">Mood-based AI</span>
             </div>
-            <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full px-4 py-2">
-              <Sparkles className="w-5 h-5 text-yellow-500" />
-              <span className="text-sm font-medium text-gray-700">Personalized</span>
+            <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-full px-4 py-2">
+              <Sparkles className="w-4 h-4 text-yellow-500" />
+              <span className="text-sm font-medium text-gray-700">100% Personalized</span>
             </div>
           </div>
-          
+
           {/* CTA */}
-          <div className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
-            <button onClick={onStartQuiz} className="btn-primary text-lg px-8 py-4 group">
-              Find My Meal
+          <div className="animate-slide-up flex flex-col items-center gap-4" style={{ animationDelay: '0.3s' }}>
+            <button
+              onClick={onStartQuiz}
+              className="btn-primary btn-shimmer text-lg px-10 py-4 group shadow-xl hover:shadow-primary-200/60"
+            >
+              🍽️ Find My Meal
               <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
             </button>
-            <p className="text-sm text-gray-500 mt-4">
-              No signup required • Free forever
+            <p className="text-sm text-gray-400">
+              No signup required &nbsp;·&nbsp; Free forever &nbsp;·&nbsp; Takes 90 seconds
             </p>
+          </div>
+
+          {/* Social proof strip */}
+          <div className="mt-16 flex flex-wrap justify-center items-center gap-6 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+            <div className="text-center">
+              <p className="text-2xl font-black text-primary-600">2,400+</p>
+              <p className="text-xs text-gray-500 mt-0.5">on waitlist</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <p className="text-2xl font-black text-primary-600">8</p>
+              <p className="text-xs text-gray-500 mt-0.5">cuisines</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <p className="text-2xl font-black text-primary-600">3 games</p>
+              <p className="text-xs text-gray-500 mt-0.5">to discover your mood</p>
+            </div>
           </div>
         </div>
       </div>

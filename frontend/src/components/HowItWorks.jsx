@@ -1,4 +1,5 @@
 import { Smile, MessageCircle, Utensils } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 const steps = [
   {
@@ -25,10 +26,23 @@ const steps = [
 ];
 
 function HowItWorks() {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const els = ref.current?.querySelectorAll('.fade-up');
+    if (!els) return;
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } }),
+      { threshold: 0.15 }
+    );
+    els.forEach(el => obs.observe(el));
+    return () => obs.disconnect();
+  }, []);
+
   return (
-    <section id="how-it-works" className="py-20 bg-white">
+    <section id="how-it-works" className="py-20 bg-white" ref={ref}>
       <div className="section-container">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 fade-up">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             How It Works
           </h2>
@@ -41,7 +55,8 @@ function HowItWorks() {
           {steps.map((item, index) => (
             <div
               key={index}
-              className="relative group"
+              className="relative group fade-up"
+              style={{ transitionDelay: `${index * 0.15}s` }}
             >
               <div className="card text-center group-hover:-translate-y-2 transition-transform duration-300">
                 <div className={`w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg`}>

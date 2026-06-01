@@ -1,4 +1,5 @@
 import { Clock, Brain, Compass, Heart, Zap } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 const benefits = [
   {
@@ -29,10 +30,23 @@ const benefits = [
 ];
 
 function Benefits() {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const els = ref.current?.querySelectorAll('.fade-up');
+    if (!els) return;
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } }),
+      { threshold: 0.12 }
+    );
+    els.forEach(el => obs.observe(el));
+    return () => obs.disconnect();
+  }, []);
+
   return (
-    <section id="benefits" className="py-20 bg-gradient-to-br from-gray-50 to-white">
+    <section id="benefits" className="py-20 bg-gradient-to-br from-gray-50 to-white" ref={ref}>
       <div className="section-container">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 fade-up">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             Why Choose MoodFood?
           </h2>
@@ -45,7 +59,8 @@ function Benefits() {
           {benefits.map((benefit, index) => (
             <div
               key={index}
-              className="card flex items-start space-x-4 hover:-translate-y-1 transition-transform duration-300"
+              className="card flex items-start space-x-4 hover:-translate-y-1 transition-transform duration-300 fade-up"
+              style={{ transitionDelay: `${index * 0.1}s` }}
             >
               <div className="flex-shrink-0 w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
                 <benefit.icon className="w-6 h-6 text-primary-600" />

@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import rateLimit from "express-rate-limit";
 import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 
@@ -18,8 +19,35 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// General rate limit — all API routes
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_GENERAL || "100"),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+
+// Strict limit for AI recommendations (calls OpenAI — cost-sensitive)
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_AI || "10"),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error:
+      "Too many recommendation requests. Please wait a few minutes before trying again.",
+  },
+  handler: (req, res, _next, options) => {
+    console.warn(`Rate limit hit for AI recommendations from IP: ${req.ip}`);
+    res.status(429).json(options.message);
+  },
+});
+
+app.use("/api", generalLimiter);
+
 // AI Recommendations route
-app.use("/api/ai-recommendations", aiRecommendationsRouter);
+app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {

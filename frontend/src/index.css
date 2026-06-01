@@ -12,16 +12,117 @@
   .btn-primary {
     @apply inline-flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-primary-600 rounded-full hover:bg-primary-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5;
   }
-  
+
   .btn-secondary {
     @apply inline-flex items-center justify-center px-6 py-3 text-base font-medium text-primary-700 bg-primary-50 rounded-full hover:bg-primary-100 transition-all duration-200;
   }
-  
+
   .card {
     @apply bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300;
   }
-  
+
   .section-container {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
+
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    animation: shimmer 2.4s infinite;
+  }
+
+  .fade-up {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.6s ease,
+      transform 0.6s ease;
+  }
+  .fade-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 160%;
+  }
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes blob-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 15px) scale(0.97);
+  }
+}
+
+@keyframes confetti-pop {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--cx), var(--cy)) rotate(var(--cr)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 16px rgba(249, 115, 22, 0);
+  }
+}
+
+.particle {
+  position: absolute;
+  pointer-events: none;
+  animation: float-up linear infinite;
+  user-select: none;
+}
+
+.blob-drift {
+  animation: blob-drift 8s ease-in-out infinite;
+}
+
+.glow-ring {
+  animation: glow-pulse 1.2s ease-in-out infinite;
 }

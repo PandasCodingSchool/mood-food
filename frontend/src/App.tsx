@@ -1,74 +1,91 @@
-import { useState, useEffect } from 'react'
-import Hero from './components/Hero'
-import HowItWorks from './components/HowItWorks'
-import Benefits from './components/Benefits'
-import Quiz from './components/Quiz'
-import Recommendations from './components/Recommendations'
-import Waitlist from './components/Waitlist'
-import Footer from './components/Footer'
-import Navbar from './components/Navbar'
-import GameSelector from './components/GameSelector'
-import { SwipeVibe, SpinWheel } from './components/games'
-import { trackEvent } from './utils/analytics'
-import type { QuizResults, GameData } from './types'
+import { useState, useEffect } from "react";
+import Hero from "./components/Hero";
+import HowItWorks from "./components/HowItWorks";
+import Benefits from "./components/Benefits";
+import Quiz from "./components/Quiz";
+import Recommendations from "./components/Recommendations";
+import Waitlist from "./components/Waitlist";
+import Footer from "./components/Footer";
+import Navbar from "./components/Navbar.tsx";
+import GameSelector from "./components/GameSelector";
+import { SwipeVibe, SpinWheel } from "./components/games";
+import { trackEvent } from "./utils/analytics";
+import type { QuizResults, GameData } from "./types";
 
 function App() {
-  const [showQuiz, setShowQuiz] = useState(false)
-  const [showGameSelector, setShowGameSelector] = useState(false)
-  const [activeGame, setActiveGame] = useState<string | null>(null)
-  const [quizResults, setQuizResults] = useState<QuizResults | null>(null)
-  const [showRecommendations, setShowRecommendations] = useState(false)
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [showGameSelector, setShowGameSelector] = useState(false);
+  const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
+  const [showRecommendations, setShowRecommendations] = useState(false);
 
   useEffect(() => {
-    trackEvent('landing_page_viewed')
-  }, [])
+    trackEvent("landing_page_viewed");
+  }, []);
 
   const handleStartQuiz = () => {
-    trackEvent('quiz_started')
-    setShowGameSelector(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+    trackEvent("quiz_started");
+    setShowGameSelector(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleSelectGame = (gameId: string) => {
-    setActiveGame(gameId)
-    setShowGameSelector(false)
-    if (gameId === 'quiz') {
-      setShowQuiz(true)
+    setActiveGame(gameId);
+    setShowGameSelector(false);
+    if (gameId === "quiz") {
+      setShowQuiz(true);
     }
-  }
+  };
 
-  const handleGameComplete = (results: QuizResults & { gameData: GameData }) => {
-    trackEvent('game_completed', { game: activeGame, results })
-    setQuizResults(results)
-    setActiveGame(null)
-    setShowQuiz(false)
-    setShowRecommendations(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const handleGameComplete = (
+    results: QuizResults & { gameData: GameData },
+  ) => {
+    trackEvent("game_completed", { game: activeGame, results });
+    setQuizResults(results);
+    setActiveGame(null);
+    setShowQuiz(false);
+    setShowRecommendations(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleBackToGames = () => {
-    setActiveGame(null)
-    setShowQuiz(false)
-    setShowGameSelector(true)
-  }
+    setActiveGame(null);
+    setShowQuiz(false);
+    setShowGameSelector(true);
+  };
 
   const handleBackToHome = () => {
-    setShowQuiz(false)
-    setShowGameSelector(false)
-    setActiveGame(null)
-    setShowRecommendations(false)
-    setQuizResults(null)
-  }
+    setShowQuiz(false);
+    setShowGameSelector(false);
+    setActiveGame(null);
+    setShowRecommendations(false);
+    setQuizResults(null);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      <Navbar onStartQuiz={handleStartQuiz} />
-      
+      <Navbar
+        onStartQuiz={handleStartQuiz}
+        onJoinWaitlist={() => {
+          handleBackToHome();
+          setTimeout(
+            () =>
+              document
+                .getElementById("waitlist")
+                ?.scrollIntoView({ behavior: "smooth" }),
+            100,
+          );
+        }}
+      />
+
       {showGameSelector ? (
-        <GameSelector onSelectGame={handleSelectGame} onBack={handleBackToHome} />
-      ) : activeGame === 'swipe' ? (
+        <GameSelector
+          onSelectGame={handleSelectGame}
+          onBack={handleBackToHome}
+        />
+      ) : activeGame === "swipe" ? (
         <SwipeVibe onComplete={handleGameComplete} onBack={handleBackToGames} />
-      ) : activeGame === 'wheel' ? (
+      ) : activeGame === "wheel" ? (
         <SpinWheel onComplete={handleGameComplete} onBack={handleBackToGames} />
       ) : showQuiz ? (
         <Quiz onComplete={handleGameComplete} onBack={handleBackToGames} />
@@ -82,10 +99,13 @@ function App() {
           <Waitlist />
         </main>
       )}
-      
-      {!showGameSelector && !activeGame && !showQuiz && !showRecommendations && <Footer />}
+
+      {!showGameSelector &&
+        !activeGame &&
+        !showQuiz &&
+        !showRecommendations && <Footer />}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

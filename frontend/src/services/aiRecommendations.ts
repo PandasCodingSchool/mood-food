@@ -27,6 +27,12 @@ export async function fetchRecommendations(
       body: JSON.stringify(context),
     });
 
+    if (response.status === 429) {
+      throw new Error(
+        "You've requested too many recommendations. Please wait a few minutes and try again.",
+      );
+    }
+
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
     }
@@ -110,7 +116,7 @@ function buildRequestContext(
       count: 3,
       diversity: "medium",
       includeExplanations: true,
-      includeAlternatives: false,
+      includeAlternatives: true,
       ...(refresh && {
         temperature: parseFloat((0.5 + Math.random() * 0.5).toFixed(2)),
       }),
