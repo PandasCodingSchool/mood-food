@@ -107,7 +107,7 @@ function Hero({ onStartQuiz }) {
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">
-              <p className="text-2xl font-black text-primary-600">3 games</p>
+              <p className="text-2xl font-black text-primary-600">4 games</p>
               <p className="text-xs text-gray-500 mt-0.5">to discover your mood</p>
             </div>
           </div>

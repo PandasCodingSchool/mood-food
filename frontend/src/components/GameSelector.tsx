@@ -5,6 +5,7 @@ import {
   MessageCircle,
   Sparkles,
   RotateCw,
+  BookOpen,
 } from "lucide-react";
 import { trackEvent } from "../utils/analytics";
 import type { LucideIcon } from "lucide-react";
@@ -20,6 +21,15 @@ interface Game {
 }
 
 const GAMES: Game[] = [
+  {
+    id: "story",
+    title: "Day Story",
+    description: "Live a mini workday — we read your mood from your choices",
+    icon: BookOpen,
+    color: "from-primary-500 to-secondary-500",
+    bgColor: "bg-primary-50",
+    duration: "~45 sec",
+  },
   {
     id: "quiz",
     title: "Classic Quiz",

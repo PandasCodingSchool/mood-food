@@ -8,7 +8,7 @@ import Waitlist from "./components/Waitlist";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar.tsx";
 import GameSelector from "./components/GameSelector";
-import { SwipeVibe, SpinWheel } from "./components/games";
+import { SwipeVibe, SpinWheel, DayStory } from "./components/games";
 import { trackEvent } from "./utils/analytics";
 import type { QuizResults, GameData } from "./types";
 
@@ -87,6 +87,8 @@ function App() {
           onSelectGame={handleSelectGame}
           onBack={handleBackToHome}
         />
+      ) : activeGame === "story" ? (
+        <DayStory onComplete={handleGameComplete} onBack={handleBackToGames} />
       ) : activeGame === "swipe" ? (
         <SwipeVibe onComplete={handleGameComplete} onBack={handleBackToGames} />
       ) : activeGame === "wheel" ? (
