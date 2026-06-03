@@ -97,7 +97,7 @@ const SWIPE_ITEMS: SwipeItem[] = [
   {
     id: 10,
     image:
-      "https://images.unsplash.com/photo-1542345812-d98b5cd6cf98?w=600&h=400&fit=crop",
+      "https://sinfulkitchen.com/wp-content/uploads/2024/01/Mediterranean-Wrap-Sandwich.jpg",
     name: "Mediterranean Wrap",
     category: "healthy",
     cuisine: "Mediterranean",

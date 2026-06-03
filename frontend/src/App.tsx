@@ -66,6 +66,10 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
       <Navbar
         onStartQuiz={handleStartQuiz}
+        onHome={() => {
+          handleBackToHome();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
         onJoinWaitlist={() => {
           handleBackToHome();
           setTimeout(

@@ -42,9 +42,6 @@ function Hero({ onStartQuiz }) {
           <div className="inline-flex items-center space-x-2 bg-white/90 backdrop-blur-sm border border-primary-100 shadow-sm rounded-full px-4 py-2 mb-8 animate-fade-in">
             <Sparkles className="w-4 h-4 text-primary-500" />
             <span className="text-sm font-semibold text-primary-700">AI-Powered Food Recommendations</span>
-            <span className="flex items-center gap-0.5 text-yellow-500 text-xs ml-1">
-              <Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" />
-            </span>
           </div>
 
           {/* Headline — word-by-word reveal */}
