@@ -1,4 +1,4 @@
-import { UtensilsCrossed, Heart, Twitter, Instagram, Linkedin, Github } from 'lucide-react';
+import { Heart, Twitter, Instagram, Linkedin, Github } from 'lucide-react';
 
 function Footer() {
   const currentYear = new Date().getFullYear();
@@ -10,10 +10,11 @@ function Footer() {
           {/* Brand */}
           <div className="col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center">
-                <UtensilsCrossed className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold">MoodFood</span>
+              <img
+                src="/MoodFood.png"
+                alt="MoodFood"
+                className="h-16 w-auto rounded-xl object-contain bg-white"
+              />
             </div>
             <p className="text-gray-400 max-w-sm mb-6">
               Helping you decide what to eat in under 2 minutes. Personalized food recommendations based on your mood, cravings, and preferences.

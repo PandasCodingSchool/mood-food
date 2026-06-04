@@ -307,7 +307,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
           </button>
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-1">
-              Swipe & Vibe 🍽️
+              Snack & Match 🍽️
             </h2>
             <p className="text-gray-500 text-sm">
               Swipe right to love it, left to pass

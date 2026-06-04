@@ -1,4 +1,4 @@
-import { UtensilsCrossed, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface NavbarProps {
@@ -59,12 +59,11 @@ function Navbar({ onStartQuiz, onJoinWaitlist, onHome }: NavbarProps) {
             onClick={handleHome}
             aria-label="Go to home"
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center shadow-md">
-              <UtensilsCrossed className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
-              MoodFood
-            </span>
+            <img
+              src="/MoodFood.png"
+              alt="MoodFood"
+              className="h-16 w-auto rounded-xl object-contain"
+            />
           </button>
 
           {/* Desktop nav */}

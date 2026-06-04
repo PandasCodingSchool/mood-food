@@ -132,6 +132,7 @@ export interface WheelSegment {
   id: string;
   label: string;
   color: string;
+  gradient?: string;
   icon: string;
   mood: string;
 }

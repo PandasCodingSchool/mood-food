@@ -63,7 +63,7 @@ windsurf-project/
 
 - **Classic Quiz** — 4-question mood quiz
 - **Swipe & Vibe** — Tinder-style food card swiping with touch drag, card tilt, and LIKE/NOPE stamps
-- **Spin the Wheel** — Spin to land on a food vibe; accept or reject with confetti on land
+- **Meal Roulette** — Spin to land on a food vibe; accept or reject with confetti on land
 
 ### 🤖 AI Recommendations
 

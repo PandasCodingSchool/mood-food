@@ -7,6 +7,10 @@ const router = express.Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const AI_SERVICE_KEY = process.env.AI_SERVICE_KEY;
 const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS || "30000"); // 30s default, handles cold starts
+const AI_MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES || "2");
+const AI_RETRY_BASE_DELAY_MS = parseInt(
+  process.env.AI_RETRY_BASE_DELAY_MS || "400",
+);
 
 /**
  * POST /api/ai-recommendations
@@ -77,6 +81,30 @@ router.post("/", async (req, res) => {
  * Simply passes through the request body to the service
  */
 async function fetchAIService(context) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+    try {
+      return await fetchAIServiceOnce(context, attempt + 1);
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetryableAIError(error) || attempt === AI_MAX_RETRIES) {
+        throw error;
+      }
+
+      const delayMs = getRetryDelay(attempt);
+      console.warn(
+        `AI service attempt ${attempt + 1} failed (${error.message}). Retrying in ${delayMs}ms...`,
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError;
+}
+
+async function fetchAIServiceOnce(context, attempt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT);
 
@@ -89,24 +117,51 @@ async function fetchAIService(context) {
   }
 
   console.log(
-    "Calling AI service:",
+    `Calling AI service (attempt ${attempt}/${AI_MAX_RETRIES + 1}):`,
     AI_SERVICE_URL + "/api/ai-recommendations",
   );
 
-  const response = await fetch(AI_SERVICE_URL + "/api/ai-recommendations", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(context),
-    signal: controller.signal,
-  });
-
-  clearTimeout(timeout);
+  let response;
+  try {
+    response = await fetch(AI_SERVICE_URL + "/api/ai-recommendations", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(context),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
-    throw new Error(`AI service error: ${response.status}`);
+    const error = new Error(`AI service error: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
 
   return await response.json();
+}
+
+function isRetryableAIError(error) {
+  if (error?.name === "AbortError") {
+    return true;
+  }
+
+  if (error?.status) {
+    return error.status === 408 || error.status === 429 || error.status >= 500;
+  }
+
+  return true;
+}
+
+function getRetryDelay(attempt) {
+  const exponentialDelay = AI_RETRY_BASE_DELAY_MS * 2 ** attempt;
+  const jitter = Math.floor(Math.random() * 150);
+  return exponentialDelay + jitter;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -119,6 +174,11 @@ function buildAiRequest(body) {
   const prefs = ctx?.preferences || {};
   const sit = ctx?.situational || {};
   const cfg = body?.recommendationConfig || {};
+  const gameSelections = [
+    ...(game.selections || []),
+    ...(game.storyChoices || []),
+    ...(game.storySummary ? [game.storySummary] : []),
+  ];
 
   const user_context = {
     mood: {
@@ -142,7 +202,7 @@ function buildAiRequest(body) {
     ...(Object.keys(sit).length && {
       situational: {
         ...(sit.timeOfDay && {
-          time_of_day: sit.timeOfDay === "night" ? "late_night" : sit.timeOfDay,
+          time_of_day: mapTimeOfDay(sit.timeOfDay),
         }),
         ...(sit.dayOfWeek && { day_of_week: sit.dayOfWeek }),
         ...(sit.weather && { weather: sit.weather }),
@@ -161,13 +221,21 @@ function buildAiRequest(body) {
     }),
     ...(Object.keys(game).length && {
       game_data: {
-        selections: game.selections || [],
+        ...(game.type && { type: game.type }),
+        selections: gameSelections,
         swipes: game.swipes || [],
         ...(game.sliderValues && {
           slider_values: {
             adventurous: game.sliderValues.adventurous,
             health_conscious: game.sliderValues.healthConscious,
             spicy: game.sliderValues.spicy,
+          },
+        }),
+        ...(game.moodVector && {
+          slider_values: {
+            adventurous: scoreToScale(game.moodVector.valence),
+            health_conscious: scoreToScale(game.moodVector.energy),
+            spicy: scoreToScale(game.moodVector.social),
           },
         }),
       },
@@ -183,6 +251,29 @@ function buildAiRequest(body) {
   };
 
   return { user_context, recommendation_config };
+}
+
+function mapTimeOfDay(timeOfDay) {
+  const normalized = String(timeOfDay).toLowerCase();
+  const map = {
+    morning: "breakfast",
+    breakfast: "breakfast",
+    afternoon: "lunch",
+    lunch: "lunch",
+    evening: "dinner",
+    dinner: "dinner",
+    night: "late_night",
+    late_night: "late_night",
+  };
+  return map[normalized] || "dinner";
+}
+
+function scoreToScale(value) {
+  if (typeof value !== "number") {
+    return undefined;
+  }
+
+  return Math.min(10, Math.max(1, Math.round(((value + 1) / 2) * 9 + 1)));
 }
 
 /**

@@ -205,14 +205,14 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
         {/* Error */}
         {error && !loading && (
-          <div className="text-center py-12 bg-red-50 rounded-2xl">
+          <div className="text-center py-12 mb-4 bg-red-50 rounded-2xl">
             <p className="text-red-600 mb-4">{error}</p>
-            <button
+            {/* <button
               onClick={() => loadRecommendations()}
               className="px-6 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
             >
               Try Again
-            </button>
+            </button> */}
           </div>
         )}
 
