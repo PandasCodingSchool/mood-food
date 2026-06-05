@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/MoodFood.png" />
     <link rel="apple-touch-icon" href="/MoodFood.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="application-name" content="MoodFood" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MoodFood — AI Food Recommendations for Your Mood & Cravings</title>
     <meta
@@ -17,6 +19,12 @@
     <meta name="author" content="MoodFood" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#f97316" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="MoodFood" />
     <link rel="canonical" href="https://moodfood.fun/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -71,6 +79,70 @@
           "@type": "Organization",
           "name": "MoodFood"
         }
+      }
+    </script>
+    <!-- FAQ Schema -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How does MoodFood work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "MoodFood uses AI to give you personalized food recommendations based on your mood, cravings, budget, and dietary preferences. Choose a game mode (Classic Quiz, Swipe & Vibe, or Meal Roulette), answer a few questions, and get 3 curated meal picks with healthier swaps and budget alternatives."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is MoodFood free to use?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, MoodFood is completely free to use. You can get AI-powered food recommendations without any cost or subscription."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What game modes does MoodFood offer?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "MoodFood offers three game modes: Classic Quiz (4-question mood quiz), Swipe & Vibe (Tinder-style food card swiping), and Meal Roulette (spin to land on a food vibe with confetti celebration)."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I get healthier food alternatives?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes! Every recommendation comes with a Healthier Swap option (marked with 🥦) and a Budget Pick alternative (marked with 💰) so you can make the best choice for your needs."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How long does it take to get recommendations?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "From 'I'm hungry' to eating in 90 seconds. MoodFood delivers personalized AI food recommendations in under 2 minutes."
+            }
+          }
+        ]
+      }
+    </script>
+    <!-- Breadcrumb Schema -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://moodfood.fun/"
+          }
+        ]
       }
     </script>
   </head>
