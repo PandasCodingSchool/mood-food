@@ -8,6 +8,22 @@
       "destination": "https://mood-food-production-7e8d.up.railway.app/api/$1"
     },
     {
+      "source": "/sitemap.xml",
+      "destination": "/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
+    },
+    {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
+    {
+      "source": "/MoodFood.png",
+      "destination": "/MoodFood.png"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
