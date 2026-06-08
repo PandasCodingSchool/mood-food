@@ -10,6 +10,11 @@ import {
   Zap,
   MapPin,
   Truck,
+  X,
+  Mail,
+  User,
+  CheckCircle,
+  Loader2,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import { trackEvent } from "../utils/analytics";
@@ -54,9 +59,35 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     detected_mood_profile?: string;
   } | null>(null);
 
+  // Waitlist popup state
+  const [showWaitlistPopup, setShowWaitlistPopup] = useState(false);
+  const [waitlistForm, setWaitlistForm] = useState({ name: "", email: "" });
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [waitlistError, setWaitlistError] = useState("");
+
   useEffect(() => {
     loadRecommendations();
   }, []);
+
+  // Show waitlist popup 2.5 seconds after recommendations load
+  useEffect(() => {
+    if (!loading && !error && recommendations.length > 0) {
+      // Check if user already dismissed or joined waitlist this session
+      const hasInteracted = sessionStorage.getItem("waitlistPopupInteracted");
+      if (hasInteracted) return;
+
+      const timer = setTimeout(() => {
+        setShowWaitlistPopup(true);
+        trackEvent("waitlist_popup_shown", {
+          recommendations_count: recommendations.length,
+          mood: results.mood,
+        });
+      }, 2500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [loading, error, recommendations, results.mood]);
 
   useEffect(() => {
     if (!loading) return;
@@ -123,6 +154,48 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     if (score >= 7) return "bg-green-500";
     if (score >= 4) return "bg-yellow-400";
     return "bg-red-400";
+  };
+
+  const handleCloseWaitlistPopup = () => {
+    setShowWaitlistPopup(false);
+    sessionStorage.setItem("waitlistPopupInteracted", "dismissed");
+    trackEvent("waitlist_popup_dismissed");
+  };
+
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingWaitlist(true);
+    setWaitlistError("");
+
+    trackEvent("waitlist_popup_submit_attempted", waitlistForm);
+
+    try {
+      const response = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: waitlistForm.name,
+          email: waitlistForm.email,
+          city: "",
+          cuisine: "",
+        }),
+      });
+
+      if (response.ok) {
+        trackEvent("waitlist_popup_submitted", { email: waitlistForm.email });
+        setWaitlistSubmitted(true);
+        sessionStorage.setItem("waitlistPopupInteracted", "joined");
+        // Close popup after 2 seconds of success message
+        setTimeout(() => setShowWaitlistPopup(false), 2000);
+      } else {
+        throw new Error("Failed to join waitlist");
+      }
+    } catch (err) {
+      setWaitlistError("Something went wrong. Please try again.");
+      trackEvent("waitlist_popup_error", { error: (err as Error).message });
+    } finally {
+      setIsSubmittingWaitlist(false);
+    }
   };
 
   return (
@@ -496,6 +569,126 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             <ArrowLeft className="w-5 h-5 ml-2" />
           </button>
         </div>
+
+        {/* Waitlist Popup Modal */}
+        {showWaitlistPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={handleCloseWaitlistPopup}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 md:p-8 animate-in fade-in zoom-in duration-300">
+              {/* Close button */}
+              <button
+                onClick={handleCloseWaitlistPopup}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {waitlistSubmitted ? (
+                // Success state
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    You are on the list!
+                  </h3>
+                  <p className="text-gray-500">
+                    We will notify you when MoodFood launches with new features.
+                  </p>
+                </div>
+              ) : (
+                // Form state
+                <>
+                  <div className="text-center mb-6">
+                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Sparkles className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      Love these picks?
+                    </h3>
+                    <p className="text-gray-500 text-sm">
+                      Join our waitlist to get early access and exclusive food
+                      recommendations tailored just for you.
+                    </p>
+                  </div>
+
+                  {waitlistError && (
+                    <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
+                      {waitlistError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleWaitlistSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        <User className="w-4 h-4 inline mr-1.5" />
+                        Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={waitlistForm.name}
+                        onChange={(e) =>
+                          setWaitlistForm((prev) => ({
+                            ...prev,
+                            name: e.target.value,
+                          }))
+                        }
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                        placeholder="Your name"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        <Mail className="w-4 h-4 inline mr-1.5" />
+                        Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={waitlistForm.email}
+                        onChange={(e) =>
+                          setWaitlistForm((prev) => ({
+                            ...prev,
+                            email: e.target.value,
+                          }))
+                        }
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmittingWaitlist}
+                      className="w-full btn-primary py-3.5 text-base disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingWaitlist ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin inline" />
+                          Joining...
+                        </>
+                      ) : (
+                        "Join Waitlist"
+                      )}
+                    </button>
+
+                    <p className="text-center text-gray-400 text-xs">
+                      No spam, ever. Unsubscribe anytime.
+                    </p>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

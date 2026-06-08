@@ -129,7 +129,7 @@ function Waitlist() {
               </div>
 
               {/* City */}
-              <div>
+              {/* <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <MapPin className="w-4 h-4 inline mr-2" />
                   City *
@@ -143,10 +143,10 @@ function Waitlist() {
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
                   placeholder="Your city"
                 />
-              </div>
+              </div> */}
 
               {/* Favorite Cuisine */}
-              <div>
+              {/* <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Utensils className="w-4 h-4 inline mr-2" />
                   Favorite Cuisine (Optional)
@@ -168,7 +168,7 @@ function Waitlist() {
                   <option value="mediterranean">Mediterranean</option>
                   <option value="other">Other</option>
                 </select>
-              </div>
+              </div> */}
             </div>
 
             <button

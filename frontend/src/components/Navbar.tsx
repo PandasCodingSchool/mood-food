@@ -62,7 +62,7 @@ function Navbar({ onStartQuiz, onJoinWaitlist, onHome }: NavbarProps) {
             <img
               src="/MoodFood.png"
               alt="MoodFood"
-              className="h-20 w-auto rounded-xl object-contain"
+              className="h-16 w-auto rounded-xl object-contain"
             />
           </button>
 
