@@ -70,7 +70,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     loadRecommendations();
   }, []);
 
-  // Show waitlist popup 2.5 seconds after recommendations load
+  // Show waitlist popup 10 seconds after recommendations load
   useEffect(() => {
     if (!loading && !error && recommendations.length > 0) {
       // Check if user already dismissed or joined waitlist this session
@@ -83,7 +83,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           recommendations_count: recommendations.length,
           mood: results.mood,
         });
-      }, 2500);
+      }, 10000);
 
       return () => clearTimeout(timer);
     }
