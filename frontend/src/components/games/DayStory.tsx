@@ -1,16 +1,33 @@
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Sparkles, ChevronLeft } from "lucide-react";
+import { useState, useMemo } from "react";
 import {
-  STORY_BEATS,
-  STORY_COLD_OPEN,
-  STORY_FOLLOW_UP,
-} from "../../constants/storyBeats";
-import { computeMoodFromStory, type StoryMoodResult } from "../../utils/storyEngine";
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Sparkles,
+  ChevronLeft,
+} from "lucide-react";
+import { getActiveStory } from "../../constants/storyBeats";
+import {
+  computeMoodFromStory,
+  type StoryMoodResult,
+} from "../../utils/storyEngine";
 import StoryScene from "./StoryScene";
 import { trackEvent } from "../../utils/analytics";
 import type { GameResult } from "../../types";
 
-const SEGMENTS = ["Morning", "Lunch", "Evening"];
+const TIME_SLOT_EMOJI: Record<string, string> = {
+  morning: "☀️",
+  afternoon: "🌤️",
+  evening: "🌆",
+  night: "🌙",
+};
+
+const TIME_SLOT_LABEL: Record<string, string> = {
+  morning: "Morning",
+  afternoon: "Afternoon",
+  evening: "Evening",
+  night: "Late night",
+};
 const FOLLOW_UP_STEPS = ["craving", "budget", "preference"] as const;
 type FollowUpStep = (typeof FOLLOW_UP_STEPS)[number];
 type Phase = "intro" | "beats" | "reveal" | "followUp";
@@ -21,6 +38,14 @@ interface DayStoryProps {
 }
 
 function DayStory({ onComplete, onBack }: DayStoryProps) {
+  // Build the time-of-day-aware story once on mount.
+  const activeStory = useMemo(() => getActiveStory(), []);
+  const STORY_BEATS = activeStory.beats;
+  const STORY_FOLLOW_UP = activeStory.followUp;
+  const SEGMENTS = activeStory.segments;
+  const STORY_COLD_OPEN = activeStory.coldOpen;
+  const timeSlot = activeStory.timeSlot;
+
   const [phase, setPhase] = useState<Phase>("intro");
   const [beatIndex, setBeatIndex] = useState(0);
   const [choices, setChoices] = useState<string[]>([]);
@@ -36,7 +61,7 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
   const followUpConfig = STORY_FOLLOW_UP[currentFollowUpKey];
 
   const handleIntroStart = () => {
-    trackEvent("story_started");
+    trackEvent("story_started", { timeSlot });
     setPhase("beats");
   };
 
@@ -150,11 +175,19 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
             Back
           </button>
 
-          <div className="bg-white rounded-3xl shadow-xl p-8 text-center animate-fade-in">
+          <div className="flex flex-col items-center justify-center bg-white rounded-3xl shadow-xl p-8 text-center animate-fade-in">
             <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-2xl mb-4">
               <BookOpen className="w-7 h-7 text-white" />
             </div>
-            <StoryScene scene="morning" />
+
+            <div className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-full px-3 py-1 mb-4 text-xs font-medium text-gray-600">
+              <span>{TIME_SLOT_EMOJI[timeSlot]}</span>
+              <span>
+                It's {TIME_SLOT_LABEL[timeSlot].toLowerCase()} where you are
+              </span>
+            </div>
+
+            <StoryScene scene={STORY_BEATS[0]?.scene ?? "morning"} />
             <h1 className="text-2xl font-bold text-gray-900 mt-6 mb-2">
               {STORY_COLD_OPEN.title}
             </h1>
@@ -220,7 +253,9 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
           <div className="sticky top-16 z-10 mb-6 flex flex-col items-center gap-2">
             <div className="inline-flex items-center gap-2 bg-white/90 backdrop-blur border border-gray-200 rounded-full px-4 py-2 shadow-sm text-sm">
               <span className="text-xl">{reveal.moodEmoji}</span>
-              <span className="font-medium text-gray-800">{reveal.moodLabel}</span>
+              <span className="font-medium text-gray-800">
+                {reveal.moodLabel}
+              </span>
             </div>
             <p className="text-xs text-gray-500 text-center max-w-sm px-2">
               {reveal.storySummary}
@@ -352,7 +387,9 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
                 <span className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-primary-100 to-secondary-100 flex items-center justify-center text-xl">
                   {choice.emoji}
                 </span>
-                <span className="font-medium text-gray-900">{choice.label}</span>
+                <span className="font-medium text-gray-900">
+                  {choice.label}
+                </span>
               </button>
             ))}
           </div>

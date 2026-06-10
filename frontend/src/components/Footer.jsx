@@ -20,13 +20,13 @@ function Footer() {
               Helping you decide what to eat in under 2 minutes. Personalized food recommendations based on your mood, cravings, and preferences.
             </p>
             <div className="flex space-x-4">
-              <a href="https://twitter.com" className="text-gray-400 hover:text-white transition-colors">
+              {/* <a href="https://twitter.com" className="text-gray-400 hover:text-white transition-colors">
                 <Twitter className="w-5 h-5" />
-              </a>
+              </a> */}
               <a href="https://instagram.com/moodfoodfun" className="text-gray-400 hover:text-white transition-colors">
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="https://linkedin.com/company/moodfoodfun" className="text-gray-400 hover:text-white transition-colors">
+              <a href="https://linkedin.com/company/moodfoodf-ai" className="text-gray-400 hover:text-white transition-colors">
                 <Linkedin className="w-5 h-5" />
               </a>
             </div>

@@ -313,8 +313,7 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
               </span>
             </h2>
             <p className="text-gray-600 text-sm max-w-xs mx-auto">
-              Let the wheel pick your food vibe. Accept the bite — or spin
-              again!
+              Let the wheel pick your food vibe. Accept the bite, or spin again!
             </p>
           </div>
         </div>

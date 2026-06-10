@@ -15,7 +15,7 @@ const steps = [
     icon: Gamepad2,
     step: '02',
     title: 'Play a Quick Game',
-    description: 'Swipe foods, Meal Roulette, or answer a quiz — it\'s fun, not a chore.',
+    description: 'Swipe foods, spin the roulette, or take a quiz. It\'s fun, not a chore.',
     color: 'from-primary-400 to-primary-600',
     emoji: '🎮',
     duration: '30 sec',

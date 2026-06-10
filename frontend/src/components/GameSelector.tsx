@@ -6,6 +6,7 @@ import {
   Sandwich,
   CircleDotDashed,
   BookOpen,
+  Clapperboard,
 } from "lucide-react";
 import { trackEvent } from "../utils/analytics";
 import type { LucideIcon } from "lucide-react";
@@ -26,7 +27,7 @@ const GAMES: Game[] = [
   {
     id: "story",
     title: "Day Story",
-    description: "Live a mini workday — we read your mood from your choices",
+    description: "Live a mini workday. We'll read your mood from your choices.",
     icon: BookOpen,
     color: "from-primary-500 to-secondary-500",
     bgColor: "bg-primary-50",
@@ -67,6 +68,18 @@ const GAMES: Game[] = [
     duration: "~45 sec",
     tag: "Surprise me",
     emoji: "🎡",
+  },
+  {
+    id: "character",
+    title: "Character Match",
+    description:
+      "Find out which TV character you are tonight, and what they'd eat.",
+    icon: Clapperboard,
+    color: "from-fuchsia-500 to-purple-500",
+    bgColor: "bg-fuchsia-50",
+    duration: "~30 sec",
+    tag: "New",
+    emoji: "🎬",
   },
 ];
 

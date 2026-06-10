@@ -61,7 +61,7 @@ function Hero({ onStartQuiz }) {
           <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto animate-slide-up leading-relaxed" style={{ animationDelay: '0.1s' }}>
             Tell us your mood. Get{' '}
             <span className="font-bold text-primary-600">AI-curated meal picks</span>{' '}
-            in under 2 minutes — no decision fatigue, just deliciousness.
+            in under 2 minutes. No decision fatigue, just deliciousness.
           </p>
 
           {/* Stat pills */}

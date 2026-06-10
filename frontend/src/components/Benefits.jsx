@@ -33,7 +33,7 @@ const benefits = [
   {
     icon: Zap,
     title: 'Actually Fun',
-    description: 'Swipe, spin, or quiz — choosing food becomes a 30-second game, not a 30-minute chore.',
+    description: 'Swipe, spin, or quiz. Choosing food becomes a 30-second game, not a 30-minute chore.',
     gradient: 'from-amber-500 to-orange-500',
     bg: 'bg-amber-50',
   },
@@ -109,7 +109,7 @@ function Benefits() {
               We answer: <span className="underline decoration-yellow-300 decoration-4 underline-offset-4">"What should I eat?"</span>
             </h3>
             <p className="mt-4 text-white/70 text-sm max-w-md mx-auto">
-              Because the hardest part isn't ordering — it's deciding.
+              Because the hardest part isn't ordering. It's deciding.
             </p>
           </div>
         </div>
@@ -132,7 +132,7 @@ function Benefits() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { emoji: '📍', title: 'Restaurant Finder', desc: 'Find nearby spots serving your AI-picked dish', tag: 'Q3 2026' },
-              { emoji: '👥', title: 'Group Decisions', desc: 'Vote with friends — one link, everyone picks', tag: 'Q3 2026' },
+              { emoji: '👥', title: 'Group Decisions', desc: 'Vote with friends. One link, everyone picks.', tag: 'Q3 2026' },
               { emoji: '📸', title: 'Meal Memories', desc: 'Snap what you ate, build your flavor profile', tag: 'Q4 2026' },
               { emoji: '🔔', title: 'Meal Reminders', desc: '"Hungry yet?" nudges based on your routine', tag: 'Q4 2026' },
               { emoji: '🏆', title: 'Taste Streaks', desc: 'Try new things daily & earn badges', tag: 'Q1 2027' },
