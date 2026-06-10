@@ -26,7 +26,7 @@ function Footer() {
               <a href="https://instagram.com/moodfoodfun" className="text-gray-400 hover:text-white transition-colors">
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="https://linkedin.com/company/moodfoodf-ai" className="text-gray-400 hover:text-white transition-colors">
+              <a href="https://linkedin.com/company/moodfood-ai" className="text-gray-400 hover:text-white transition-colors">
                 <Linkedin className="w-5 h-5" />
               </a>
             </div>
