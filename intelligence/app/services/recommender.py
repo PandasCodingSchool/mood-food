@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import settings
-from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt
+from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt, get_character_dish_ids
 
 # (drink, reason) keyed by cuisine
 _DRINK_PAIRINGS: dict[str, tuple[str, str]] = {
@@ -50,7 +50,8 @@ RANKING RULES (in priority order):
 1. HARD EXCLUDE dishes whose allergens overlap with user's allergies
 2. HARD EXCLUDE dishes that conflict with dietary_restrictions
 3. HARD EXCLUDE dishes priced above budget.max (if provided)
-4. RANK by: mood_tags match > spice_level vs spice_tolerance > \
+4. IF CHARACTER CONTEXT PROVIDED: Strongly boost char_* prefixed dishes (they're personality-aligned favorites)
+5. RANK by: mood_tags match > spice_level vs spice_tolerance > \
 energy_requirement vs energy_level > weather_tags match > adventurousness alignment > health_conscious alignment
 
 Return ONLY valid JSON, no markdown fences, no extra text."""
@@ -67,14 +68,28 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
     budget_max = (sit.budget.max if sit and sit.budget else None)
     budget_str = f"₹{budget_max}" if budget_max else "not specified"
 
-    # Character context for personality-aligned recommendations
+    # Character context: look up dish IDs from the mapping and inject into prompt
     character_context = ""
     if game and hasattr(game, "character") and game.character:
         char = game.character
+        char_id = char.get("id", "") if isinstance(char, dict) else getattr(char, "id", "")
         char_name = char.get("name", "unknown") if isinstance(char, dict) else getattr(char, "name", "unknown")
-        char_dishes = char.get("characterDishes", []) if isinstance(char, dict) else getattr(char, "characterDishes", [])
-        char_dishes_str = ", ".join(char_dishes[:5]) if char_dishes else "not specified"
-        character_context = f"\nCHARACTER CONTEXT:\n  Personality: User matched as {char_name}\n  Typical dishes: {char_dishes_str}\n  This is a strong signal — prioritize these character-aligned recommendations.\n"
+
+        preferred_ids = get_character_dish_ids(char_id)
+        preferred_lines = []
+        for dish_id in preferred_ids:
+            dish = DISHES_BY_ID.get(dish_id)
+            if dish:
+                preferred_lines.append(f"  - {dish_id}: {dish.name} ({dish.cuisine})")
+
+        if preferred_lines:
+            character_context = (
+                f"\nCHARACTER CONTEXT:\n"
+                f"  User matched as: {char_name}\n"
+                f"  This character's preferred dishes (STRONGLY PREFER these dish IDs):\n"
+                + "\n".join(preferred_lines) + "\n"
+                f"  Rank these dishes above others when they satisfy hard constraints.\n"
+            )
 
     return f"""PAYLOAD:
   mood={mood.primary} | energy={mood.energy_level}/10 | social={mood.social_context}

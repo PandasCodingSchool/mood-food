@@ -14,8 +14,8 @@ from app.data.dishes import DISHES
 
 
 class TestDishList:
-    def test_exactly_80_dishes(self):
-        assert len(DISHES) == 80
+    def test_minimum_dishes(self):
+        assert len(DISHES) >= 80, f"Expected at least 80 dishes, got {len(DISHES)}"
 
     def test_all_have_image_url(self):
         for dish in DISHES:
@@ -36,9 +36,10 @@ class TestDishList:
         ids = [d.id for d in DISHES]
         assert len(ids) == len(set(ids))
 
-    def test_eight_cuisines_represented(self):
+    def test_core_cuisines_represented(self):
         cuisines = {d.cuisine for d in DISHES}
-        assert cuisines == {"indian", "italian", "mexican", "japanese", "american", "mediterranean", "chinese", "thai"}
+        core = {"indian", "italian", "mexican", "japanese", "american", "mediterranean", "chinese", "thai"}
+        assert core.issubset(cuisines), f"Missing cuisines: {core - cuisines}"
 
 
 class TestPromptBuilding:

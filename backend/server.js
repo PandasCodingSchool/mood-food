@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
+import characterMatchRouter from "./routes/characterMatch.js";
 
 dotenv.config();
 
@@ -48,6 +49,8 @@ app.use("/api", generalLimiter);
 
 // AI Recommendations route
 app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
+// Character match route (AI-driven personality matching)
+app.use("/api/character-match", aiLimiter, characterMatchRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {

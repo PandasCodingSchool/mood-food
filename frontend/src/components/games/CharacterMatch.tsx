@@ -22,6 +22,12 @@ import type { GameResult } from "../../types";
 
 type Phase = "intro" | "questions" | "computing" | "reveal";
 
+interface AIMatchResult {
+  character_id: string;
+  match_percent: number;
+  spirit_animal: string;
+}
+
 interface CharacterMatchProps {
   onComplete: (results: GameResult) => void;
   onBack: () => void;
@@ -113,29 +119,80 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
   const [matchResult, setMatchResult] = useState<CharacterMatchResult | null>(
     null,
   );
+  const [spiritAnimal, setSpiritAnimal] = useState<string>("");
   const [revealStep, setRevealStep] = useState(0); // for staggered reveal animation
 
   const currentQuestion = CHARACTER_QUESTIONS[questionIndex];
   const totalQuestions = CHARACTER_QUESTIONS.length;
   const progress = ((questionIndex + 1) / totalQuestions) * 100;
 
-  // After all answers, run a brief "computing" phase for drama
+  // After all answers, call AI to match the character
   useEffect(() => {
     if (phase !== "computing") return;
-    const userVector = buildUserVector(selections);
-    const result = matchCharacter(userVector);
 
-    const timer = setTimeout(() => {
-      setMatchResult(result);
+    // Build full Q&A for AI
+    const fullAnswers = answers.map(({ questionId, optionId }) => {
+      const question = CHARACTER_QUESTIONS.find((q) => q.id === questionId);
+      const option = question?.options.find((o) => o.id === optionId);
+      return {
+        question: question?.prompt ?? questionId,
+        selected: option?.label ?? optionId,
+        emoji: option?.emoji ?? "",
+      };
+    });
+
+    const resolveWithFallback = () => {
+      const userVector = buildUserVector(selections);
+      return matchCharacter(userVector);
+    };
+
+    const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
+    const runMatch = async () => {
+      try {
+        const resp = await fetch(`${API_BASE}/character-match`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers: fullAnswers }),
+          signal: AbortSignal.timeout(12000),
+        });
+
+        if (!resp.ok) throw new Error("ai_unavailable");
+
+        const data: AIMatchResult = await resp.json();
+        const character = CHARACTERS.find((c) => c.id === data.character_id);
+        if (!character) throw new Error("unknown character_id");
+
+        const userVector = buildUserVector(selections);
+        // Runner-ups: top 2 from local cosine excluding AI winner
+        const { runnerUps } = matchCharacter(userVector);
+        const filteredRunnerUps = runnerUps.filter(
+          (r) => r.character.id !== data.character_id,
+        );
+
+        setSpiritAnimal(data.spirit_animal);
+        setMatchResult({
+          character,
+          score: data.match_percent / 100,
+          matchPercent: data.match_percent,
+          runnerUps: filteredRunnerUps,
+          userVector,
+        });
+      } catch {
+        // Fallback to local cosine similarity
+        setMatchResult(resolveWithFallback());
+      }
+
       setPhase("reveal");
-      trackEvent("character_matched", {
-        characterId: result.character.id,
-        score: result.score,
-      });
-    }, 1800);
+    };
 
-    return () => clearTimeout(timer);
-  }, [phase, selections]);
+    // Minimum 1.5 s of "computing" drama, then resolve
+    const [matchPromise] = [runMatch()];
+    const minDelay = new Promise<void>((r) => setTimeout(r, 1500));
+    Promise.all([matchPromise, minDelay]);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Staggered reveal animation
   useEffect(() => {
@@ -241,6 +298,7 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
     setSelections([]);
     setAnswers([]);
     setMatchResult(null);
+    setSpiritAnimal("");
   };
 
   // ─────────────── INTRO ───────────────
@@ -422,7 +480,7 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
               </div>
             </div>
 
-            {/* Tagline + vibe */}
+            {/* Tagline + spirit animal / vibe */}
             <div
               className={`px-6 pb-4 transition-all duration-500 ${
                 revealStep >= 3
@@ -431,7 +489,7 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
               }`}
             >
               <div
-                className={`bg-gradient-to-r ${c.gradient} bg-opacity-10 rounded-2xl p-4 text-center`}
+                className="rounded-2xl p-4 text-center"
                 style={{
                   background: `linear-gradient(to right, rgb(243 244 246), rgb(249 250 251))`,
                 }}
@@ -439,7 +497,14 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
                 <p className="text-xl font-bold text-gray-900 mb-1.5 italic">
                   "{c.tagline}"
                 </p>
-                <p className="text-sm text-gray-600">{c.vibe}</p>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {spiritAnimal || c.vibe}
+                </p>
+                {spiritAnimal && (
+                  <p className="text-xs text-fuchsia-500 mt-2 font-semibold uppercase tracking-wider">
+                    ✨ Your spirit animal tonight
+                  </p>
+                )}
               </div>
             </div>
 

@@ -3150,5 +3150,1918 @@
     "health_score": 4.0,
     "image_url": "https://images.unsplash.com/photo-1644031995386-fe9665dc5b57?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxUaGFpJTIwSWNlZCUyMFRlYXxlbnwwfHx8fDE3ODAzMTYyOTN8MA&ixlib=rb-4.1.0&q=80&w=1080",
     "img_processed": true
+  },
+  {
+    "id": "am_011",
+    "name": "Crispy Fried Chicken",
+    "cuisine": "american",
+    "category": "comfort_food",
+    "mood_tags": [
+      "happy",
+      "comfort",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "friends",
+      "family",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 350,
+    "calories": 680,
+    "prep_time_min": 25,
+    "health_score": 3.5,
+    "image_url": "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_012",
+    "name": "Ribeye Steak",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "happy",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "date",
+      "friends",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 3,
+    "price_inr": 900,
+    "calories": 750,
+    "prep_time_min": 20,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1546964124-0cce460b38f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_013",
+    "name": "French Fries",
+    "cuisine": "american",
+    "category": "snack",
+    "mood_tags": [
+      "happy",
+      "comfort",
+      "stressed"
+    ],
+    "dietary_tags": [
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "solo",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner",
+      "late_night"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 120,
+    "calories": 320,
+    "prep_time_min": 10,
+    "health_score": 2.5,
+    "image_url": "https://images.unsplash.com/photo-1573080496219-bb964701c394?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_014",
+    "name": "Bagel with Cream Cheese",
+    "cuisine": "american",
+    "category": "light_meal",
+    "mood_tags": [
+      "happy",
+      "comfort"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 180,
+    "calories": 350,
+    "prep_time_min": 5,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1551024601-bec78aea704b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_015",
+    "name": "Ice Cream Sundae",
+    "cuisine": "american",
+    "category": "dessert",
+    "mood_tags": [
+      "happy",
+      "comfort",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "solo",
+      "friends",
+      "date"
+    ],
+    "weather_tags": [
+      "hot",
+      "sunny",
+      "any"
+    ],
+    "meal_time": [
+      "dinner",
+      "late_night"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 200,
+    "calories": 420,
+    "prep_time_min": 2,
+    "health_score": 2.5,
+    "image_url": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_016",
+    "name": "Chocolate Chip Cookies",
+    "cuisine": "american",
+    "category": "dessert",
+    "mood_tags": [
+      "stressed",
+      "comfort",
+      "happy"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy",
+      "eggs"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "solo",
+      "friends",
+      "family"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "dinner",
+      "late_night"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 150,
+    "calories": 240,
+    "prep_time_min": 5,
+    "health_score": 3.0,
+    "image_url": "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_017",
+    "name": "New York Cheesecake",
+    "cuisine": "american",
+    "category": "dessert",
+    "mood_tags": [
+      "celebratory",
+      "happy",
+      "comfort"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy",
+      "eggs"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 2,
+    "social_context_tags": [
+      "solo",
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner",
+      "late_night"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 280,
+    "calories": 450,
+    "prep_time_min": 5,
+    "health_score": 3.5,
+    "image_url": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_018",
+    "name": "Glazed Donuts",
+    "cuisine": "american",
+    "category": "dessert",
+    "mood_tags": [
+      "happy",
+      "comfort",
+      "nostalgic"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy",
+      "eggs"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "solo",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "late_night"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 120,
+    "calories": 300,
+    "prep_time_min": 2,
+    "health_score": 2.0,
+    "image_url": "https://images.unsplash.com/photo-1551024506-0bccd828d307?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_019",
+    "name": "Soft Pretzels",
+    "cuisine": "american",
+    "category": "snack",
+    "mood_tags": [
+      "happy",
+      "comfort"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 150,
+    "calories": 280,
+    "prep_time_min": 5,
+    "health_score": 4.0,
+    "image_url": "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_020",
+    "name": "Hot Dogs",
+    "cuisine": "american",
+    "category": "street_food",
+    "mood_tags": [
+      "happy",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "family"
+    ],
+    "weather_tags": [
+      "sunny",
+      "hot",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 150,
+    "calories": 290,
+    "prep_time_min": 5,
+    "health_score": 3.0,
+    "image_url": "https://images.unsplash.com/photo-1612392062631-94ae9d49edd3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_021",
+    "name": "Beef Chili",
+    "cuisine": "american",
+    "category": "comfort_food",
+    "mood_tags": [
+      "stressed",
+      "comfort",
+      "cold"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "hot",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "solo",
+      "family"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 300,
+    "calories": 420,
+    "prep_time_min": 20,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_022",
+    "name": "Beef Wellington",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "romantic",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 7,
+    "price_inr": 1200,
+    "calories": 680,
+    "prep_time_min": 60,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1559847844-5315695dadae?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_023",
+    "name": "Filet Mignon",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "romantic",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 6,
+    "price_inr": 1800,
+    "calories": 500,
+    "prep_time_min": 20,
+    "health_score": 6.0,
+    "image_url": "https://images.unsplash.com/photo-1600891964092-4316c288032e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "am_024",
+    "name": "Prime Rib",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "celebratory",
+      "happy"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "date",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 5,
+    "price_inr": 1500,
+    "calories": 820,
+    "prep_time_min": 30,
+    "health_score": 4.5,
+    "image_url": "https://images.unsplash.com/photo-1544025162-d76694265947?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "it_011",
+    "name": "Ravioli al Burro",
+    "cuisine": "italian",
+    "category": "comfort_food",
+    "mood_tags": [
+      "romantic",
+      "comfort",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy",
+      "eggs"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "solo"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 5,
+    "price_inr": 500,
+    "calories": 560,
+    "prep_time_min": 20,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "it_012",
+    "name": "Seafood Risotto",
+    "cuisine": "italian",
+    "category": "indulgent",
+    "mood_tags": [
+      "romantic",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "shellfish",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 7,
+    "price_inr": 750,
+    "calories": 540,
+    "prep_time_min": 35,
+    "health_score": 7.0,
+    "image_url": "https://images.unsplash.com/photo-1476124369491-e7addf5db371?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "it_013",
+    "name": "Shrimp Scampi",
+    "cuisine": "italian",
+    "category": "indulgent",
+    "mood_tags": [
+      "romantic",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "shellfish",
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 6,
+    "price_inr": 700,
+    "calories": 480,
+    "prep_time_min": 20,
+    "health_score": 6.5,
+    "image_url": "https://images.unsplash.com/photo-1626082927389-6cd097cee6a8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "fr_001",
+    "name": "Duck Confit",
+    "cuisine": "french",
+    "category": "indulgent",
+    "mood_tags": [
+      "romantic",
+      "celebratory",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 8,
+    "price_inr": 900,
+    "calories": 620,
+    "prep_time_min": 40,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1580554530778-ca36943938b2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "fr_002",
+    "name": "Crepes",
+    "cuisine": "french",
+    "category": "light_meal",
+    "mood_tags": [
+      "happy",
+      "romantic",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy",
+      "eggs"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "solo",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 250,
+    "calories": 300,
+    "prep_time_min": 10,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1519676867240-f03562e64548?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "fr_003",
+    "name": "Foie Gras",
+    "cuisine": "french",
+    "category": "indulgent",
+    "mood_tags": [
+      "celebratory",
+      "romantic"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "date"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 9,
+    "price_inr": 2500,
+    "calories": 480,
+    "prep_time_min": 10,
+    "health_score": 4.0,
+    "image_url": "https://images.unsplash.com/photo-1625944525533-473f1a3d54e7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "sf_001",
+    "name": "Grilled Salmon",
+    "cuisine": "mediterranean",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "romantic",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "date",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 600,
+    "calories": 350,
+    "prep_time_min": 20,
+    "health_score": 9.0,
+    "image_url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "sf_002",
+    "name": "Lobster",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "celebratory",
+      "romantic"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "shellfish"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 8,
+    "price_inr": 2000,
+    "calories": 400,
+    "prep_time_min": 20,
+    "health_score": 7.0,
+    "image_url": "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "sf_003",
+    "name": "Wagyu Beef Steak",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "celebratory",
+      "romantic"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 8,
+    "price_inr": 2500,
+    "calories": 700,
+    "prep_time_min": 20,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1546964124-0cce460b38f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "sf_004",
+    "name": "Oysters on the Half Shell",
+    "cuisine": "american",
+    "category": "indulgent",
+    "mood_tags": [
+      "romantic",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "shellfish"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 8,
+    "price_inr": 1200,
+    "calories": 100,
+    "prep_time_min": 5,
+    "health_score": 8.0,
+    "image_url": "https://images.unsplash.com/photo-1621949763386-09aa66605b33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "sf_005",
+    "name": "Caviar Platter",
+    "cuisine": "french",
+    "category": "indulgent",
+    "mood_tags": [
+      "celebratory",
+      "romantic"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "date"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 9,
+    "price_inr": 3000,
+    "calories": 150,
+    "prep_time_min": 2,
+    "health_score": 7.5,
+    "image_url": "https://images.unsplash.com/photo-1607189200299-f7a83d6c7b3d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_011",
+    "name": "Tandoori Chicken",
+    "cuisine": "indian",
+    "category": "snack",
+    "mood_tags": [
+      "happy",
+      "adventurous",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "hot",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "family",
+      "date"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 350,
+    "calories": 450,
+    "prep_time_min": 30,
+    "health_score": 7.0,
+    "image_url": "https://images.unsplash.com/photo-1574484284002-952d92456975?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_012",
+    "name": "Masala Chai",
+    "cuisine": "indian",
+    "category": "beverage",
+    "mood_tags": [
+      "stressed",
+      "comfort",
+      "happy",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "solo",
+      "family",
+      "friends"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 30,
+    "calories": 80,
+    "prep_time_min": 5,
+    "health_score": 6.0,
+    "image_url": "https://images.unsplash.com/photo-1567922045116-2a00fae2ed03?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_013",
+    "name": "Aloo Paratha",
+    "cuisine": "indian",
+    "category": "comfort_food",
+    "mood_tags": [
+      "happy",
+      "comfort",
+      "nostalgic"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "medium",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "family",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 100,
+    "calories": 380,
+    "prep_time_min": 20,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_014",
+    "name": "Chaat",
+    "cuisine": "indian",
+    "category": "snack",
+    "mood_tags": [
+      "adventurous",
+      "happy"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "hot",
+    "energy_requirement": 6,
+    "social_context_tags": [
+      "friends",
+      "solo"
+    ],
+    "weather_tags": [
+      "hot",
+      "sunny",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 5,
+    "price_inr": 80,
+    "calories": 200,
+    "prep_time_min": 10,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1601050690597-df0568f70950?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_015",
+    "name": "Kheer",
+    "cuisine": "indian",
+    "category": "dessert",
+    "mood_tags": [
+      "nostalgic",
+      "comfort",
+      "happy"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 2,
+    "social_context_tags": [
+      "family",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "dinner",
+      "late_night"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 100,
+    "calories": 280,
+    "prep_time_min": 20,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1557714605-d48e5d83b741?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_016",
+    "name": "Momos",
+    "cuisine": "indian",
+    "category": "snack",
+    "mood_tags": [
+      "happy",
+      "adventurous"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "hot",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "solo"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 100,
+    "calories": 220,
+    "prep_time_min": 20,
+    "health_score": 6.0,
+    "image_url": "https://images.unsplash.com/photo-1625398407796-30b1c8d58b05?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_017",
+    "name": "Jalebi",
+    "cuisine": "indian",
+    "category": "dessert",
+    "mood_tags": [
+      "happy",
+      "nostalgic",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "friends",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 3,
+    "price_inr": 60,
+    "calories": 350,
+    "prep_time_min": 10,
+    "health_score": 3.0,
+    "image_url": "https://images.unsplash.com/photo-1666400987234-d5aced8b4ab7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_018",
+    "name": "Butter Naan",
+    "cuisine": "indian",
+    "category": "comfort_food",
+    "mood_tags": [
+      "comfort",
+      "happy",
+      "stressed"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "gluten",
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "family",
+      "friends",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 60,
+    "calories": 250,
+    "prep_time_min": 10,
+    "health_score": 4.5,
+    "image_url": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_019",
+    "name": "Rajma Chawal",
+    "cuisine": "indian",
+    "category": "comfort_food",
+    "mood_tags": [
+      "comfort",
+      "nostalgic",
+      "happy"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "medium",
+    "energy_requirement": 2,
+    "social_context_tags": [
+      "family",
+      "solo"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 150,
+    "calories": 400,
+    "prep_time_min": 20,
+    "health_score": 7.5,
+    "image_url": "https://images.unsplash.com/photo-1645177628172-a4f6d33c0b6e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_020",
+    "name": "Idli Sambar",
+    "cuisine": "indian",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "relaxed",
+      "comfort"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "solo",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 80,
+    "calories": 200,
+    "prep_time_min": 15,
+    "health_score": 8.0,
+    "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_021",
+    "name": "Poha",
+    "cuisine": "indian",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "comfort",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "solo",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 60,
+    "calories": 180,
+    "prep_time_min": 10,
+    "health_score": 7.5,
+    "image_url": "https://images.unsplash.com/photo-1614777735417-4bc6f8e2d9a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_022",
+    "name": "Upma",
+    "cuisine": "indian",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "comfort"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "solo",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 60,
+    "calories": 200,
+    "prep_time_min": 10,
+    "health_score": 7.0,
+    "image_url": "https://images.unsplash.com/photo-1630409351211-d62ab2d24da4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_023",
+    "name": "Mutton Curry",
+    "cuisine": "indian",
+    "category": "indulgent",
+    "mood_tags": [
+      "celebratory",
+      "happy",
+      "stressed"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "hot",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "family",
+      "friends"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 450,
+    "calories": 580,
+    "prep_time_min": 40,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_024",
+    "name": "Vindaloo",
+    "cuisine": "indian",
+    "category": "indulgent",
+    "mood_tags": [
+      "adventurous",
+      "stressed",
+      "happy"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "very_hot",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 8,
+    "price_inr": 400,
+    "calories": 520,
+    "prep_time_min": 35,
+    "health_score": 5.0,
+    "image_url": "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_025",
+    "name": "Seekh Kebabs",
+    "cuisine": "indian",
+    "category": "snack",
+    "mood_tags": [
+      "celebratory",
+      "happy",
+      "adventurous"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [],
+    "spice_level": "hot",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "date",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 300,
+    "calories": 380,
+    "prep_time_min": 25,
+    "health_score": 6.5,
+    "image_url": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_026",
+    "name": "Kachumber Salad",
+    "cuisine": "indian",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "solo",
+      "family"
+    ],
+    "weather_tags": [
+      "hot",
+      "sunny",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 60,
+    "calories": 80,
+    "prep_time_min": 5,
+    "health_score": 9.0,
+    "image_url": "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_027",
+    "name": "Paneer Tikka Masala",
+    "cuisine": "indian",
+    "category": "indulgent",
+    "mood_tags": [
+      "stressed",
+      "comfort",
+      "celebratory"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "hot",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "date",
+      "family",
+      "solo"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 3,
+    "price_inr": 320,
+    "calories": 460,
+    "prep_time_min": 25,
+    "health_score": 5.5,
+    "image_url": "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "in_028",
+    "name": "Andhra Biryani",
+    "cuisine": "indian",
+    "category": "indulgent",
+    "mood_tags": [
+      "adventurous",
+      "celebratory",
+      "stressed"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "very_hot",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "friends",
+      "family"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 6,
+    "price_inr": 450,
+    "calories": 700,
+    "prep_time_min": 50,
+    "health_score": 4.5,
+    "image_url": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "hh_001",
+    "name": "Overnight Oats",
+    "cuisine": "american",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 150,
+    "calories": 280,
+    "prep_time_min": 5,
+    "health_score": 9.0,
+    "image_url": "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "hh_002",
+    "name": "Quinoa Bowl",
+    "cuisine": "mediterranean",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [
+      "nuts"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 6,
+    "social_context_tags": [
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 4,
+    "price_inr": 300,
+    "calories": 350,
+    "prep_time_min": 15,
+    "health_score": 9.5,
+    "image_url": "https://images.unsplash.com/photo-1546069901-d5bfd2cbfb1f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "hh_003",
+    "name": "Fresh Fruit Bowl",
+    "cuisine": "american",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "happy"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 6,
+    "social_context_tags": [
+      "solo",
+      "friends"
+    ],
+    "weather_tags": [
+      "hot",
+      "sunny"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 150,
+    "calories": 150,
+    "prep_time_min": 5,
+    "health_score": 9.5,
+    "image_url": "https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "hh_004",
+    "name": "Greek Yogurt Parfait",
+    "cuisine": "mediterranean",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "happy"
+    ],
+    "dietary_tags": [
+      "vegetarian"
+    ],
+    "allergens": [
+      "dairy"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 2,
+    "price_inr": 180,
+    "calories": 200,
+    "prep_time_min": 5,
+    "health_score": 8.5,
+    "image_url": "https://images.unsplash.com/photo-1488477181946-6428a0291777?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "hh_005",
+    "name": "Steamed Vegetables",
+    "cuisine": "mediterranean",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 120,
+    "calories": 120,
+    "prep_time_min": 10,
+    "health_score": 9.5,
+    "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "hh_006",
+    "name": "Brown Rice Bowl",
+    "cuisine": "japanese",
+    "category": "light_meal",
+    "mood_tags": [
+      "healthy",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "vegetarian",
+      "vegan"
+    ],
+    "allergens": [],
+    "spice_level": "mild",
+    "energy_requirement": 4,
+    "social_context_tags": [
+      "solo"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 1,
+    "price_inr": 150,
+    "calories": 250,
+    "prep_time_min": 15,
+    "health_score": 8.5,
+    "image_url": "https://images.unsplash.com/photo-1516684732162-798a0062be99?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "vn_001",
+    "name": "Pho Bo",
+    "cuisine": "vietnamese",
+    "category": "comfort_food",
+    "mood_tags": [
+      "adventurous",
+      "comfort",
+      "relaxed"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 3,
+    "social_context_tags": [
+      "solo",
+      "date",
+      "friends"
+    ],
+    "weather_tags": [
+      "rainy",
+      "cold",
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 6,
+    "price_inr": 350,
+    "calories": 380,
+    "prep_time_min": 15,
+    "health_score": 7.5,
+    "image_url": "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "vn_002",
+    "name": "Banh Mi",
+    "cuisine": "vietnamese",
+    "category": "street_food",
+    "mood_tags": [
+      "adventurous",
+      "happy",
+      "energetic"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "gluten"
+    ],
+    "spice_level": "medium",
+    "energy_requirement": 6,
+    "social_context_tags": [
+      "solo",
+      "friends"
+    ],
+    "weather_tags": [
+      "any"
+    ],
+    "meal_time": [
+      "breakfast",
+      "lunch"
+    ],
+    "delivery_friendly": true,
+    "adventurousness_score": 6,
+    "price_inr": 200,
+    "calories": 320,
+    "prep_time_min": 10,
+    "health_score": 6.5,
+    "image_url": "https://images.unsplash.com/photo-1600271886742-f049cd451bba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+  },
+  {
+    "id": "sp_001",
+    "name": "Seafood Paella",
+    "cuisine": "spanish",
+    "category": "indulgent",
+    "mood_tags": [
+      "adventurous",
+      "celebratory",
+      "romantic"
+    ],
+    "dietary_tags": [
+      "non_veg"
+    ],
+    "allergens": [
+      "shellfish",
+      "gluten"
+    ],
+    "spice_level": "mild",
+    "energy_requirement": 5,
+    "social_context_tags": [
+      "date",
+      "friends",
+      "family"
+    ],
+    "weather_tags": [
+      "sunny",
+      "hot",
+      "any"
+    ],
+    "meal_time": [
+      "lunch",
+      "dinner"
+    ],
+    "delivery_friendly": false,
+    "adventurousness_score": 8,
+    "price_inr": 800,
+    "calories": 580,
+    "prep_time_min": 45,
+    "health_score": 7.0,
+    "image_url": "https://images.unsplash.com/photo-1534080564583-6be75777b70a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
   }
 ]
