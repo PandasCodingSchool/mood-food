@@ -8,7 +8,9 @@ import {
 } from "lucide-react";
 import {
   CHARACTERS,
-  CHARACTER_QUESTIONS,
+  CHARACTER_QUESTION_BANK,
+  FIRST_QUESTION_ID,
+  TOTAL_QUESTIONS,
   type CharacterProfile,
   type CharacterQuestionOption,
 } from "../../constants/characters";
@@ -110,7 +112,9 @@ function Confetti() {
 
 function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
   const [phase, setPhase] = useState<Phase>("intro");
-  const [questionIndex, setQuestionIndex] = useState(0);
+  // Track current question by ID + a history stack for back navigation
+  const [currentQuestionId, setCurrentQuestionId] = useState(FIRST_QUESTION_ID);
+  const [questionHistory, setQuestionHistory] = useState<string[]>([]);
   const [selections, setSelections] = useState<CharacterQuestionOption[]>([]);
   const [answers, setAnswers] = useState<
     Array<{ questionId: string; optionId: string }>
@@ -122,17 +126,18 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
   const [spiritAnimal, setSpiritAnimal] = useState<string>("");
   const [revealStep, setRevealStep] = useState(0); // for staggered reveal animation
 
-  const currentQuestion = CHARACTER_QUESTIONS[questionIndex];
-  const totalQuestions = CHARACTER_QUESTIONS.length;
-  const progress = ((questionIndex + 1) / totalQuestions) * 100;
+  const currentQuestion = CHARACTER_QUESTION_BANK[currentQuestionId];
+  // depth = how many questions answered so far + 1
+  const questionDepth = questionHistory.length + 1;
+  const progress = (questionDepth / TOTAL_QUESTIONS) * 100;
 
   // After all answers, call AI to match the character
   useEffect(() => {
     if (phase !== "computing") return;
 
-    // Build full Q&A for AI
+    // Build full Q&A for AI using the question bank
     const fullAnswers = answers.map(({ questionId, optionId }) => {
-      const question = CHARACTER_QUESTIONS.find((q) => q.id === questionId);
+      const question = CHARACTER_QUESTION_BANK[questionId];
       const option = question?.options.find((o) => o.id === optionId);
       return {
         question: question?.prompt ?? questionId,
@@ -224,23 +229,28 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
       optionId: option.id,
     });
 
-    if (questionIndex < totalQuestions - 1) {
+    if (option.next) {
+      // Branch to the linked next question
       setIsAnimating(true);
       setTimeout(() => {
-        setQuestionIndex((i) => i + 1);
+        setQuestionHistory((h) => [...h, currentQuestionId]);
+        setCurrentQuestionId(option.next!);
         setIsAnimating(false);
       }, 260);
     } else {
+      // No next means this is the final question
       setPhase("computing");
     }
   };
 
   const handleQuestionBack = () => {
-    if (questionIndex === 0) {
+    if (questionHistory.length === 0) {
       setPhase("intro");
       return;
     }
-    setQuestionIndex((i) => i - 1);
+    const prevId = questionHistory[questionHistory.length - 1];
+    setQuestionHistory((h) => h.slice(0, -1));
+    setCurrentQuestionId(prevId);
     setSelections((s) => s.slice(0, -1));
     setAnswers((a) => a.slice(0, -1));
   };
@@ -249,8 +259,8 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
     if (phase === "intro") onBack();
     else if (phase === "questions") handleQuestionBack();
     else if (phase === "reveal") {
+      // Step back into the final question of the path
       setPhase("questions");
-      setQuestionIndex(totalQuestions - 1);
       setSelections((s) => s.slice(0, -1));
       setAnswers((a) => a.slice(0, -1));
       setMatchResult(null);
@@ -294,7 +304,8 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
 
   const handleTryAgain = () => {
     setPhase("intro");
-    setQuestionIndex(0);
+    setCurrentQuestionId(FIRST_QUESTION_ID);
+    setQuestionHistory([]);
     setSelections([]);
     setAnswers([]);
     setMatchResult(null);
@@ -330,7 +341,7 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
               </span>
             </h1>
             <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Answer {totalQuestions} quick questions. We'll match you with a
+              Answer {TOTAL_QUESTIONS} quick questions. We'll match you with a
               sitcom or Bollywood icon, then serve up a meal in their vibe.
             </p>
 
@@ -621,7 +632,7 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
           />
         </div>
         <p className="text-sm text-gray-500 mb-6">
-          Question {questionIndex + 1} of {totalQuestions}
+          Question {questionDepth} of {TOTAL_QUESTIONS}
         </p>
 
         <div

@@ -38,6 +38,7 @@ export interface CharacterQuestionOption {
   label: string;
   emoji: string;
   traitWeights: Partial<TraitVector>;
+  next?: string; // question ID to show next (omit on final question)
 }
 
 export interface CharacterQuestion {
@@ -457,11 +458,24 @@ export const CHARACTERS: CharacterProfile[] = [
 ];
 
 // ─────────────────────────────────────────────────────────
-// Question bank (4 questions, each shifts the user's trait vector)
+// Branching question bank — each option's `next` field decides
+// which question comes up next. Users always answer exactly 4
+// questions but the path depends on every previous answer.
+//
+// Tree structure (10 nodes, 4 per path):
+//   q1_night → q2_solo | q2_social | q2_adventure | q2_romance
+//   q2_solo      → q3_calm | q3_edge
+//   q2_social    → q3_edge | q3_global
+//   q2_adventure → q3_edge | q3_global
+//   q2_romance   → q3_calm | q3_global
+//   q3_calm   → q4_quiet   (final, no next)
+//   q3_edge   → q4_bold    (final, no next)
+//   q3_global → q4_wander  (final, no next)
 // ─────────────────────────────────────────────────────────
-export const CHARACTER_QUESTIONS: CharacterQuestion[] = [
-  {
-    id: "weekend_vibe",
+export const CHARACTER_QUESTION_BANK: Record<string, CharacterQuestion> = {
+  // ── LEVEL 1 — same for everyone ──────────────────────────
+  q1_night: {
+    id: "q1_night",
     prompt: "It's Saturday night. Your move?",
     subtitle: "Pick what sounds most like you right now",
     options: [
@@ -470,115 +484,377 @@ export const CHARACTER_QUESTIONS: CharacterQuestion[] = [
         label: "Couch + comfort food",
         emoji: "🛋️",
         traitWeights: { energy: -2, social: -2, indulgence: 2 },
+        next: "q2_solo",
       },
       {
         id: "party",
         label: "Out with the squad",
         emoji: "🎉",
         traitWeights: { energy: 3, social: 3, indulgence: 1 },
+        next: "q2_social",
       },
       {
         id: "explore",
         label: "Try a new place in town",
         emoji: "🗺️",
         traitWeights: { adventure: 3, energy: 1, budget: 1 },
+        next: "q2_adventure",
       },
       {
         id: "date",
         label: "Cozy dinner with someone",
         emoji: "🕯️",
         traitWeights: { social: 1, budget: 2, indulgence: 1 },
+        next: "q2_romance",
       },
     ],
   },
-  {
-    id: "food_pick",
-    prompt: "Pick the plate that's calling you",
+
+  // ── LEVEL 2 — one unique question per Q1 answer ──────────
+  q2_solo: {
+    id: "q2_solo",
+    prompt: "The couch is yours. Pick your companion for tonight.",
     options: [
       {
-        id: "spicy_street",
-        label: "Street food, extra spicy",
-        emoji: "🌶️",
-        traitWeights: { spice: 3, adventure: 2, budget: -2 },
+        id: "binge_show",
+        label: "Guilty-pleasure reality show",
+        emoji: "📺",
+        traitWeights: { energy: -1, indulgence: 2 },
+        next: "q3_calm",
       },
       {
-        id: "pizza_pasta",
-        label: "Pizza or pasta, please",
+        id: "spicy_noodles",
+        label: "Something spicy to really feel alive",
+        emoji: "🔥",
+        traitWeights: { spice: 3, energy: 1 },
+        next: "q3_edge",
+      },
+      {
+        id: "good_book",
+        label: "A good book or podcast",
+        emoji: "📚",
+        traitWeights: { energy: -2, adventure: 1 },
+        next: "q3_calm",
+      },
+      {
+        id: "doom_scroll",
+        label: "Food delivery + doom-scroll",
+        emoji: "📱",
+        traitWeights: { energy: -1, indulgence: 1 },
+        next: "q3_calm",
+      },
+    ],
+  },
+
+  q2_social: {
+    id: "q2_social",
+    prompt: "You're with the squad. First order of business?",
+    options: [
+      {
+        id: "snack_table",
+        label: "Hunt the snack spread — immediately",
         emoji: "🍕",
         traitWeights: { indulgence: 3, social: 1 },
+        next: "q3_edge",
       },
       {
-        id: "salad_bowl",
-        label: "Bowl with greens & grains",
+        id: "music_on",
+        label: "Put on music, get everyone going",
+        emoji: "🎵",
+        traitWeights: { energy: 3, social: 2 },
+        next: "q3_edge",
+      },
+      {
+        id: "new_spot",
+        label: "Suggest somewhere none of you have tried",
+        emoji: "🌍",
+        traitWeights: { adventure: 3, social: 1 },
+        next: "q3_global",
+      },
+      {
+        id: "just_vibe",
+        label: "Just vibe, catch up, go wherever",
+        emoji: "😊",
+        traitWeights: { energy: -1, social: 2 },
+        next: "q3_calm",
+      },
+    ],
+  },
+
+  q2_adventure: {
+    id: "q2_adventure",
+    prompt: "You found the hidden gem. No menu — chef decides. You feel...",
+    options: [
+      {
+        id: "love_it",
+        label: "Excited — I literally live for this",
+        emoji: "✨",
+        traitWeights: { adventure: 4, energy: 2 },
+        next: "q3_global",
+      },
+      {
+        id: "cautious",
+        label: "Cautiously curious — let's see the vibe",
+        emoji: "👀",
+        traitWeights: { adventure: 1, indulgence: 1 },
+        next: "q3_edge",
+      },
+      {
+        id: "googling",
+        label: "Fine, but I'm secretly Googling it",
+        emoji: "📱",
+        traitWeights: { adventure: -1, energy: -1 },
+        next: "q3_calm",
+      },
+      {
+        id: "atmosphere",
+        label: "Love the atmosphere — food is secondary",
+        emoji: "🕯️",
+        traitWeights: { social: 2, budget: 2 },
+        next: "q3_global",
+      },
+    ],
+  },
+
+  q2_romance: {
+    id: "q2_romance",
+    prompt: "You're choosing the dinner spot. You pick...",
+    options: [
+      {
+        id: "italian_candlelit",
+        label: "Classic Italian, candlelit, proper",
+        emoji: "🍷",
+        traitWeights: { budget: 3, social: 1 },
+        next: "q3_calm",
+      },
+      {
+        id: "street_food_walk",
+        label: "Street food walk — casual and honest",
+        emoji: "🌮",
+        traitWeights: { adventure: 2, indulgence: 1 },
+        next: "q3_global",
+      },
+      {
+        id: "healthy_spot",
+        label: "Somewhere healthy but impressive",
         emoji: "🥗",
-        traitWeights: { indulgence: -3, energy: -1 },
+        traitWeights: { indulgence: -2, budget: 2 },
+        next: "q3_calm",
       },
       {
-        id: "steak_dinner",
-        label: "Steak or fancy dinner",
+        id: "cook_myself",
+        label: "I'm cooking. More personal that way.",
+        emoji: "🍳",
+        traitWeights: { social: 1, indulgence: 2 },
+        next: "q3_calm",
+      },
+    ],
+  },
+
+  // ── LEVEL 3 — three variants, reached from Q2 ────────────
+  q3_calm: {
+    id: "q3_calm",
+    prompt: "Honestly, your perfect meal is...",
+    subtitle: "No judgment — what actually sounds good",
+    options: [
+      {
+        id: "desi_home",
+        label: "Dal-rice, sabzi, roti — the works",
+        emoji: "🍛",
+        traitWeights: { indulgence: 1, social: 1 },
+        next: "q4_quiet",
+      },
+      {
+        id: "comfort_pasta",
+        label: "A big bowl of pasta or biryani",
+        emoji: "🍝",
+        traitWeights: { indulgence: 2, energy: 1 },
+        next: "q4_quiet",
+      },
+      {
+        id: "light_fresh",
+        label: "Something light — dosa, salad, smoothie",
+        emoji: "🥗",
+        traitWeights: { indulgence: -2, energy: 1 },
+        next: "q4_quiet",
+      },
+      {
+        id: "premium_quiet",
+        label: "Steak or a fine-dining main",
         emoji: "🥩",
         traitWeights: { budget: 3, indulgence: 2 },
+        next: "q4_quiet",
       },
     ],
   },
-  {
-    id: "energy_today",
-    prompt: "How's your energy today?",
+
+  q3_edge: {
+    id: "q3_edge",
+    prompt: "You need to eat right now. What do you grab?",
     options: [
       {
-        id: "low",
-        label: "Drained, need comfort",
-        emoji: "😴",
-        traitWeights: { energy: -3, indulgence: 1 },
+        id: "pizza_wings",
+        label: "Pizza, wings, something messy",
+        emoji: "🍕",
+        traitWeights: { indulgence: 3, social: 1 },
+        next: "q4_bold",
       },
       {
-        id: "chill",
-        label: "Mellow & relaxed",
-        emoji: "😌",
-        traitWeights: { energy: -1, social: -1 },
+        id: "street_fiery",
+        label: "Street food — the spicier the better",
+        emoji: "🌶️",
+        traitWeights: { spice: 3, adventure: 2 },
+        next: "q4_bold",
       },
       {
-        id: "hyped",
-        label: "Buzzing, let's go!",
-        emoji: "🤩",
-        traitWeights: { energy: 3, adventure: 2 },
+        id: "bbq_ribs",
+        label: "BBQ, ribs, something you eat with hands",
+        emoji: "🍖",
+        traitWeights: { indulgence: 2, social: 2 },
+        next: "q4_bold",
       },
       {
-        id: "stressed",
-        label: "Stressed, need a treat",
-        emoji: "😰",
-        traitWeights: { indulgence: 2, spice: 1 },
+        id: "late_snack",
+        label: "Cheesecake, donuts — straight dessert",
+        emoji: "🍩",
+        traitWeights: { indulgence: 2, energy: -1 },
+        next: "q4_bold",
       },
     ],
   },
-  {
-    id: "catchphrase",
-    prompt: "Which line feels most like you?",
+
+  q3_global: {
+    id: "q3_global",
+    prompt: "You're ordering from a menu with 10 world cuisines. You go for...",
     options: [
       {
-        id: "joey_line",
+        id: "sushi_ramen",
+        label: "Sushi, ramen, or dim sum",
+        emoji: "🍱",
+        traitWeights: { adventure: 3, budget: 2 },
+        next: "q4_wander",
+      },
+      {
+        id: "pho_banh",
+        label: "Pho, banh mi, or something Vietnamese",
+        emoji: "🍜",
+        traitWeights: { adventure: 3, energy: 1 },
+        next: "q4_wander",
+      },
+      {
+        id: "paella_tapas",
+        label: "Paella, tapas, or mezze",
+        emoji: "🥘",
+        traitWeights: { adventure: 2, social: 2 },
+        next: "q4_wander",
+      },
+      {
+        id: "thai_curry",
+        label: "Thai curry or pad thai",
+        emoji: "🌿",
+        traitWeights: { spice: 2, adventure: 2 },
+        next: "q4_wander",
+      },
+    ],
+  },
+
+  // ── LEVEL 4 — three final questions, no `next` ────────────
+  q4_quiet: {
+    id: "q4_quiet",
+    prompt: "One line that's very you tonight?",
+    options: [
+      {
+        id: "chandler_real",
+        label: '"Could this BE any more comforting?"',
+        emoji: "🥪",
+        traitWeights: { indulgence: 2, energy: -1 },
+      },
+      {
+        id: "rancho_real",
+        label: '"All izz well — and all izz light."',
+        emoji: "🌱",
+        traitWeights: { indulgence: -2, adventure: 1 },
+      },
+      {
+        id: "ted_real",
+        label: '"Kids, I have a story about this dinner."',
+        emoji: "🍷",
+        traitWeights: { budget: 2, social: 1 },
+      },
+      {
+        id: "munna_real",
+        label: '"Mamu, ek thali laga de full!"',
+        emoji: "🍛",
+        traitWeights: { social: 1, indulgence: 1 },
+      },
+    ],
+  },
+
+  q4_bold: {
+    id: "q4_bold",
+    prompt: "Last question — one line that's you tonight?",
+    options: [
+      {
+        id: "joey_real",
         label: '"Food is my love language."',
         emoji: "🍕",
         traitWeights: { indulgence: 3, social: 1 },
       },
       {
-        id: "geet_line",
-        label: '"Main apni favourite hoon!"',
-        emoji: "💃",
-        traitWeights: { energy: 2, adventure: 2, spice: 2 },
+        id: "michael_real",
+        label: '"I declared it a party. That\'s why."',
+        emoji: "🎉",
+        traitWeights: { energy: 2, social: 3 },
       },
       {
-        id: "barney_line",
-        label: '"Suit up. We\'re going premium."',
+        id: "kabir_real",
+        label: '"Sirf full flavour. Kuch compromise nahi."',
+        emoji: "🔥",
+        traitWeights: { spice: 3, indulgence: 2 },
+      },
+      {
+        id: "geet_real",
+        label: '"Main apni favourite hoon!"',
+        emoji: "💃",
+        traitWeights: { energy: 2, adventure: 2 },
+      },
+    ],
+  },
+
+  q4_wander: {
+    id: "q4_wander",
+    prompt: "One line that captures tonight's energy?",
+    options: [
+      {
+        id: "bunny_real",
+        label: '"Main udna chahta hoon — new city, new food."',
+        emoji: "🌍",
+        traitWeights: { adventure: 4, energy: 2 },
+      },
+      {
+        id: "barney_real",
+        label: '"Suit up. Dinner is LEGEN... wait for it."',
         emoji: "🥃",
         traitWeights: { budget: 3, social: 2 },
       },
       {
-        id: "rancho_line",
-        label: '"All izz well, keep it light."',
-        emoji: "🌱",
-        traitWeights: { indulgence: -2, adventure: 1 },
+        id: "geet_wander",
+        label: '"Chalo — wherever is fine, as long as it\'s spicy."',
+        emoji: "🌶️",
+        traitWeights: { spice: 2, adventure: 3 },
+      },
+      {
+        id: "ted_wander",
+        label: '"I researched the best spot in town."',
+        emoji: "📖",
+        traitWeights: { budget: 2, adventure: 1 },
       },
     ],
   },
-];
+};
+
+export const FIRST_QUESTION_ID = "q1_night";
+export const TOTAL_QUESTIONS = 4;
+
+// Keep CHARACTER_QUESTIONS as a flat list for backwards-compat with characterEngine fallback
+export const CHARACTER_QUESTIONS = Object.values(CHARACTER_QUESTION_BANK);
