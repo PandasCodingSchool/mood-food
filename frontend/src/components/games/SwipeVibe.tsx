@@ -162,6 +162,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
           topCategory: "comfort",
           topCuisine: "Mixed",
           likedCount: 0,
+          sliderValues: { adventurous: 5, healthConscious: 5, spicy: 5 },
         },
       };
     }
@@ -179,6 +180,22 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
     const topCuisine = getTop(countByKey("cuisine")) || "Mixed";
     const topBudget = getTop(countByKey("budget")) || "moderate";
     const topVibe = getTop(countByKey("vibe")) || "casual";
+
+    // Derive slider signals from liked swipe patterns (1–10 scale)
+    const total = likedSwipes.length;
+    const adventurousCategories = new Set(["spicy", "light", "indulgent"]);
+    const healthyCategories = new Set(["healthy", "light"]);
+    const spicyCategories = new Set(["spicy"]);
+    const adventurous = Math.round(
+      1 + (likedSwipes.filter((s) => adventurousCategories.has(s.category)).length / total) * 9,
+    );
+    const health_conscious = Math.round(
+      1 + (likedSwipes.filter((s) => healthyCategories.has(s.category)).length / total) * 9,
+    );
+    const spicy = Math.round(
+      1 + (likedSwipes.filter((s) => spicyCategories.has(s.category)).length / total) * 9,
+    );
+
     return {
       mood: VIBE_TO_MOOD[topVibe] || "happy",
       craving: topCategory,
@@ -190,6 +207,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
         topCategory,
         topCuisine,
         likedCount: likedSwipes.length,
+        sliderValues: { adventurous, healthConscious: health_conscious, spicy },
       },
     };
   }, []);

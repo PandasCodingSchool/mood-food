@@ -48,7 +48,8 @@ Each dish has explicit attributes. Match them precisely against the user's paylo
 
 RANKING RULES (in priority order):
 1. HARD EXCLUDE dishes whose allergens overlap with user's allergies
-2. HARD EXCLUDE dishes that conflict with dietary_restrictions
+2. IF dietary_restrictions contains "vegetarian" or "vegan": HARD EXCLUDE non_veg dishes
+   IF dietary_restrictions contains "non_veg": STRONGLY PREFER dishes with non_veg dietary_tag; exclude purely vegetarian/vegan dishes unless nothing else fits
 3. HARD EXCLUDE dishes priced above budget.max (if provided)
 4. IF CHARACTER CONTEXT PROVIDED: Strongly boost char_* prefixed dishes (they're personality-aligned favorites)
 5. RANK by: mood_tags match > spice_level vs spice_tolerance > \
@@ -91,13 +92,24 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
                 f"  Rank these dishes above others when they satisfy hard constraints.\n"
             )
 
+    # Game-specific context lines
+    game_context = ""
+    if game:
+        if game.selections:
+            game_context += f"  game_selections={game.selections}\n"
+        if game.swipes:
+            liked = [s.item for s in game.swipes if s.liked]
+            disliked = [s.item for s in game.swipes if not s.liked]
+            if liked or disliked:
+                game_context += f"  swipe_liked={liked} | swipe_disliked={disliked}\n"
+
     return f"""PAYLOAD:
   mood={mood.primary} | energy={mood.energy_level}/10 | social={mood.social_context}
   time_of_day={sit.time_of_day if sit else None} | weather={sit.weather if sit else None} | budget={budget_str} | time_available={sit.time_available if sit else None}min | delivery={sit.delivery_preferred if sit else False}
   cuisines={prefs.cuisine_types if prefs else []} | restrictions={prefs.dietary_restrictions if prefs else []} | allergies={prefs.allergies if prefs else []} | spice_tolerance={prefs.spice_tolerance if prefs else None}
   adventurous_slider={sliders.adventurous if sliders else None}/10 | health_slider={sliders.health_conscious if sliders else None}/10 | spicy_slider={sliders.spicy if sliders else None}/10
   avoid={hist.avoid_these if hist else []}
-{character_context}
+{game_context}{character_context}
 DISH LIST (id: name | mood_tags | spice | diet | allergens | energy_req | price | weather | meal_time | delivery | adventurousness):
 {get_dishes_for_prompt()}
 

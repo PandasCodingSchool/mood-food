@@ -18,7 +18,15 @@ import {
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import { trackEvent } from "../utils/analytics";
-import { openSwiggy } from "../utils/deliveryLinks";
+import {
+  openSwiggy,
+  SWIGGY_APP_STORE,
+  SWIGGY_PLAY_STORE,
+} from "../utils/deliveryLinks";
+
+const IS_IOS = /iphone|ipad|ipod/i.test(
+  typeof navigator !== "undefined" ? navigator.userAgent : "",
+);
 import { useState, useEffect } from "react";
 import type { QuizResults, Recommendation } from "../types";
 
@@ -539,11 +547,19 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                     <div className="pt-3 border-t border-gray-100">
                       <button
                         onClick={() => handleOrderOnSwiggy(d.name)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 hover:shadow-md"
+                        className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 hover:shadow-md"
                         style={{ backgroundColor: "#FC8019" }}
                       >
                         Order Now
                       </button>
+                      <a
+                        href={IS_IOS ? SWIGGY_APP_STORE : SWIGGY_PLAY_STORE}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-center text-[10px] text-gray-400 hover:text-gray-600 transition-colors mt-2"
+                      >
+                        Don't have Swiggy? Download →
+                      </a>
                     </div>
                   </div>
                 </div>

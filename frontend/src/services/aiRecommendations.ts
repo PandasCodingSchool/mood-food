@@ -97,7 +97,12 @@ function buildRequestContext(
       },
       preferences: {
         cuisineTypes: [craving],
-        dietaryRestrictions: preference === "veg" ? ["vegetarian"] : [],
+        dietaryRestrictions:
+          preference === "veg"
+            ? ["vegetarian"]
+            : preference === "non-veg"
+              ? ["non_veg"]
+              : [],
         spiceTolerance: "medium",
       },
       situational: {

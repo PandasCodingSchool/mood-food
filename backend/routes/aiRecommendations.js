@@ -183,11 +183,18 @@ function buildAiRequest(body) {
   const prefs = ctx?.preferences || {};
   const sit = ctx?.situational || {};
   const cfg = body?.recommendationConfig || {};
+  // Flatten all game signal strings into a single selections array for the AI prompt.
+  // CharacterMatch sends `answers` as [{questionId, optionId}] — convert to readable strings.
+  const characterAnswerStrings = (game.answers || [])
+    .filter((a) => a && typeof a === "object" && a.optionId)
+    .map((a) => String(a.optionId));
+
   const gameSelections = [
     ...(game.selections || []),
+    ...characterAnswerStrings,
     ...(game.storyChoices || []),
     ...(game.storySummary ? [game.storySummary] : []),
-  ];
+  ].filter((s) => typeof s === "string");
 
   const user_context = {
     mood: {

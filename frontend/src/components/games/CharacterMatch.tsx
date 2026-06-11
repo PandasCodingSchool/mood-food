@@ -22,7 +22,8 @@ import {
 import { trackEvent } from "../../utils/analytics";
 import type { GameResult } from "../../types";
 
-type Phase = "intro" | "questions" | "computing" | "reveal";
+type Phase = "intro" | "questions" | "computing" | "reveal" | "followUp";
+type FollowUpStep = "budget" | "preference";
 
 interface AIMatchResult {
   character_id: string;
@@ -125,6 +126,8 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
   );
   const [spiritAnimal, setSpiritAnimal] = useState<string>("");
   const [revealStep, setRevealStep] = useState(0); // for staggered reveal animation
+  const [followUpStep, setFollowUpStep] = useState<FollowUpStep>("budget");
+  const [followUpAnswers, setFollowUpAnswers] = useState<{ budget?: string; preference?: string }>({});
 
   const currentQuestion = CHARACTER_QUESTION_BANK[currentQuestionId];
   // depth = how many questions answered so far + 1
@@ -269,37 +272,54 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
 
   const handleFindMeal = () => {
     if (!matchResult) return;
+    setFollowUpStep("budget");
+    setFollowUpAnswers({});
+    setPhase("followUp");
+  };
+
+  const handleFollowUpSelect = (value: string) => {
+    if (!matchResult) return;
     const c = matchResult.character;
 
-    trackEvent("character_game_complete", {
-      characterId: c.id,
-      mood: c.mood,
-      craving: c.craving,
-    });
+    if (followUpStep === "budget") {
+      setFollowUpAnswers({ budget: value });
+      setFollowUpStep("preference");
+    } else {
+      const budget = followUpAnswers.budget || c.budget;
+      const preference = value;
 
-    onComplete({
-      mood: c.mood,
-      craving: c.craving,
-      budget: c.budget,
-      preference: c.preference,
-      gameData: {
-        type: "character_match",
-        character: {
-          id: c.id,
-          name: c.name,
-          show: c.show,
-          emoji: c.emoji,
-          tagline: c.tagline,
-          vibe: c.vibe,
-          signatureFood: c.signatureFood,
-          characterDishes: c.characterDishes,
-          traits: c.traits,
+      trackEvent("character_game_complete", {
+        characterId: c.id,
+        mood: c.mood,
+        craving: c.craving,
+        budget,
+        preference,
+      });
+
+      onComplete({
+        mood: c.mood,
+        craving: c.craving,
+        budget,
+        preference,
+        gameData: {
+          type: "character_match",
+          character: {
+            id: c.id,
+            name: c.name,
+            show: c.show,
+            emoji: c.emoji,
+            tagline: c.tagline,
+            vibe: c.vibe,
+            signatureFood: c.signatureFood,
+            characterDishes: c.characterDishes,
+            traits: c.traits,
+          },
+          matchPercentage: matchResult.matchPercent,
+          userTraits: matchResult.userVector,
+          answers,
         },
-        matchPercentage: matchResult.matchPercent,
-        userTraits: matchResult.userVector,
-        answers,
-      },
-    });
+      });
+    }
   };
 
   const handleTryAgain = () => {
@@ -310,6 +330,8 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
     setAnswers([]);
     setMatchResult(null);
     setSpiritAnimal("");
+    setFollowUpAnswers({});
+    setFollowUpStep("budget");
   };
 
   // ─────────────── INTRO ───────────────
@@ -413,6 +435,89 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
                 <CharacterAvatar character={c} size="sm" />
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────── FOLLOW-UP (budget + preference) ───────────────
+  if (phase === "followUp" && matchResult) {
+    const c = matchResult.character;
+    const isBudget = followUpStep === "budget";
+
+    const BUDGET_OPTIONS = [
+      { value: "budget", label: "Budget", emoji: "💰", subtitle: "Under ₹300" },
+      { value: "moderate", label: "Moderate", emoji: "💰💰", subtitle: "₹300–₹800" },
+      { value: "splurge", label: "Splurge", emoji: "💰💰💰", subtitle: "Above ₹800" },
+    ];
+    const PREF_OPTIONS = [
+      { value: "veg", label: "Vegetarian", emoji: "🥬" },
+      { value: "non-veg", label: "Non-Vegetarian", emoji: "🍗" },
+      { value: "both", label: "No Preference", emoji: "🍽️" },
+    ];
+
+    return (
+      <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-fuchsia-50 via-white to-purple-50">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={() => isBudget ? setPhase("reveal") : setFollowUpStep("budget")}
+            className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" /> Back
+          </button>
+
+          <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-fuchsia-100 rounded-full mb-4">
+              <span className="text-3xl">{c.emoji}</span>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">
+              {isBudget ? "What's your budget today?" : "Any dietary preference?"}
+            </h2>
+            <p className="text-gray-500 text-sm mb-6">
+              {isBudget
+                ? `${c.name} vibes — but your wallet has the final say.`
+                : `So we only show you dishes you'd actually eat.`}
+            </p>
+
+            {isBudget ? (
+              <div className="space-y-3">
+                {BUDGET_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => handleFollowUpSelect(o.value)}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-transparent hover:border-fuchsia-300 hover:bg-fuchsia-50 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{o.emoji}</span>
+                      <div className="text-left">
+                        <p className="font-semibold text-gray-900">{o.label}</p>
+                        <p className="text-xs text-gray-400">{o.subtitle}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {PREF_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => handleFollowUpSelect(o.value)}
+                    className="p-5 rounded-2xl border-2 border-gray-200 hover:border-fuchsia-400 hover:bg-fuchsia-50 hover:scale-105 transition-all text-center"
+                  >
+                    <span className="text-3xl mb-2 block">{o.emoji}</span>
+                    <span className="font-semibold text-gray-900 text-sm">{o.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Progress dots */}
+          <div className="flex justify-center gap-2 mt-6">
+            <div className={`w-2 h-2 rounded-full ${isBudget ? "bg-fuchsia-500" : "bg-gray-300"}`} />
+            <div className={`w-2 h-2 rounded-full ${!isBudget ? "bg-fuchsia-500" : "bg-gray-300"}`} />
           </div>
         </div>
       </div>

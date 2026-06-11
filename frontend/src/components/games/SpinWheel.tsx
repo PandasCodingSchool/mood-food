@@ -190,6 +190,30 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
   };
 
   const handlePreferenceSelect = (preference: string) => {
+    // Derive slider signals from accept/reject pattern
+    const adventurousIds = new Set(["spicy", "exotic", "indulgent"]);
+    const healthyIds = new Set(["healthy", "light"]);
+    const spicyIds = new Set(["spicy"]);
+    const totalSignals = acceptedSegments.length + rejectedSegments.length || 1;
+
+    const acceptedAdventurous = acceptedSegments.filter((s) => adventurousIds.has(s.id)).length;
+    const rejectedAdventurous = rejectedSegments.filter((s) => adventurousIds.has(s.id)).length;
+    const adventurous = Math.round(
+      1 + ((acceptedAdventurous - rejectedAdventurous + totalSignals) / (2 * totalSignals)) * 9,
+    );
+
+    const acceptedHealthy = acceptedSegments.filter((s) => healthyIds.has(s.id)).length;
+    const rejectedHealthy = rejectedSegments.filter((s) => healthyIds.has(s.id)).length;
+    const health_conscious = Math.round(
+      1 + ((acceptedHealthy - rejectedHealthy + totalSignals) / (2 * totalSignals)) * 9,
+    );
+
+    const acceptedSpicy = acceptedSegments.filter((s) => spicyIds.has(s.id)).length;
+    const rejectedSpicy = rejectedSegments.filter((s) => spicyIds.has(s.id)).length;
+    const spicy = Math.round(
+      1 + ((acceptedSpicy - rejectedSpicy + totalSignals) / (2 * totalSignals)) * 9,
+    );
+
     const results: GameResult = {
       mood: finalSelections.mood || "happy",
       craving: finalSelections.craving || "comfort",
@@ -202,6 +226,7 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
         rejected: rejectedSegments.map((s) => s.id),
         finalCraving: finalSelections.craving,
         finalMood: finalSelections.mood,
+        sliderValues: { adventurous, healthConscious: health_conscious, spicy },
       },
     };
     trackEvent("wheel_complete", results);
