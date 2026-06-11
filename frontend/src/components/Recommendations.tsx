@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import { trackEvent } from "../utils/analytics";
+import { openSwiggy } from "../utils/deliveryLinks";
 import { useState, useEffect } from "react";
 import type { QuizResults, Recommendation } from "../types";
 
@@ -122,6 +123,11 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOrderOnSwiggy = (dishName: string) => {
+    trackEvent("delivery_link_clicked", { platform: "swiggy", dish: dishName });
+    openSwiggy(dishName);
   };
 
   const handleShare = (item: Recommendation) => {
@@ -528,6 +534,17 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                           </div>
                         </div>
                       )}
+
+                    {/* Delivery CTA — Swiggy */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => handleOrderOnSwiggy(d.name)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 hover:shadow-md"
+                        style={{ backgroundColor: "#FC8019" }}
+                      >
+                        Order Now
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
