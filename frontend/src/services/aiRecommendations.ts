@@ -16,7 +16,12 @@ export async function fetchRecommendations(
   gameData: GameData | null = null,
   refresh = false,
 ): Promise<RecommendationResponse> {
-  const context = buildRequestContext(quizResults, gameData, refresh);
+  // Use gameData from quizResults if available (GameResult includes gameData)
+  const finalGameData =
+    gameData ||
+    ((quizResults as any).gameData as GameData | undefined) ||
+    null;
+  const context = buildRequestContext(quizResults, finalGameData, refresh);
 
   try {
     const response = await fetch(`${API_BASE_URL}/ai-recommendations`, {

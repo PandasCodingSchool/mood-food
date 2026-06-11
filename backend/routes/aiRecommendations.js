@@ -1,5 +1,8 @@
 import express from "express";
 import { getRecommendations } from "../utils/recommendationEngine.js";
+import {
+  getCharacterAwareRecommendations,
+} from "../utils/characterRecommendationEngine.js";
 
 const router = express.Router();
 
@@ -20,9 +23,31 @@ const AI_RETRY_BASE_DELAY_MS = parseInt(
  */
 router.post("/", async (req, res) => {
   const body = req.body;
+  const userContext = body?.userContext || {};
+  const gameData = userContext?.gameData || {};
 
   // Extract basic quiz data for fallback
   const { mood, craving, budget, preference } = extractQuizData(body);
+
+  // ⚡ FAST PATH: Character match game gets instant character-specific recommendations
+  if (gameData.type === "character_match" && gameData.character?.id) {
+    console.log(
+      `Fast path: Character Match detected (${gameData.character.name})`
+    );
+
+    const characterRecs = getCharacterAwareRecommendations(gameData, {
+      mood,
+      craving,
+      budget,
+      preference,
+    });
+
+    if (characterRecs) {
+      // Return character recommendations immediately (sub-100ms)
+      // AI service can be called async in background for enrichment
+      return res.json(characterRecs);
+    }
+  }
 
   // Build contract-compliant snake_case request for AI service
   const aiRequest = buildAiRequest(body);

@@ -67,13 +67,22 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
     budget_max = (sit.budget.max if sit and sit.budget else None)
     budget_str = f"₹{budget_max}" if budget_max else "not specified"
 
+    # Character context for personality-aligned recommendations
+    character_context = ""
+    if game and hasattr(game, "character") and game.character:
+        char = game.character
+        char_name = char.get("name", "unknown") if isinstance(char, dict) else getattr(char, "name", "unknown")
+        char_dishes = char.get("characterDishes", []) if isinstance(char, dict) else getattr(char, "characterDishes", [])
+        char_dishes_str = ", ".join(char_dishes[:5]) if char_dishes else "not specified"
+        character_context = f"\nCHARACTER CONTEXT:\n  Personality: User matched as {char_name}\n  Typical dishes: {char_dishes_str}\n  This is a strong signal — prioritize these character-aligned recommendations.\n"
+
     return f"""PAYLOAD:
   mood={mood.primary} | energy={mood.energy_level}/10 | social={mood.social_context}
   time_of_day={sit.time_of_day if sit else None} | weather={sit.weather if sit else None} | budget={budget_str} | time_available={sit.time_available if sit else None}min | delivery={sit.delivery_preferred if sit else False}
   cuisines={prefs.cuisine_types if prefs else []} | restrictions={prefs.dietary_restrictions if prefs else []} | allergies={prefs.allergies if prefs else []} | spice_tolerance={prefs.spice_tolerance if prefs else None}
   adventurous_slider={sliders.adventurous if sliders else None}/10 | health_slider={sliders.health_conscious if sliders else None}/10 | spicy_slider={sliders.spicy if sliders else None}/10
   avoid={hist.avoid_these if hist else []}
-
+{character_context}
 DISH LIST (id: name | mood_tags | spice | diet | allergens | energy_req | price | weather | meal_time | delivery | adventurousness):
 {get_dishes_for_prompt()}
 

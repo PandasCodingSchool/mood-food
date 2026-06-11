@@ -211,6 +211,30 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             Back to Home
           </button>
           <div className="text-center">
+            {/* Character header (if character match) */}
+            {recommendations.length > 0 &&
+              recommendations[0]?.characterId && (
+                <div className="mb-4 inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-fuchsia-50 to-purple-50 rounded-full px-4 py-2 border border-fuchsia-200 mb-4">
+                  <span className="text-2xl">
+                    {recommendations[0].ai_reasoning
+                      ?.nostalgia_factor ? (
+                      // Extract emoji from character if available
+                      "🎬"
+                    ) : (
+                      "😊"
+                    )}
+                  </span>
+                  <span className="font-medium text-fuchsia-700">
+                    Here's what{" "}
+                    {recommendations[0].characterId
+                      ?.charAt(0)
+                      .toUpperCase() +
+                      recommendations[0].characterId?.slice(1)}{" "}
+                    would order
+                  </span>
+                </div>
+              )}
+
             <div className="inline-flex items-center space-x-2 bg-primary-100 rounded-full px-4 py-2 mb-4">
               <span className="text-2xl">
                 {moodEmojis[results.mood] || "😊"}
@@ -323,9 +347,16 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                     {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
 
-                    {/* Rank badge */}
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-gray-800 text-xs font-bold px-2 py-1 rounded-full">
-                      #{item.rank || index + 1}
+                    {/* Rank badge + Character badge */}
+                    <div className="absolute top-3 left-3 flex items-center gap-2">
+                      <div className="bg-white/90 backdrop-blur-sm text-gray-800 text-xs font-bold px-2 py-1 rounded-full">
+                        #{item.rank || index + 1}
+                      </div>
+                      {item.characterBranded && (
+                        <div className="bg-fuchsia-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
+                          Character pick
+                        </div>
+                      )}
                     </div>
 
                     {/* Action buttons */}

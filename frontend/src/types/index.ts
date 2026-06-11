@@ -54,6 +54,8 @@ export interface Recommendation {
     name: string;
     reason: string;
   }>;
+  characterBranded?: boolean;
+  characterId?: string;
 }
 
 export interface RecommendationResponse {
