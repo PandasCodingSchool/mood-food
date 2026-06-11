@@ -6,7 +6,7 @@ import {
   Sparkles,
   ChevronLeft,
 } from "lucide-react";
-import { getActiveStory } from "../../constants/storyBeats";
+import { getActiveStory, getMoodCravingFollowUp } from "../../constants/storyBeats";
 import {
   computeMoodFromStory,
   type StoryMoodResult,
@@ -58,7 +58,11 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
 
   const beat = STORY_BEATS[beatIndex];
   const currentFollowUpKey = FOLLOW_UP_STEPS[followUpStep];
-  const followUpConfig = STORY_FOLLOW_UP[currentFollowUpKey];
+  // Craving step is mood-aware; budget & preference are static
+  const followUpConfig =
+    currentFollowUpKey === "craving" && reveal
+      ? getMoodCravingFollowUp(reveal.moodSlug)
+      : STORY_FOLLOW_UP[currentFollowUpKey];
 
   const handleIntroStart = () => {
     trackEvent("story_started", { timeSlot });
@@ -310,11 +314,12 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
                   <span className="font-semibold text-gray-900 block text-sm">
                     {option.label}
                   </span>
-                  {"subtitle" in option && option.subtitle && (
-                    <span className="text-xs text-gray-500 mt-1 block">
-                      {option.subtitle}
-                    </span>
-                  )}
+                  {"subtitle" in option &&
+                    (option as { subtitle?: string }).subtitle && (
+                      <span className="text-xs text-gray-500 mt-1 block">
+                        {(option as { subtitle?: string }).subtitle}
+                      </span>
+                    )}
                 </button>
               ))}
             </div>

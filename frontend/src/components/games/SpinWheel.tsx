@@ -103,6 +103,8 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     {},
   );
   const [showBudgetPicker, setShowBudgetPicker] = useState(false);
+  const [showPreferencePicker, setShowPreferencePicker] = useState(false);
+  const [selectedBudget, setSelectedBudget] = useState<string | null>(null);
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
 
   const wheelRef = useRef<HTMLDivElement>(null);
@@ -180,13 +182,19 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
 
   const handleBudgetSelect = (budget: string) => {
     setFinalSelections((prev) => ({ ...prev, budget }));
+    setSelectedBudget(budget);
     trackEvent("wheel_budget_selected", { budget });
+    // Move to preference step instead of completing immediately
+    setShowBudgetPicker(false);
+    setShowPreferencePicker(true);
+  };
 
+  const handlePreferenceSelect = (preference: string) => {
     const results: GameResult = {
       mood: finalSelections.mood || "happy",
       craving: finalSelections.craving || "comfort",
-      budget: budget,
-      preference: "both",
+      budget: selectedBudget || "moderate",
+      preference,
       gameData: {
         type: "spin_wheel",
         spins: spinCount,
@@ -196,7 +204,6 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
         finalMood: finalSelections.mood,
       },
     };
-
     trackEvent("wheel_complete", results);
     onComplete(results);
   };
@@ -261,6 +268,53 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
                 </span>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Preference step (after budget is picked) ────────────
+  if (showPreferencePicker) {
+    const acceptedVibe = acceptedSegments[acceptedSegments.length - 1];
+    const vibeLabel = acceptedVibe?.label ?? "your meal";
+    const PREF_OPTIONS = [
+      { value: "veg",     label: "Vegetarian",    emoji: "🥬" },
+      { value: "non-veg", label: "Non-Vegetarian", emoji: "🍗" },
+      { value: "both",    label: "No Preference",  emoji: "🍽️" },
+    ];
+
+    return (
+      <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-orange-50 via-white to-yellow-50">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={() => { setShowPreferencePicker(false); setShowBudgetPicker(true); }}
+            className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" />
+            Back
+          </button>
+
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              One last thing
+            </h2>
+            <p className="text-gray-600">
+              Any dietary preference for your {vibeLabel.toLowerCase()} meal?
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            {PREF_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => handlePreferenceSelect(option.value)}
+                className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all text-center"
+              >
+                <span className="text-3xl mb-2 block">{option.emoji}</span>
+                <span className="font-semibold text-gray-800 text-sm">{option.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
