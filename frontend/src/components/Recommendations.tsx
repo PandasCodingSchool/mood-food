@@ -137,8 +137,25 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     }
   };
 
-  const handleOrderOnSwiggy = (dishName: string) => {
-    trackEvent("delivery_link_clicked", { platform: "swiggy", dish: dishName });
+  const handleOrderOnSwiggy = (
+    dishName: string,
+    dishType: "main" | "healthier" | "budget" = "main",
+  ) => {
+    trackEvent("delivery_link_clicked", {
+      platform: "swiggy",
+      dish: dishName,
+      type: dishType,
+    });
+    // Track internally for admin dashboard
+    fetch("/api/analytics/order-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dish_name: dishName,
+        dish_type: dishType,
+        platform: "swiggy",
+      }),
+    }).catch(() => {}); // Silent fail - don't block user experience
     openSwiggy(dishName);
   };
 
@@ -616,7 +633,10 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                               </p>
                               <button
                                 onClick={() =>
-                                  handleOrderOnSwiggy(healthierAlt.name)
+                                  handleOrderOnSwiggy(
+                                    healthierAlt.name,
+                                    "healthier",
+                                  )
                                 }
                                 className="mt-3 w-full py-2 bg-green-500 text-white rounded-xl text-xs font-bold hover:bg-green-600 transition-colors"
                               >
@@ -653,7 +673,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                               </p>
                               <button
                                 onClick={() =>
-                                  handleOrderOnSwiggy(budgetAlt.name)
+                                  handleOrderOnSwiggy(budgetAlt.name, "budget")
                                 }
                                 className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 transition-colors"
                               >

@@ -247,6 +247,100 @@ app.get("/api/admin/waitlist", async (req, res) => {
   }
 });
 
+// Track order clicks (for internal analytics)
+app.post("/api/analytics/order-click", async (req, res) => {
+  const { dish_name, dish_type = "main", platform = "swiggy" } = req.body;
+
+  if (!dish_name) {
+    return res.status(400).json({ error: "dish_name is required" });
+  }
+
+  try {
+    const user_agent = req.headers["user-agent"] || "";
+    const ip_address = req.ip || req.connection.remoteAddress || "";
+
+    if (isPostgres()) {
+      await query(
+        `INSERT INTO order_clicks (dish_name, dish_type, platform, user_agent, ip_address) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        [dish_name, dish_type, platform, user_agent, ip_address],
+      );
+    } else {
+      await query(
+        `INSERT INTO order_clicks (dish_name, dish_type, platform, user_agent, ip_address) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [dish_name, dish_type, platform, user_agent, ip_address],
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Order click tracking error:", error);
+    res.status(500).json({ error: "Failed to track order click" });
+  }
+});
+
+// Get order click stats (for admin)
+app.get("/api/admin/order-clicks", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const expectedAuth =
+    "Basic " +
+    Buffer.from(
+      `${process.env.ADMIN_USERNAME || "admin"}:${process.env.ADMIN_PASSWORD || "changeme"}`,
+    ).toString("base64");
+
+  if (authHeader !== expectedAuth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Get total clicks
+    const totalClicks = await query(
+      "SELECT COUNT(*) as count FROM order_clicks",
+    );
+
+    // Get clicks by dish type (main, healthier, budget)
+    const clicksByType = await query(`
+      SELECT dish_type, COUNT(*) as count 
+      FROM order_clicks 
+      GROUP BY dish_type
+    `);
+
+    // Get top dishes ordered
+    const topDishes = await query(`
+      SELECT dish_name, COUNT(*) as clicks 
+      FROM order_clicks 
+      GROUP BY dish_name 
+      ORDER BY clicks DESC 
+      LIMIT 10
+    `);
+
+    // Get daily clicks for last 7 days
+    const dateFilter = isPostgres()
+      ? "WHERE created_at > NOW() - INTERVAL '7 days'"
+      : "WHERE created_at > datetime('now', '-7 days')";
+    const dailyClicks = await query(`
+      SELECT date(created_at) as date, COUNT(*) as count
+      FROM order_clicks
+      ${dateFilter}
+      GROUP BY date(created_at)
+      ORDER BY date DESC
+    `);
+
+    res.json({
+      totalClicks: parseInt(
+        totalClicks.rows?.[0]?.count || totalClicks?.[0]?.count || 0,
+      ),
+      clicksByType: clicksByType.rows || clicksByType,
+      topDishes: topDishes.rows || topDishes,
+      dailyClicks: dailyClicks.rows || dailyClicks,
+    });
+  } catch (error) {
+    console.error("Admin order clicks error:", error);
+    res.status(500).json({ error: "Failed to fetch order click stats" });
+  }
+});
+
 // Serve admin panel
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "admin", "index.html"));
