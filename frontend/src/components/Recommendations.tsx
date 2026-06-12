@@ -15,9 +15,13 @@ import {
   User,
   CheckCircle,
   Loader2,
+  RotateCw,
+  Leaf,
+  Wallet,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import { trackEvent } from "../utils/analytics";
+import { openSwiggy } from "../utils/deliveryLinks";
 import { useState, useEffect } from "react";
 import type { QuizResults, Recommendation } from "../types";
 
@@ -28,12 +32,6 @@ const moodEmojis: Record<string, string> = {
   celebrating: "🎉",
   relaxed: "😌",
   adventurous: "🤩",
-};
-
-const pairingIcons: Record<string, string> = {
-  drink: "🥤",
-  dessert: "🍮",
-  side: "🥗",
 };
 
 const loaderSteps = [
@@ -66,6 +64,21 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistError, setWaitlistError] = useState("");
 
+  // Flip card state - tracks which cards are flipped
+  const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
+
+  const handleFlipCard = (itemId: string) => {
+    setFlippedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     loadRecommendations();
   }, []);
@@ -73,9 +86,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Show waitlist popup 10 seconds after recommendations load
   useEffect(() => {
     if (!loading && !error && recommendations.length > 0) {
-      // Check if user already dismissed or joined waitlist this session
-      const hasInteracted = sessionStorage.getItem("waitlistPopupInteracted");
-      if (hasInteracted) return;
+      // Only skip if user already joined waitlist (dismissed users will see it again)
+      const hasJoined = sessionStorage.getItem("waitlistJoined");
+      if (hasJoined) return;
 
       const timer = setTimeout(() => {
         setShowWaitlistPopup(true);
@@ -124,6 +137,28 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     }
   };
 
+  const handleOrderOnSwiggy = (
+    dishName: string,
+    dishType: "main" | "healthier" | "budget" = "main",
+  ) => {
+    trackEvent("delivery_link_clicked", {
+      platform: "swiggy",
+      dish: dishName,
+      type: dishType,
+    });
+    // Track internally for admin dashboard
+    fetch("/api/analytics/order-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dish_name: dishName,
+        dish_type: dishType,
+        platform: "swiggy",
+      }),
+    }).catch(() => {}); // Silent fail - don't block user experience
+    openSwiggy(dishName);
+  };
+
   const handleShare = (item: Recommendation) => {
     trackEvent("recommendation_shared", { food: item.dish.name });
     if (navigator.share) {
@@ -144,6 +179,15 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       } else {
         next.add(item.id);
         trackEvent("recommendation_liked", { food: item.dish.name });
+        // Show waitlist popup when user likes something (even if dismissed before, but not if joined)
+        const hasJoined = sessionStorage.getItem("waitlistJoined");
+        if (!hasJoined) {
+          setShowWaitlistPopup(true);
+          trackEvent("waitlist_popup_shown", {
+            trigger: "like",
+            food: item.dish.name,
+          });
+        }
       }
       return next;
     });
@@ -158,7 +202,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
   const handleCloseWaitlistPopup = () => {
     setShowWaitlistPopup(false);
-    sessionStorage.setItem("waitlistPopupInteracted", "dismissed");
+    // Don't set any storage on dismiss - popup will show again
     trackEvent("waitlist_popup_dismissed");
   };
 
@@ -184,7 +228,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       if (response.ok) {
         trackEvent("waitlist_popup_submitted", { email: waitlistForm.email });
         setWaitlistSubmitted(true);
-        sessionStorage.setItem("waitlistPopupInteracted", "joined");
+        sessionStorage.setItem("waitlistJoined", "true");
         // Close popup after 2 seconds of success message
         setTimeout(() => setShowWaitlistPopup(false), 2000);
       } else {
@@ -211,6 +255,24 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             Back to Home
           </button>
           <div className="text-center">
+            {/* Character header (if character match) */}
+            {recommendations.length > 0 && recommendations[0]?.characterId && (
+              <div className="inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-fuchsia-50 to-purple-50 rounded-full px-4 py-2 border border-fuchsia-200 mb-4">
+                <span className="text-2xl">
+                  {recommendations[0].ai_reasoning?.nostalgia_factor
+                    ? // Extract emoji from character if available
+                      "🎬"
+                    : "😊"}
+                </span>
+                <span className="font-medium text-fuchsia-700">
+                  Here's what{" "}
+                  {recommendations[0].characterId?.charAt(0).toUpperCase() +
+                    recommendations[0].characterId?.slice(1)}{" "}
+                  would order
+                </span>
+              </div>
+            )}
+
             <div className="inline-flex items-center space-x-2 bg-primary-100 rounded-full px-4 py-2 mb-4">
               <span className="text-2xl">
                 {moodEmojis[results.mood] || "😊"}
@@ -289,7 +351,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-        {/* Cards */}
+        {/* Flip Cards */}
         {!loading && !error && (
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             {recommendations.map((item, index) => {
@@ -297,257 +359,355 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               const pd = item.practical_details;
               const r = item.restaurant;
               const ar = item.ai_reasoning;
+              const isFlipped = flippedCards.has(item.id);
+              const hasAlternatives =
+                item.alternatives && item.alternatives.length > 0;
+              const healthierAlt = item.alternatives?.find(
+                (a) => a.type === "healthier_swap",
+              );
+              const budgetAlt = item.alternatives?.find(
+                (a) => a.type === "budget_swap",
+              );
 
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-3xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col"
+                  className="relative h-[520px] perspective-1000"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
-                  {/* Image */}
-                  <div className="relative h-52 bg-gradient-to-br from-primary-400 to-secondary-500 overflow-hidden">
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={d.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-6xl">
-                        🍽️
-                      </div>
-                    )}
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-
-                    {/* Rank badge */}
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-gray-800 text-xs font-bold px-2 py-1 rounded-full">
-                      #{item.rank || index + 1}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="absolute top-3 right-3 flex gap-2">
-                      <button
-                        onClick={() => handleLike(item)}
-                        className={`p-2 rounded-full transition-colors backdrop-blur-sm ${likedItems.has(item.id) ? "bg-red-500 text-white" : "bg-white/80 text-gray-600 hover:bg-white"}`}
-                      >
-                        <Heart
-                          className={`w-4 h-4 ${likedItems.has(item.id) ? "fill-current" : ""}`}
-                        />
-                      </button>
-                      <button
-                        onClick={() => handleShare(item)}
-                        className="p-2 bg-white/80 backdrop-blur-sm text-gray-600 rounded-full hover:bg-white transition-colors"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Bottom info */}
-                    <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
-                      <div>
-                        <h3 className="text-white font-bold text-lg leading-tight drop-shadow">
-                          {d.name}
-                        </h3>
-                        <span className="text-white/80 text-xs capitalize">
-                          {d.cuisine}
-                        </span>
-                      </div>
-                      {item.confidence && (
-                        <span className="bg-white/20 backdrop-blur-sm text-white text-xs px-2 py-0.5 rounded-full">
-                          {Math.round(item.confidence * 100)}% match
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div className="p-4 flex flex-col gap-3 flex-1">
-                    {/* Tags */}
-                    {d.tags && d.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {d.tags.slice(0, 4).map((tag) => (
-                          <span
-                            key={tag}
-                            className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* AI Reasoning */}
-                    {ar?.psychological_hook && (
-                      <div className="bg-primary-50 rounded-xl p-3">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Sparkles className="w-3 h-3 text-primary-500" />
-                          <span className="text-xs font-semibold text-primary-600">
-                            Why this?
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-700 leading-snug">
-                          {ar.psychological_hook}
-                        </p>
-                        {ar.nostalgia_factor && (
-                          <p className="text-xs text-primary-500 mt-1 italic">
-                            {ar.nostalgia_factor}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Practical details */}
-                    {pd && (
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-gray-50 rounded-xl p-2">
-                          <div className="flex justify-center mb-0.5">
-                            <Flame className="w-3.5 h-3.5 text-orange-400" />
-                          </div>
-                          <p className="text-xs font-semibold text-gray-800">
-                            {pd.calories ?? "—"}
-                          </p>
-                          <p className="text-xs text-gray-400">kcal</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-2">
-                          <div className="flex justify-center mb-0.5">
-                            <Clock className="w-3.5 h-3.5 text-blue-400" />
-                          </div>
-                          <p className="text-xs font-semibold text-gray-800">
-                            {pd.preparation_time ?? "—"}
-                          </p>
-                          <p className="text-xs text-gray-400">min</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-2">
-                          <div className="flex justify-center mb-0.5">
-                            <Zap className="w-3.5 h-3.5 text-green-400" />
-                          </div>
-                          <p className="text-xs font-semibold text-gray-800">
-                            ₹{pd.estimated_price ?? "—"}
-                          </p>
-                          <p className="text-xs text-gray-400">est.</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Health score bar */}
-                    {pd?.health_score != null && (
-                      <div>
-                        <div className="flex justify-between text-xs text-gray-500 mb-1">
-                          <span>Health score</span>
-                          <span className="font-medium">
-                            {pd.health_score}/10
-                          </span>
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${healthColor(pd.health_score)}`}
-                            style={{
-                              width: `${(pd.health_score / 10) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Restaurant */}
-                    {r && (
-                      <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 rounded-xl p-2.5">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          <span className="font-medium text-gray-700">
-                            {r.name}
-                          </span>
-                          {r.rating && (
-                            <span className="flex items-center gap-0.5 ml-1">
-                              <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                              {r.rating}
-                            </span>
+                  {/* Flip Container */}
+                  <div
+                    className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? "rotate-y-180" : ""}`}
+                    style={{ transformStyle: "preserve-3d" }}
+                  >
+                    {/* FRONT of card */}
+                    <div
+                      className="absolute inset-0 backface-hidden"
+                      style={{ backfaceVisibility: "hidden" }}
+                    >
+                      <div className="bg-white rounded-3xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
+                        {/* Image */}
+                        <div className="relative h-40 bg-gradient-to-br from-primary-400 to-secondary-500 overflow-hidden flex-shrink-0">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={d.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-5xl">
+                              🍽️
+                            </div>
                           )}
-                        </div>
-                        {r.delivery_time_min && (
-                          <div className="flex items-center gap-1">
-                            <Truck className="w-3 h-3" />
-                            <span>{r.delivery_time_min} min</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
 
-                    {/* Pairing suggestions */}
-                    {item.pairing_suggestions &&
-                      item.pairing_suggestions.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 mb-1.5">
-                            Pairs well with
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.pairing_suggestions.map((p, i) => (
-                              <span
-                                key={i}
-                                className="flex items-center gap-1 text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-full"
-                              >
-                                <span>{pairingIcons[p.type] || "🍴"}</span>
-                                <span>{p.name}</span>
+                          {/* Rank badge + Character badge */}
+                          <div className="absolute top-3 left-3 flex items-center gap-2">
+                            <div className="bg-white/90 backdrop-blur-sm text-gray-800 text-xs font-bold px-2 py-1 rounded-full">
+                              #{item.rank || index + 1}
+                            </div>
+                            {item.characterBranded && (
+                              <div className="bg-fuchsia-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
+                                Character pick
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="absolute top-3 right-3 flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLike(item);
+                              }}
+                              className={`p-2 rounded-full transition-colors backdrop-blur-sm ${likedItems.has(item.id) ? "bg-red-500 text-white" : "bg-white/80 text-gray-600 hover:bg-white"}`}
+                            >
+                              <Heart
+                                className={`w-4 h-4 ${likedItems.has(item.id) ? "fill-current" : ""}`}
+                              />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShare(item);
+                              }}
+                              className="p-2 bg-white/80 backdrop-blur-sm text-gray-600 rounded-full hover:bg-white transition-colors"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Bottom info */}
+                          <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                            <div>
+                              <h3 className="text-white font-bold text-base leading-tight drop-shadow">
+                                {d.name}
+                              </h3>
+                              <span className="text-white/80 text-xs capitalize">
+                                {d.cuisine}
                               </span>
-                            ))}
+                            </div>
+                            {item.confidence && (
+                              <span className="bg-white/20 backdrop-blur-sm text-white text-xs px-2 py-0.5 rounded-full">
+                                {Math.round(item.confidence * 100)}% match
+                              </span>
+                            )}
                           </div>
                         </div>
-                      )}
+
+                        {/* Body */}
+                        <div className="p-4 flex flex-col gap-2 flex-1 overflow-hidden">
+                          {/* Tags */}
+                          {d.tags && d.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {d.tags.slice(0, 3).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* AI Reasoning */}
+                          <div className="bg-primary-50 rounded-xl p-2.5 min-h-[60px]">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Sparkles className="w-3 h-3 text-primary-500" />
+                              <span className="text-xs font-semibold text-primary-600">
+                                Why this?
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-700 leading-snug line-clamp-2">
+                              {ar?.psychological_hook ||
+                                "Perfect match for your mood and cravings"}
+                            </p>
+                          </div>
+
+                          {/* Practical details - always show grid for consistency */}
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="bg-gray-50 rounded-lg p-1.5">
+                              <Flame className="w-3 h-3 text-orange-400 mx-auto mb-0.5" />
+                              <p className="text-xs font-semibold text-gray-800">
+                                {pd?.calories ?? "—"}
+                              </p>
+                              <p className="text-[10px] text-gray-400">kcal</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-1.5">
+                              <Clock className="w-3 h-3 text-blue-400 mx-auto mb-0.5" />
+                              <p className="text-xs font-semibold text-gray-800">
+                                {pd?.preparation_time ?? "—"}
+                              </p>
+                              <p className="text-[10px] text-gray-400">min</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-1.5">
+                              <Zap className="w-3 h-3 text-green-400 mx-auto mb-0.5" />
+                              <p className="text-xs font-semibold text-gray-800">
+                                ₹{pd?.estimated_price ?? "—"}
+                              </p>
+                              <p className="text-[10px] text-gray-400">est.</p>
+                            </div>
+                          </div>
+
+                          {/* Health score - always show */}
+                          <div>
+                            <div className="flex justify-between text-xs text-gray-500 mb-1">
+                              <span>Health score</span>
+                              <span className="font-medium">
+                                {pd?.health_score ?? "—"}/10
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${healthColor(pd?.health_score || 0)}`}
+                                style={{
+                                  width: `${((pd?.health_score || 5) / 10) * 100}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Restaurant - always show placeholder if missing */}
+                          <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 rounded-xl p-2">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              <span className="font-medium text-gray-700">
+                                {r?.name ?? "Local restaurants"}
+                              </span>
+                              {r?.rating && (
+                                <span className="flex items-center gap-0.5 ml-1">
+                                  <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                                  {r.rating}
+                                </span>
+                              )}
+                            </div>
+                            {r?.delivery_time_min && (
+                              <div className="flex items-center gap-1">
+                                <Truck className="w-3 h-3" />
+                                <span>{r.delivery_time_min} min</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Flip hint */}
+                          {hasAlternatives && (
+                            <button
+                              onClick={() => handleFlipCard(item.id)}
+                              className="flex items-center justify-center gap-1 text-xs text-primary-500 hover:text-primary-600 transition-colors mt-auto pt-1"
+                            >
+                              <RotateCw className="w-3.5 h-3.5" />
+                              <span>Flip for healthy & budget options</span>
+                            </button>
+                          )}
+
+                          {/* Delivery CTA */}
+                          <div className="pt-2 border-t border-gray-100 mt-1">
+                            <button
+                              onClick={() => handleOrderOnSwiggy(d.name)}
+                              className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
+                            >
+                              <span className="flex items-center justify-center gap-2">
+                                <svg
+                                  className="w-4 h-4"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                >
+                                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                                </svg>
+                                Order on Swiggy
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* BACK of card - Alternatives */}
+                    <div
+                      className="absolute inset-0 backface-hidden rotate-y-180"
+                      style={{
+                        backfaceVisibility: "hidden",
+                        transform: "rotateY(180deg)",
+                      }}
+                    >
+                      <div className="bg-white rounded-3xl shadow-md overflow-hidden h-full flex flex-col">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-4 text-white">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-lg">Alternatives</h3>
+                            <button
+                              onClick={() => handleFlipCard(item.id)}
+                              className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                            >
+                              <RotateCw className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <p className="text-white/80 text-xs mt-1">
+                            for {d.name}
+                          </p>
+                        </div>
+
+                        {/* Alternatives content */}
+                        <div className="p-4 flex flex-col gap-3 flex-1">
+                          {/* Healthier option */}
+                          {healthierAlt ? (
+                            <div className="bg-green-50 rounded-2xl p-4 border border-green-100">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                  <Leaf className="w-4 h-4 text-green-600" />
+                                </div>
+                                <span className="text-xs font-bold text-green-700 uppercase tracking-wide">
+                                  Healthier Swap
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-gray-900 text-sm mb-1">
+                                {healthierAlt.name}
+                              </h4>
+                              <p className="text-xs text-gray-600 leading-snug">
+                                {healthierAlt.reason}
+                              </p>
+                              <button
+                                onClick={() =>
+                                  handleOrderOnSwiggy(
+                                    healthierAlt.name,
+                                    "healthier",
+                                  )
+                                }
+                                className="mt-3 w-full py-2 bg-green-500 text-white rounded-xl text-xs font-bold hover:bg-green-600 transition-colors"
+                              >
+                                Order This Instead
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="bg-green-50 rounded-2xl p-4 border border-green-100 opacity-60">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Leaf className="w-4 h-4 text-green-600" />
+                                <span className="text-xs font-bold text-green-700">
+                                  No healthier swap available
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Budget option */}
+                          {budgetAlt ? (
+                            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                                  <Wallet className="w-4 h-4 text-amber-600" />
+                                </div>
+                                <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">
+                                  Budget Pick
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-gray-900 text-sm mb-1">
+                                {budgetAlt.name}
+                              </h4>
+                              <p className="text-xs text-gray-600 leading-snug">
+                                {budgetAlt.reason}
+                              </p>
+                              <button
+                                onClick={() =>
+                                  handleOrderOnSwiggy(budgetAlt.name, "budget")
+                                }
+                                className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 transition-colors"
+                              >
+                                Order This Instead
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 opacity-60">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Wallet className="w-4 h-4 text-amber-600" />
+                                <span className="text-xs font-bold text-amber-700">
+                                  No budget swap available
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Back button */}
+                          <button
+                            onClick={() => handleFlipCard(item.id)}
+                            className="mt-auto flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors py-2"
+                          >
+                            <RotateCw className="w-4 h-4" />
+                            Back to main recommendation
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-
-        {/* Alternatives strip */}
-        {!loading &&
-          !error &&
-          (() => {
-            const allAlts = recommendations.flatMap((r) =>
-              (r.alternatives || []).map((a) => ({
-                ...a,
-                fromDish: r.dish.name,
-              })),
-            );
-            if (allAlts.length === 0) return null;
-            return (
-              <div className="mb-8">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                  You might also like
-                </h3>
-                <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
-                  {allAlts.map((alt, i) => (
-                    <div
-                      key={i}
-                      className="snap-start flex-shrink-0 w-52 bg-white rounded-2xl shadow-md p-4 border border-gray-100 hover:shadow-lg transition-shadow"
-                    >
-                      <span
-                        className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${alt.type === "healthier_swap" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}
-                      >
-                        {alt.type === "healthier_swap"
-                          ? "🥦 Healthier"
-                          : "💰 Budget Pick"}
-                      </span>
-                      <p className="font-semibold text-gray-900 text-sm leading-tight mb-1">
-                        {alt.name}
-                      </p>
-                      <p className="text-xs text-gray-500 leading-snug">
-                        {alt.reason}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1.5">
-                        Instead of {alt.fromDish}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
 
         {/* Bottom actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

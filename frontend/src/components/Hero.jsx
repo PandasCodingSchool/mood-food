@@ -1,4 +1,5 @@
-import { ArrowRight, Sparkles, Clock, Smile, Star } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Sparkles, Clock, Smile, Star, Users } from 'lucide-react';
 
 const PARTICLES = [
   { emoji: '🍕', left: '8%',  delay: '0s',   dur: '12s', size: '2rem' },
@@ -11,7 +12,61 @@ const PARTICLES = [
   { emoji: '🍰', left: '90%', delay: '1.5s', dur: '12s', size: '1.6rem' },
 ];
 
+// Animated counter hook
+function useAnimatedCounter(target, duration = 2000, start = 100) {
+  const [count, setCount] = useState(start);
+  const countRef = useRef(start);
+  const targetRef = useRef(target);
+
+  useEffect(() => {
+    targetRef.current = target;
+    const startTime = Date.now();
+    const startValue = countRef.current;
+    const diff = target - startValue;
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const current = Math.floor(startValue + diff * easeOut);
+      countRef.current = current;
+      setCount(current);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [target, duration]);
+
+  return count;
+}
+
 function Hero({ onStartQuiz }) {
+  const [waitlistData, setWaitlistData] = useState({ count: 0, base: 100, total: 100 });
+  const [loading, setLoading] = useState(true);
+  const animatedCount = useAnimatedCounter(waitlistData.total, 2500, 0);
+
+  useEffect(() => {
+    const fetchWaitlistCount = async () => {
+      try {
+        const response = await fetch('/api/waitlist/count');
+        if (response.ok) {
+          const data = await response.json();
+          setWaitlistData(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch waitlist count:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWaitlistCount();
+  }, []);
+
   return (
     <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
       {/* Animated background blobs */}
@@ -97,7 +152,10 @@ function Hero({ onStartQuiz }) {
           {/* Social proof strip */}
           <div className="mt-16 flex flex-wrap justify-center items-center gap-6 animate-fade-in" style={{ animationDelay: '0.5s' }}>
             <div className="text-center">
-              <p className="text-2xl font-black text-primary-600">2,400+</p>
+              <div className="flex items-center justify-center gap-1 text-2xl font-black text-primary-600">
+                <Users className="w-5 h-5" />
+                <span>{loading ? '100+' : `${animatedCount.toLocaleString()}+`}</span>
+              </div>
               <p className="text-xs text-gray-500 mt-0.5">on waitlist</p>
             </div>
             <div className="w-px h-8 bg-gray-200" />
@@ -107,8 +165,8 @@ function Hero({ onStartQuiz }) {
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">
-              <p className="text-2xl font-black text-primary-600">4 games</p>
-              <p className="text-xs text-gray-500 mt-0.5">to discover your mood</p>
+              <p className="text-2xl font-black text-primary-600">5 games</p>
+              <p className="text-xs text-gray-500 mt-0.5">+ more coming soon</p>
             </div>
           </div>
         </div>

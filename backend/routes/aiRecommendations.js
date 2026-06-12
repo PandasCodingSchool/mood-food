@@ -20,12 +20,21 @@ const AI_RETRY_BASE_DELAY_MS = parseInt(
  */
 router.post("/", async (req, res) => {
   const body = req.body;
+  const userContext = body?.userContext || {};
+  const gameData = userContext?.gameData || {};
 
   // Extract basic quiz data for fallback
   const { mood, craving, budget, preference } = extractQuizData(body);
 
   // Build contract-compliant snake_case request for AI service
+  // Character context is included in gameData for AI to reason about
   const aiRequest = buildAiRequest(body);
+
+  if (gameData.type === "character_match" && gameData.character?.id) {
+    console.log(
+      `Character Match detected: ${gameData.character.name} - AI will prioritize their favorite dishes`
+    );
+  }
   console.log(aiRequest);
 
   // Try external AI service first
@@ -174,11 +183,18 @@ function buildAiRequest(body) {
   const prefs = ctx?.preferences || {};
   const sit = ctx?.situational || {};
   const cfg = body?.recommendationConfig || {};
+  // Flatten all game signal strings into a single selections array for the AI prompt.
+  // CharacterMatch sends `answers` as [{questionId, optionId}] — convert to readable strings.
+  const characterAnswerStrings = (game.answers || [])
+    .filter((a) => a && typeof a === "object" && a.optionId)
+    .map((a) => String(a.optionId));
+
   const gameSelections = [
     ...(game.selections || []),
+    ...characterAnswerStrings,
     ...(game.storyChoices || []),
     ...(game.storySummary ? [game.storySummary] : []),
-  ];
+  ].filter((s) => typeof s === "string");
 
   const user_context = {
     mood: {
@@ -236,6 +252,17 @@ function buildAiRequest(body) {
             adventurous: scoreToScale(game.moodVector.valence),
             health_conscious: scoreToScale(game.moodVector.energy),
             spicy: scoreToScale(game.moodVector.social),
+          },
+        }),
+        // Pass character context for character_match games
+        ...(game.character && {
+          character: {
+            id: game.character.id,
+            name: game.character.name,
+            show: game.character.show,
+            emoji: game.character.emoji,
+            match_percentage: game.matchPercentage,
+            traits: game.character.traits,
           },
         }),
       },

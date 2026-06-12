@@ -54,6 +54,15 @@ export async function initDb() {
         preference VARCHAR(50) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
+      await db.query(`CREATE TABLE IF NOT EXISTS order_clicks (
+        id SERIAL PRIMARY KEY,
+        dish_name VARCHAR(255) NOT NULL,
+        dish_type VARCHAR(50) DEFAULT 'main',
+        platform VARCHAR(50) DEFAULT 'swiggy',
+        user_agent TEXT,
+        ip_address TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
       await db.query(
         `CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(event_name)`,
       );
@@ -65,6 +74,12 @@ export async function initDb() {
       );
       await db.query(
         `CREATE INDEX IF NOT EXISTS idx_quiz_completions_created ON quiz_completions(created_at)`,
+      );
+      await db.query(
+        `CREATE INDEX IF NOT EXISTS idx_order_clicks_created ON order_clicks(created_at)`,
+      );
+      await db.query(
+        `CREATE INDEX IF NOT EXISTS idx_order_clicks_dish ON order_clicks(dish_name)`,
       );
       console.log("PostgreSQL tables created/verified successfully");
     } catch (err) {
@@ -105,6 +120,19 @@ export async function initDb() {
         preference TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS order_clicks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dish_name TEXT NOT NULL,
+        dish_type TEXT DEFAULT 'main',
+        platform TEXT DEFAULT 'swiggy',
+        user_agent TEXT,
+        ip_address TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_order_clicks_created ON order_clicks(created_at);
+      CREATE INDEX IF NOT EXISTS idx_order_clicks_dish ON order_clicks(dish_name);
     `);
   }
 

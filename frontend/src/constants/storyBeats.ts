@@ -311,6 +311,35 @@ export const MOOD_REVEAL_COPY: Record<string, string> = {
 };
 
 // ─────────────────────────────────────────────────────────
+// Mood-aware craving follow-up — question text adapts to the revealed mood
+// ─────────────────────────────────────────────────────────
+const CRAVING_BY_MOOD: Record<string, { title: string; subtitle: string }> = {
+  stressed:    { title: "What kind of fix sounds right?",        subtitle: "Food helps. Let's find the right one." },
+  happy:       { title: "What amplifies the good mood?",         subtitle: "You're on a roll — keep it going." },
+  tired:       { title: "What would actually help right now?",   subtitle: "Low energy. No pressure — pick honestly." },
+  celebrating: { title: "What matches the moment?",              subtitle: "Tonight deserves something special." },
+  relaxed:     { title: "What fits the chill?",                  subtitle: "No rush. What sounds just right?" },
+  adventurous: { title: "How bold are we going?",                subtitle: "You're up for anything — what calls you?" },
+  sad:         { title: "What would comfort you most?",          subtitle: "A little food magic goes a long way." },
+  sick:        { title: "What sounds easy and soothing?",        subtitle: "Something gentle tonight." },
+};
+
+export function getMoodCravingFollowUp(mood: string) {
+  const copy = CRAVING_BY_MOOD[mood] ?? CRAVING_BY_MOOD.relaxed;
+  return {
+    title: copy.title,
+    subtitle: copy.subtitle,
+    options: [
+      { value: "spicy",    label: "Spicy",        emoji: "🌶️" },
+      { value: "sweet",    label: "Sweet",         emoji: "🍯" },
+      { value: "comfort",  label: "Comfort Food",  emoji: "🍲" },
+      { value: "healthy",  label: "Healthy",       emoji: "🥗" },
+      { value: "light",    label: "Light",         emoji: "🌿" },
+      { value: "indulgent",label: "Indulgent",     emoji: "🍰" },
+    ],
+  };
+}
+
 // Static follow-up (titles get overridden per time slot above)
 // ─────────────────────────────────────────────────────────
 export const STORY_FOLLOW_UP = {

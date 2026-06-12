@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import settings
-from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt
+from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt, get_character_dish_ids
 
 # (drink, reason) keyed by cuisine
 _DRINK_PAIRINGS: dict[str, tuple[str, str]] = {
@@ -48,9 +48,11 @@ Each dish has explicit attributes. Match them precisely against the user's paylo
 
 RANKING RULES (in priority order):
 1. HARD EXCLUDE dishes whose allergens overlap with user's allergies
-2. HARD EXCLUDE dishes that conflict with dietary_restrictions
+2. IF dietary_restrictions contains "vegetarian" or "vegan": HARD EXCLUDE non_veg dishes
+   IF dietary_restrictions contains "non_veg": STRONGLY PREFER dishes with non_veg dietary_tag; exclude purely vegetarian/vegan dishes unless nothing else fits
 3. HARD EXCLUDE dishes priced above budget.max (if provided)
-4. RANK by: mood_tags match > spice_level vs spice_tolerance > \
+4. IF CHARACTER CONTEXT PROVIDED: Strongly boost char_* prefixed dishes (they're personality-aligned favorites)
+5. RANK by: mood_tags match > spice_level vs spice_tolerance > \
 energy_requirement vs energy_level > weather_tags match > adventurousness alignment > health_conscious alignment
 
 Return ONLY valid JSON, no markdown fences, no extra text."""
@@ -67,13 +69,47 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
     budget_max = (sit.budget.max if sit and sit.budget else None)
     budget_str = f"₹{budget_max}" if budget_max else "not specified"
 
+    # Character context: look up dish IDs from the mapping and inject into prompt
+    character_context = ""
+    if game and hasattr(game, "character") and game.character:
+        char = game.character
+        char_id = char.get("id", "") if isinstance(char, dict) else getattr(char, "id", "")
+        char_name = char.get("name", "unknown") if isinstance(char, dict) else getattr(char, "name", "unknown")
+
+        preferred_ids = get_character_dish_ids(char_id)
+        preferred_lines = []
+        for dish_id in preferred_ids:
+            dish = DISHES_BY_ID.get(dish_id)
+            if dish:
+                preferred_lines.append(f"  - {dish_id}: {dish.name} ({dish.cuisine})")
+
+        if preferred_lines:
+            character_context = (
+                f"\nCHARACTER CONTEXT:\n"
+                f"  User matched as: {char_name}\n"
+                f"  This character's preferred dishes (STRONGLY PREFER these dish IDs):\n"
+                + "\n".join(preferred_lines) + "\n"
+                f"  Rank these dishes above others when they satisfy hard constraints.\n"
+            )
+
+    # Game-specific context lines
+    game_context = ""
+    if game:
+        if game.selections:
+            game_context += f"  game_selections={game.selections}\n"
+        if game.swipes:
+            liked = [s.item for s in game.swipes if s.liked]
+            disliked = [s.item for s in game.swipes if not s.liked]
+            if liked or disliked:
+                game_context += f"  swipe_liked={liked} | swipe_disliked={disliked}\n"
+
     return f"""PAYLOAD:
   mood={mood.primary} | energy={mood.energy_level}/10 | social={mood.social_context}
   time_of_day={sit.time_of_day if sit else None} | weather={sit.weather if sit else None} | budget={budget_str} | time_available={sit.time_available if sit else None}min | delivery={sit.delivery_preferred if sit else False}
   cuisines={prefs.cuisine_types if prefs else []} | restrictions={prefs.dietary_restrictions if prefs else []} | allergies={prefs.allergies if prefs else []} | spice_tolerance={prefs.spice_tolerance if prefs else None}
   adventurous_slider={sliders.adventurous if sliders else None}/10 | health_slider={sliders.health_conscious if sliders else None}/10 | spicy_slider={sliders.spicy if sliders else None}/10
   avoid={hist.avoid_these if hist else []}
-
+{game_context}{character_context}
 DISH LIST (id: name | mood_tags | spice | diet | allergens | energy_req | price | weather | meal_time | delivery | adventurousness):
 {get_dishes_for_prompt()}
 

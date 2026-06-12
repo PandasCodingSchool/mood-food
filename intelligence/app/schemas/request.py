@@ -44,11 +44,25 @@ class SliderValues(BaseModel):
     spicy: Optional[int] = Field(default=None, ge=1, le=10)
 
 
+class CharacterContext(BaseModel):
+    id: str
+    name: str
+    show: Optional[str] = None
+    emoji: Optional[str] = None
+    traits: Optional[dict] = None
+    match_percentage: Optional[int] = None
+
+    model_config = {"extra": "ignore"}
+
+
 class GameData(BaseModel):
     type: Optional[str] = None
     selections: list[str] = Field(default_factory=list)  # emoji or keyword selections
     swipes: list[SwipeItem] = Field(default_factory=list)
     slider_values: Optional[SliderValues] = None
+    character: Optional[CharacterContext] = None  # populated for character_match games
+
+    model_config = {"extra": "ignore"}
 
 
 class RecentOrder(BaseModel):

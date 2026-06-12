@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _DISHES_JSON = Path(__file__).parent / "dishes.json"
+_CHARACTER_MAPPING_JSON = Path(__file__).parent / "character_dish_mapping.json"
 
 
 @dataclass
@@ -41,6 +42,9 @@ def _load_dishes() -> list[DishRecord]:
 DISHES: list[DishRecord] = _load_dishes()
 DISHES_BY_ID: dict[str, DishRecord] = {d.id: d for d in DISHES}
 
+with _CHARACTER_MAPPING_JSON.open() as _f:
+    CHARACTER_DISH_MAPPING: dict[str, list[str]] = json.load(_f)
+
 
 def get_dishes_for_prompt() -> str:
     """Returns compact, attribute-rich dish lines for the AI prompt."""
@@ -55,3 +59,8 @@ def get_dishes_for_prompt() -> str:
             f"delivery={d.delivery_friendly} | adventurousness={d.adventurousness_score}"
         )
     return "\n".join(lines)
+
+
+def get_character_dish_ids(character_id: str) -> list[str]:
+    """Returns dish IDs preferred by a specific character."""
+    return CHARACTER_DISH_MAPPING.get(character_id.lower(), [])

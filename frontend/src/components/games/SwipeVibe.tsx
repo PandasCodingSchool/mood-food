@@ -125,6 +125,16 @@ interface SwipeVibeProps {
 
 const TOUCH_THRESHOLD = 80;
 
+// Preference step: question text adapts to the top-liked category from swipes
+const PREFERENCE_BY_CATEGORY: Record<string, { title: string; subtitle: string }> = {
+  comfort:   { title: "Any dietary needs for your comfort fix?",   subtitle: "We'll keep it in your comfort zone." },
+  spicy:     { title: "All good with meat in your spicy picks?",   subtitle: "Let us know and we'll filter perfectly." },
+  healthy:   { title: "Any specific dietary restrictions?",        subtitle: "Healthy choices are easier to tailor." },
+  indulgent: { title: "Any lines on your indulgence?",             subtitle: "So nothing surprises you." },
+  light:     { title: "Any dietary preferences for lighter bites?", subtitle: "Easier to nail this with your needs." },
+  sweet:     { title: "Dietary preference for your sweet tooth?",  subtitle: "Just so we get it right." },
+};
+
 function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipes, setSwipes] = useState<SwipeData[]>([]);
@@ -132,6 +142,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingResult, setPendingResult] = useState<GameResult | null>(null);
   const touchStartX = useRef<number>(0);
 
   const currentItem = SWIPE_ITEMS[currentIndex];
@@ -151,6 +162,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
           topCategory: "comfort",
           topCuisine: "Mixed",
           likedCount: 0,
+          sliderValues: { adventurous: 5, healthConscious: 5, spicy: 5 },
         },
       };
     }
@@ -168,6 +180,22 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
     const topCuisine = getTop(countByKey("cuisine")) || "Mixed";
     const topBudget = getTop(countByKey("budget")) || "moderate";
     const topVibe = getTop(countByKey("vibe")) || "casual";
+
+    // Derive slider signals from liked swipe patterns (1–10 scale)
+    const total = likedSwipes.length;
+    const adventurousCategories = new Set(["spicy", "light", "indulgent"]);
+    const healthyCategories = new Set(["healthy", "light"]);
+    const spicyCategories = new Set(["spicy"]);
+    const adventurous = Math.round(
+      1 + (likedSwipes.filter((s) => adventurousCategories.has(s.category)).length / total) * 9,
+    );
+    const health_conscious = Math.round(
+      1 + (likedSwipes.filter((s) => healthyCategories.has(s.category)).length / total) * 9,
+    );
+    const spicy = Math.round(
+      1 + (likedSwipes.filter((s) => spicyCategories.has(s.category)).length / total) * 9,
+    );
+
     return {
       mood: VIBE_TO_MOOD[topVibe] || "happy",
       craving: topCategory,
@@ -179,6 +207,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
         topCategory,
         topCuisine,
         likedCount: likedSwipes.length,
+        sliderValues: { adventurous, healthConscious: health_conscious, spicy },
       },
     };
   }, []);
@@ -210,8 +239,9 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
         setIsAnimating(false);
         if (currentIndex >= SWIPE_ITEMS.length - 1) {
           const results = analyzeSwipes([...swipes, swipeData]);
-          trackEvent("swipe_vibe_complete", results);
-          onComplete(results);
+          trackEvent("swipe_vibe_analyzed", results);
+          // Hold results and show preference step before completing
+          setPendingResult(results);
         } else {
           setCurrentIndex((prev) => prev + 1);
         }
@@ -291,6 +321,55 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
           transition: "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)",
           cursor: "grab",
         };
+
+  // ── Preference step (after all cards are swiped) ────────
+  if (pendingResult) {
+    const topCategory = (pendingResult.gameData as { topCategory?: string })?.topCategory ?? "comfort";
+    const copy = PREFERENCE_BY_CATEGORY[topCategory] ?? PREFERENCE_BY_CATEGORY.comfort;
+
+    const handlePreferenceSelect = (preference: string) => {
+      const final: GameResult = { ...pendingResult, preference };
+      trackEvent("swipe_vibe_complete", final);
+      onComplete(final);
+    };
+
+    const PREF_OPTIONS = [
+      { value: "veg",     label: "Vegetarian",    emoji: "🥬" },
+      { value: "non-veg", label: "Non-Vegetarian", emoji: "🍗" },
+      { value: "both",    label: "No Preference",  emoji: "🍽️" },
+    ];
+
+    return (
+      <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={() => setPendingResult(null)}
+            className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" /> Back
+          </button>
+
+          <div className="bg-white rounded-3xl shadow-xl p-8 text-center animate-fade-in">
+            <span className="text-5xl mb-4 block">🍽️</span>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">{copy.title}</h2>
+            <p className="text-gray-500 mb-8 text-sm">{copy.subtitle}</p>
+            <div className="grid grid-cols-3 gap-4">
+              {PREF_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => handlePreferenceSelect(o.value)}
+                  className="p-5 rounded-2xl border-2 border-gray-200 hover:border-primary-400 hover:bg-primary-50 hover:scale-105 transition-all text-center"
+                >
+                  <span className="text-3xl mb-2 block">{o.emoji}</span>
+                  <span className="font-semibold text-gray-900 text-sm">{o.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentItem) return null;
 
