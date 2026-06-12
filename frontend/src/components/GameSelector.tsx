@@ -25,6 +25,18 @@ interface Game {
 
 const GAMES: Game[] = [
   {
+    id: "character",
+    title: "Character Match",
+    description:
+      "Find out which TV character you are tonight, and what they'd eat.",
+    icon: Clapperboard,
+    color: "from-fuchsia-500 to-purple-500",
+    bgColor: "bg-fuchsia-50",
+    duration: "~30 sec",
+    tag: "Popular",
+    emoji: "🎬",
+  },
+  {
     id: "story",
     title: "Day Story",
     description: "Live a mini workday. We'll read your mood from your choices.",
@@ -68,18 +80,6 @@ const GAMES: Game[] = [
     duration: "~45 sec",
     tag: "Surprise me",
     emoji: "🎡",
-  },
-  {
-    id: "character",
-    title: "Character Match",
-    description:
-      "Find out which TV character you are tonight, and what they'd eat.",
-    icon: Clapperboard,
-    color: "from-fuchsia-500 to-purple-500",
-    bgColor: "bg-fuchsia-50",
-    duration: "~30 sec",
-    tag: "New",
-    emoji: "🎬",
   },
 ];
 

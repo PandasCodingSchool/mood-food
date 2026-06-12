@@ -1,7 +1,54 @@
-import { useState, useRef, useCallback } from "react";
-import { ChevronLeft, Check, X, CircleDotDashed, Sparkles } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  ChevronLeft,
+  Check,
+  X,
+  CircleDotDashed,
+  Sparkles,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { trackEvent } from "../../utils/analytics";
 import type { WheelSegment, BudgetOption, GameResult } from "../../types";
+
+// Sound utility using Web Audio API
+const playSound = (
+  frequency: number,
+  duration: number,
+  type: OscillatorType = "sine",
+) => {
+  try {
+    const audioContext = new (
+      window.AudioContext || (window as any).webkitAudioContext
+    )();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.frequency.value = frequency;
+    oscillator.type = type;
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioContext.currentTime + duration,
+    );
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch {
+    // Audio not supported, silently fail
+  }
+};
+
+const SOUNDS = {
+  tick: () => playSound(800, 0.05, "triangle"),
+  spin: () => playSound(400, 0.1, "sawtooth"),
+  win: () => {
+    playSound(523.25, 0.15, "sine"); // C5
+    setTimeout(() => playSound(659.25, 0.15, "sine"), 150); // E5
+    setTimeout(() => playSound(783.99, 0.3, "sine"), 300); // G5
+  },
+  reject: () => playSound(200, 0.2, "sawtooth"),
+};
 
 const WHEEL_SEGMENTS: WheelSegment[] = [
   {
@@ -68,6 +115,38 @@ const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: "🍜",
     mood: "adventurous",
   },
+  {
+    id: "breakfast",
+    label: "Breakfast",
+    color: "#FCD34D",
+    gradient: "from-yellow-300 to-amber-400",
+    icon: "🥞",
+    mood: "happy",
+  },
+  {
+    id: "dessert",
+    label: "Dessert",
+    color: "#F472B6",
+    gradient: "from-pink-300 to-rose-400",
+    icon: "🍨",
+    mood: "celebrating",
+  },
+  {
+    id: "fusion",
+    label: "Fusion",
+    color: "#A78BFA",
+    gradient: "from-violet-400 to-purple-500",
+    icon: "🌮",
+    mood: "adventurous",
+  },
+  {
+    id: "seafood",
+    label: "Seafood",
+    color: "#22D3EE",
+    gradient: "from-cyan-300 to-blue-400",
+    icon: "🦐",
+    mood: "relaxed",
+  },
 ];
 
 const BUDGET_OPTIONS: BudgetOption[] = [
@@ -106,14 +185,40 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
   const [showPreferencePicker, setShowPreferencePicker] = useState(false);
   const [selectedBudget, setSelectedBudget] = useState<string | null>(null);
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [streakCount, setStreakCount] = useState(0);
+  const [showStreakBonus, setShowStreakBonus] = useState(false);
 
   const wheelRef = useRef<HTMLDivElement>(null);
+
+  const playTick = useCallback(() => {
+    if (soundEnabled) SOUNDS.tick();
+  }, [soundEnabled]);
+
+  const playWin = useCallback(() => {
+    if (soundEnabled) SOUNDS.win();
+  }, [soundEnabled]);
+
+  const playReject = useCallback(() => {
+    if (soundEnabled) SOUNDS.reject();
+  }, [soundEnabled]);
+
+  // Tick interval during spin
+  useEffect(() => {
+    if (!isSpinning) return;
+    const tickInterval = setInterval(() => {
+      playTick();
+    }, 150); // Tick every 150ms while spinning
+
+    return () => clearInterval(tickInterval);
+  }, [isSpinning, playTick]);
 
   const spin = useCallback(() => {
     if (isSpinning) return;
 
     setIsSpinning(true);
     setSelectedSegment(null);
+    setShowStreakBonus(false);
 
     const segmentAngle = 360 / WHEEL_SEGMENTS.length;
     const randomOffset = Math.random() * segmentAngle;
@@ -133,22 +238,39 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
 
       setSelectedSegment(segment);
       setIsSpinning(false);
+      playWin();
 
-      // Confetti burst
-      const pieces: ConfettiPiece[] = Array.from({ length: 18 }, (_, i) => ({
+      // Streak bonus check
+      const newStreak = streakCount + 1;
+      setStreakCount(newStreak);
+      if (newStreak >= 3) {
+        setShowStreakBonus(true);
+        setTimeout(() => setShowStreakBonus(false), 3000);
+      }
+
+      // Enhanced confetti burst with more pieces
+      const pieces: ConfettiPiece[] = Array.from({ length: 30 }, (_, i) => ({
         id: i,
-        x: 40 + Math.random() * 20,
-        y: 40 + Math.random() * 20,
-        color: ["#f97316", "#ec4899", "#facc15", "#34d399", "#60a5fa"][i % 5],
-        size: 6 + Math.random() * 8,
-        angle: (i / 18) * 360,
+        x: 30 + Math.random() * 40,
+        y: 30 + Math.random() * 40,
+        color: [
+          "#f97316",
+          "#ec4899",
+          "#facc15",
+          "#34d399",
+          "#60a5fa",
+          "#a855f7",
+          "#fb923c",
+        ][i % 7],
+        size: 8 + Math.random() * 10,
+        angle: (i / 30) * 360 + Math.random() * 30,
       }));
       setConfetti(pieces);
-      setTimeout(() => setConfetti([]), 900);
+      setTimeout(() => setConfetti([]), 1500);
 
       trackEvent("wheel_landed", { segment: segment.id, label: segment.label });
     }, 3000);
-  }, [isSpinning, rotation, spinCount]);
+  }, [isSpinning, rotation, spinCount, playWin, streakCount]);
 
   const handleAccept = () => {
     if (!selectedSegment) return;
@@ -173,6 +295,8 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     if (!selectedSegment) return;
 
     setRejectedSegments((prev) => [...prev, selectedSegment]);
+    setStreakCount(0); // Reset streak on reject
+    playReject();
     trackEvent("wheel_rejected", { segment: selectedSegment.id });
 
     setSelectedSegment(null);
@@ -196,22 +320,42 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     const spicyIds = new Set(["spicy"]);
     const totalSignals = acceptedSegments.length + rejectedSegments.length || 1;
 
-    const acceptedAdventurous = acceptedSegments.filter((s) => adventurousIds.has(s.id)).length;
-    const rejectedAdventurous = rejectedSegments.filter((s) => adventurousIds.has(s.id)).length;
+    const acceptedAdventurous = acceptedSegments.filter((s) =>
+      adventurousIds.has(s.id),
+    ).length;
+    const rejectedAdventurous = rejectedSegments.filter((s) =>
+      adventurousIds.has(s.id),
+    ).length;
     const adventurous = Math.round(
-      1 + ((acceptedAdventurous - rejectedAdventurous + totalSignals) / (2 * totalSignals)) * 9,
+      1 +
+        ((acceptedAdventurous - rejectedAdventurous + totalSignals) /
+          (2 * totalSignals)) *
+          9,
     );
 
-    const acceptedHealthy = acceptedSegments.filter((s) => healthyIds.has(s.id)).length;
-    const rejectedHealthy = rejectedSegments.filter((s) => healthyIds.has(s.id)).length;
+    const acceptedHealthy = acceptedSegments.filter((s) =>
+      healthyIds.has(s.id),
+    ).length;
+    const rejectedHealthy = rejectedSegments.filter((s) =>
+      healthyIds.has(s.id),
+    ).length;
     const health_conscious = Math.round(
-      1 + ((acceptedHealthy - rejectedHealthy + totalSignals) / (2 * totalSignals)) * 9,
+      1 +
+        ((acceptedHealthy - rejectedHealthy + totalSignals) /
+          (2 * totalSignals)) *
+          9,
     );
 
-    const acceptedSpicy = acceptedSegments.filter((s) => spicyIds.has(s.id)).length;
-    const rejectedSpicy = rejectedSegments.filter((s) => spicyIds.has(s.id)).length;
+    const acceptedSpicy = acceptedSegments.filter((s) =>
+      spicyIds.has(s.id),
+    ).length;
+    const rejectedSpicy = rejectedSegments.filter((s) =>
+      spicyIds.has(s.id),
+    ).length;
     const spicy = Math.round(
-      1 + ((acceptedSpicy - rejectedSpicy + totalSignals) / (2 * totalSignals)) * 9,
+      1 +
+        ((acceptedSpicy - rejectedSpicy + totalSignals) / (2 * totalSignals)) *
+          9,
     );
 
     const results: GameResult = {
@@ -304,16 +448,19 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     const acceptedVibe = acceptedSegments[acceptedSegments.length - 1];
     const vibeLabel = acceptedVibe?.label ?? "your meal";
     const PREF_OPTIONS = [
-      { value: "veg",     label: "Vegetarian",    emoji: "🥬" },
+      { value: "veg", label: "Vegetarian", emoji: "🥬" },
       { value: "non-veg", label: "Non-Vegetarian", emoji: "🍗" },
-      { value: "both",    label: "No Preference",  emoji: "🍽️" },
+      { value: "both", label: "No Preference", emoji: "🍽️" },
     ];
 
     return (
       <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-orange-50 via-white to-yellow-50">
         <div className="max-w-md mx-auto">
           <button
-            onClick={() => { setShowPreferencePicker(false); setShowBudgetPicker(true); }}
+            onClick={() => {
+              setShowPreferencePicker(false);
+              setShowBudgetPicker(true);
+            }}
             className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
           >
             <ChevronLeft className="w-5 h-5 mr-1" />
@@ -337,7 +484,9 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
                 className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all text-center"
               >
                 <span className="text-3xl mb-2 block">{option.emoji}</span>
-                <span className="font-semibold text-gray-800 text-sm">{option.label}</span>
+                <span className="font-semibold text-gray-800 text-sm">
+                  {option.label}
+                </span>
               </button>
             ))}
           </div>
@@ -369,53 +518,87 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
       </div>
 
       <div className="max-w-md mx-auto relative">
-        <div className="mb-6">
+        {/* Streak Bonus Banner */}
+        {showStreakBonus && (
+          <div className="absolute top-0 left-0 right-0 -mt-4 z-30 animate-bounce">
+            <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full px-4 py-2 shadow-lg flex items-center justify-center gap-2 mx-auto max-w-fit">
+              <Sparkles className="w-4 h-4" />
+              <span className="font-bold text-sm">
+                🔥 Streak Bonus! x{streakCount}
+              </span>
+              <Sparkles className="w-4 h-4" />
+            </div>
+          </div>
+        )}
+
+        <div className="mb-6 flex items-start justify-between">
           <button
             onClick={onBack}
-            className="inline-flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6 bg-white/70 backdrop-blur-sm border border-white/80 rounded-full px-4 py-2 shadow-sm hover:shadow-md"
+            className="inline-flex items-center text-gray-500 hover:text-gray-700 transition-colors bg-white/70 backdrop-blur-sm border border-white/80 rounded-full px-4 py-2 shadow-sm hover:shadow-md"
           >
             <ChevronLeft className="w-5 h-5 mr-1" />
             Back
           </button>
 
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl mb-4 shadow-xl shadow-orange-200/70">
-              <CircleDotDashed
-                className="w-8 h-8 text-white"
-                style={{ animation: "spin 6s linear infinite" }}
-              />
-            </div>
-            <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-2 tracking-tight">
-              Meal{" "}
-              <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
-                Roulette
-              </span>
-            </h2>
-            <p className="text-gray-600 text-sm max-w-xs mx-auto">
-              Let the wheel pick your food vibe. Accept the bite, or spin again!
-            </p>
-          </div>
+          {/* Sound Toggle */}
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-2 bg-white/70 backdrop-blur-sm border border-white/80 rounded-full shadow-sm hover:shadow-md transition-all"
+            title={soundEnabled ? "Mute sounds" : "Enable sounds"}
+          >
+            {soundEnabled ? (
+              <Volume2 className="w-5 h-5 text-gray-600" />
+            ) : (
+              <VolumeX className="w-5 h-5 text-gray-400" />
+            )}
+          </button>
         </div>
 
-        <div className="flex justify-center gap-6 mb-6">
-          <div className="text-center">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl mb-4 shadow-xl shadow-orange-200/70">
+            <CircleDotDashed
+              className="w-8 h-8 text-white"
+              style={{ animation: "spin 6s linear infinite" }}
+            />
+          </div>
+          <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-2 tracking-tight">
+            Meal{" "}
+            <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
+              Roulette
+            </span>
+          </h2>
+          <p className="text-gray-600 text-sm max-w-xs mx-auto">
+            Let the wheel pick your food vibe. Accept the bite, or spin again!
+          </p>
+        </div>
+
+        <div className="flex justify-center gap-4 mb-6">
+          <div className="text-center bg-white/60 rounded-xl px-3 py-2">
             <span className="text-2xl font-bold text-primary-600">
               {spinCount}
             </span>
             <p className="text-xs text-gray-500">Spins</p>
           </div>
-          <div className="text-center">
+          <div className="text-center bg-white/60 rounded-xl px-3 py-2">
             <span className="text-2xl font-bold text-green-600">
               {acceptedSegments.length}
             </span>
             <p className="text-xs text-gray-500">Accepted</p>
           </div>
-          <div className="text-center">
+          <div className="text-center bg-white/60 rounded-xl px-3 py-2">
             <span className="text-2xl font-bold text-red-500">
               {rejectedSegments.length}
             </span>
             <p className="text-xs text-gray-500">Rejected</p>
           </div>
+          {streakCount > 0 && (
+            <div className="text-center bg-amber-100 rounded-xl px-3 py-2 border border-amber-200">
+              <span className="text-2xl font-bold text-amber-600">
+                {streakCount}
+              </span>
+              <p className="text-xs text-amber-700">Streak 🔥</p>
+            </div>
+          )}
         </div>
 
         <div className="relative mb-12 mt-12 flex items-center justify-center">

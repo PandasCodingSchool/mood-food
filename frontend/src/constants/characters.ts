@@ -303,7 +303,7 @@ export const CHARACTERS: CharacterProfile[] = [
     tagline: "Mamu, ek thali laga de full!",
     vibe: "Warm, hearty, big-brother energy. Home-style food, no shortcuts.",
     imageUrl:
-      "https://api.dicebear.com/7.x/avataaars/svg?seed=Munna&backgroundColor=ffe4b5,deb887&hairColor=2c1b18&facialHairType=MoustacheFancy&topType=ShortHairShortRound",
+      "https://api.dicebear.com/7.x/avataaars/svg?seed=sunil&backgroundColor=ffe4b5,deb887&hairColor=2c1b18&facialHairType=MoustacheFancy&topType=ShortHairShortRound",
     gradient: "from-orange-500 via-red-500 to-pink-600",
     accentColor: "orange",
     signatureFood: "Pav bhaji & dal khichdi",

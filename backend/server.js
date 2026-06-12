@@ -87,6 +87,18 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+// Get waitlist count (public endpoint for frontend)
+app.get("/api/waitlist/count", async (req, res) => {
+  try {
+    const result = await query("SELECT COUNT(*) as count FROM waitlist");
+    const count = parseInt(result.rows[0]?.count || 0);
+    res.json({ count, base: 100, total: 100 + count });
+  } catch (error) {
+    console.error("Waitlist count error:", error);
+    res.status(500).json({ error: "Failed to fetch waitlist count" });
+  }
+});
+
 // Waitlist endpoint
 app.post("/api/waitlist", async (req, res) => {
   const { name, email, city, cuisine } = req.body;
