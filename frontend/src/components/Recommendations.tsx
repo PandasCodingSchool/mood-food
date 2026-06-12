@@ -351,9 +351,12 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-        {/* Flip Cards */}
+        {/* Flip Cards - Mobile Slider / Desktop Grid */}
         {!loading && !error && (
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <div
+            className="flex md:grid md:grid-cols-3 gap-4 md:gap-6 mb-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
             {recommendations.map((item, index) => {
               const d = item.dish;
               const pd = item.practical_details;
@@ -372,7 +375,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               return (
                 <div
                   key={item.id}
-                  className="relative h-[520px] perspective-1000"
+                  className="relative h-[510px] md:h-[520px] perspective-1000 flex-shrink-0 w-[85vw] md:w-auto snap-center"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
                   {/* Flip Container */}
@@ -706,6 +709,49 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Mobile Swipe Hint & Pagination */}
+        {!loading && !error && recommendations.length > 0 && (
+          <div className="md:hidden flex flex-col items-center gap-3 mb-6">
+            <p className="text-sm text-gray-500 flex items-center gap-2">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 16l-4-4m0 0l4-4m-4 4h18"
+                />
+              </svg>
+              Swipe to see more
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 8l4 4m0 0l-4 4m4-4H3"
+                />
+              </svg>
+            </p>
+            <div className="flex gap-2">
+              {recommendations.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-2 h-2 rounded-full transition-colors ${index === 0 ? "bg-primary-500" : "bg-gray-300"}`}
+                />
+              ))}
+            </div>
           </div>
         )}
 

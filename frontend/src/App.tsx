@@ -8,6 +8,8 @@ import Waitlist from "./components/Waitlist";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar.tsx";
 import GameSelector from "./components/GameSelector";
+import About from "./components/About";
+import Contact from "./components/Contact";
 import {
   SwipeVibe,
   SpinWheel,
@@ -23,6 +25,8 @@ function App() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
+  const [showContact, setShowContact] = useState(false);
 
   useEffect(() => {
     trackEvent("landing_page_viewed");
@@ -64,7 +68,19 @@ function App() {
     setShowGameSelector(false);
     setActiveGame(null);
     setShowRecommendations(false);
+    setShowAbout(false);
+    setShowContact(false);
     setQuizResults(null);
+  };
+
+  const handleShowAbout = () => {
+    setShowAbout(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleShowContact = () => {
+    setShowContact(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -105,6 +121,10 @@ function App() {
         <SpinWheel onComplete={handleGameComplete} onBack={handleBackToGames} />
       ) : showQuiz ? (
         <Quiz onComplete={handleGameComplete} onBack={handleBackToGames} />
+      ) : showAbout ? (
+        <About onBack={handleBackToHome} />
+      ) : showContact ? (
+        <Contact onBack={handleBackToHome} />
       ) : showRecommendations && quizResults ? (
         <Recommendations results={quizResults} onBack={handleBackToHome} />
       ) : (
@@ -119,7 +139,11 @@ function App() {
       {!showGameSelector &&
         !activeGame &&
         !showQuiz &&
-        !showRecommendations && <Footer />}
+        !showRecommendations &&
+        !showAbout &&
+        !showContact && (
+          <Footer onAbout={handleShowAbout} onContact={handleShowContact} />
+        )}
     </div>
   );
 }
