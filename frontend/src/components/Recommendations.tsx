@@ -18,6 +18,7 @@ import {
   RotateCw,
   Leaf,
   Wallet,
+  ChevronDown,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import {
@@ -150,6 +151,17 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     setEnriching(true);
     setEnriched(false);
     setSwiggyMatches({});
+
+    // Safety net: never let the loader hang if the enrich endpoint stalls.
+    const MAX_ENRICH_WAIT_MS = 10000;
+    const maxWaitTimer = setTimeout(() => {
+      if (isCurrent()) {
+        setEnriching(false);
+        setEnriched(true);
+        trackEvent("swiggy_enrich_timeout", { city });
+      }
+    }, MAX_ENRICH_WAIT_MS);
+
     enrichRecommendations(recommendations, city)
       .then((matches) => {
         if (!isCurrent()) return;
@@ -165,6 +177,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           trackEvent("swiggy_enrich_error", { error: (err as Error).message });
       })
       .finally(() => {
+        clearTimeout(maxWaitTimer);
         if (isCurrent()) {
           setEnriching(false);
           setEnriched(true); // resolved (success or failure) — safe to show cards
@@ -308,9 +321,13 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Gating: when Swiggy is live, keep the loader up until enrich resolves so
   // cards only appear with live restaurant data (hard constraint).
   const preparing =
-    loading || (swiggyLive && recommendations.length > 0 && !error && !enriched);
+    loading ||
+    (swiggyLive && recommendations.length > 0 && !error && !enriched);
   const showResults =
-    !loading && !error && recommendations.length > 0 && (!swiggyLive || enriched);
+    !loading &&
+    !error &&
+    recommendations.length > 0 &&
+    (!swiggyLive || enriched);
 
   return (
     <div className="min-h-screen pt-20 pb-10 px-4 bg-gray-50">
@@ -385,28 +402,37 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
         {/* Swiggy city selector (Phase 1 — picks the delivery area for live data) */}
         {swiggyLive && showResults && (
-          <div className="flex items-center justify-center gap-2 mb-6 text-sm">
-            <MapPin className="w-4 h-4 text-orange-500" />
-            <span className="text-gray-600">Deliver to</span>
-            <select
-              value={city}
-              onChange={(e) => {
-                setCity(e.target.value);
-                saveCity(e.target.value);
-                trackEvent("swiggy_city_selected", { city: e.target.value });
-              }}
-              className="px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-800 font-medium focus:ring-2 focus:ring-orange-400 outline-none"
-            >
-              <option value="">Select your city</option>
-              {SWIGGY_CITIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            {enriching && (
-              <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
-            )}
+          <div className="flex items-center justify-center mb-6">
+            <div className="inline-flex items-center gap-2 sm:gap-3 bg-white rounded-full border border-gray-200 shadow-sm px-4 sm:px-5 py-2 sm:py-2.5 text-sm">
+              <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
+              <span className="text-gray-600 font-medium">Deliver to</span>
+
+              <div className="relative">
+                <select
+                  value={city}
+                  onChange={(e) => {
+                    setCity(e.target.value);
+                    saveCity(e.target.value);
+                    trackEvent("swiggy_city_selected", {
+                      city: e.target.value,
+                    });
+                  }}
+                  className="appearance-none pl-3 pr-8 py-1.5 rounded-full bg-orange-50 text-orange-800 font-semibold text-sm focus:ring-2 focus:ring-orange-400 focus:ring-offset-0 outline-none cursor-pointer min-w-[100px]"
+                >
+                  <option value="">Select city</option>
+                  {SWIGGY_CITIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-orange-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {enriching && (
+                <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
+              )}
+            </div>
           </div>
         )}
 
@@ -615,9 +641,13 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                             <div className="bg-gray-50 rounded-lg p-1.5">
                               <Clock className="w-3 h-3 text-blue-400 mx-auto mb-0.5" />
                               <p className="text-xs font-semibold text-gray-800">
-                                {pd?.preparation_time ?? "—"}
+                                {liveRestaurant
+                                  ? (r?.delivery_time_min ?? "—")
+                                  : (pd?.preparation_time ?? "—")}
                               </p>
-                              <p className="text-[10px] text-gray-400">min</p>
+                              <p className="text-[10px] text-gray-400">
+                                {liveRestaurant ? "delivery" : "prep"}
+                              </p>
                             </div>
                             <div className="bg-gray-50 rounded-lg p-1.5">
                               <Zap className="w-3 h-3 text-green-400 mx-auto mb-0.5" />
@@ -650,12 +680,13 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
                           {/* Restaurant - live Swiggy match when available */}
                           <div
-                            className={`flex items-center justify-between text-xs rounded-xl p-2 ${liveRestaurant ? "bg-orange-50 text-orange-700" : "bg-gray-50 text-gray-500"}`}
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs rounded-xl p-2 ${liveRestaurant ? "bg-orange-50 text-orange-700" : "bg-gray-50 text-gray-500"}`}
                           >
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
+                            <div className="flex items-center gap-1 min-w-0">
+                              <MapPin className="w-3 h-3 shrink-0" />
                               <span
-                                className={`font-medium ${liveRestaurant ? "text-orange-800" : "text-gray-700"}`}
+                                className={`font-medium truncate ${liveRestaurant ? "text-orange-800" : "text-gray-700"}`}
+                                title={r?.name}
                               >
                                 {r?.name ||
                                   (swiggyLive && enriching
@@ -663,21 +694,21 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                     : "Local restaurants")}
                               </span>
                               {liveRestaurant && (
-                                <span className="ml-1 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                <span className="ml-1 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
                                   LIVE
                                 </span>
                               )}
                               {r?.rating && (
-                                <span className="flex items-center gap-0.5 ml-1">
+                                <span className="flex items-center gap-0.5 ml-1 shrink-0">
                                   <Star className="w-3 h-3 text-yellow-400 fill-current" />
                                   {r.rating}
                                 </span>
                               )}
                             </div>
                             {r?.delivery_time_min && (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 shrink-0 sm:ml-2">
                                 <Truck className="w-3 h-3" />
-                                <span>{r.delivery_time_min} min</span>
+                                <span>{r.delivery_time_min} min delivery</span>
                               </div>
                             )}
                           </div>
