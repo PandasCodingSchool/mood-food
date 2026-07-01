@@ -112,7 +112,12 @@ class SwiggyMCPClient:
     """Calls Swiggy Food MCP tools using a bearer token."""
 
     def __init__(self, token: Optional[str] = None) -> None:
-        self._token = token or settings.swiggy_bootstrap_token
+        # Read the freshest token from the runtime store (falls back to env), so
+        # a re-auth heals the service without a restart. Each request builds a
+        # fresh client, so it always picks up the latest stored token.
+        from app.services.swiggy_token import load_token
+
+        self._token = token or load_token()
         self._url = settings.swiggy_mcp_url
         self._active: Optional["_BoundSession"] = None
 
@@ -179,7 +184,11 @@ class SwiggyMCPClient:
             ms = (time.time() - start) * 1000
             detail = _unwrap_error(exc)  # anyio hides the real cause in an ExceptionGroup
             if _is_auth_failure_text(detail):
-                logger.warning("✗ Swiggy tool '%s' AUTH failure in %.0fms: %s", name, ms, detail)
+                logger.error(
+                    "Swiggy token rejected (401) on '%s' in %.0fms. Re-auth with "
+                    "`python -m scripts.swiggy_auth --save` (auto-applies, no restart).",
+                    name, ms,
+                )
                 raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
             logger.warning("✗ Swiggy tool '%s' transport error in %.0fms: %s", name, ms, detail)
             raise SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True) from exc
@@ -293,7 +302,11 @@ class _BoundSession:
                 detail = _unwrap_error(exc)
                 await self._reset()  # connection likely broken — drop it
                 if _is_auth_failure_text(detail):
-                    logger.warning("✗ Swiggy tool '%s' AUTH failure: %s", name, detail)
+                    logger.error(
+                        "Swiggy token rejected (401) on '%s'. Re-auth with "
+                        "`python -m scripts.swiggy_auth --save` — the new token auto-applies "
+                        "to new requests (no restart needed).", name,
+                    )
                     raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
                 last_error = SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True)
                 if attempt == settings.swiggy_max_retries - 1:

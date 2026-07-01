@@ -62,6 +62,43 @@ def _client_with(tool_returns):
     return client
 
 
+def _jwt(exp: int) -> str:
+    import base64
+    import json
+    payload = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).rstrip(b"=").decode()
+    return f"eyJhbGciOiJSUzI1NiJ9.{payload}.sig"
+
+
+def test_token_store_prefers_valid_stored_token(tmp_path, monkeypatch):
+    import time
+    from app.config import settings
+    from app.services import swiggy_token
+
+    f = tmp_path / "tok.json"
+    monkeypatch.setattr(settings, "swiggy_token_file", str(f))
+    monkeypatch.setattr(settings, "swiggy_bootstrap_token", "env-token")
+
+    valid = _jwt(int(time.time()) + 100_000)
+    swiggy_token.save_token(valid, user_id="u1")
+    assert swiggy_token.load_token() == valid  # valid stored token wins
+
+    expired = _jwt(int(time.time()) - 100)
+    swiggy_token.save_token(expired)
+    assert swiggy_token.load_token() == "env-token"  # expired -> fall back to env
+
+
+@pytest.mark.asyncio
+async def test_list_addresses_normalizes():
+    client = _client_with({"get_addresses": {"addresses": [
+        {"id": "a1", "addressTag": "Home", "addressLine": "Kondhwa, Pune"},
+        {"id": "a2", "addressCategory": "Other", "addressLine": "Anjuna, Goa"},
+    ]}})
+    svc = SwiggyDiscoveryService(client=client)
+    addrs = await svc.list_addresses()
+    assert addrs[0] == {"id": "a1", "label": "Home", "line": "Kondhwa, Pune"}
+    assert addrs[1]["label"] == "Other"
+
+
 @pytest.mark.asyncio
 async def test_session_sets_and_clears_active():
     """session() opens a reusable bound session and clears it on exit."""

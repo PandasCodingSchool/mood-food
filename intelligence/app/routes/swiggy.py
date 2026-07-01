@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter
 
 from app.schemas.swiggy import (
+    AddressesResponse,
     EnrichRequest,
     EnrichResponse,
     MenuSearchRequest,
@@ -32,9 +33,21 @@ def _service() -> SwiggyDiscoveryService:
 
 @router.get("/status")
 async def status() -> dict:
-    """Whether the Swiggy integration is configured (a token is present)."""
+    """Whether the Swiggy integration is configured + token expiry diagnostics."""
+    from app.services.swiggy_token import token_status
+
     client = SwiggyMCPClient()
-    return {"configured": client.is_configured, "mode": "discovery"}
+    return {"configured": client.is_configured, "mode": "discovery", "token": token_status()}
+
+
+@router.get("/addresses", response_model=AddressesResponse)
+async def addresses() -> AddressesResponse:
+    """Saved delivery addresses for the connected account (drives the picker)."""
+    try:
+        return AddressesResponse(success=True, addresses=await _service().list_addresses())
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("addresses failed: %s", exc)
+        return AddressesResponse(success=False, error=str(exc))
 
 
 @router.post("/restaurants", response_model=RestaurantSearchResponse)

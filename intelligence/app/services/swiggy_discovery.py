@@ -186,6 +186,21 @@ class SwiggyDiscoveryService:
         self._search_tasks: dict[str, "asyncio.Task[list[SwiggyRestaurant]]"] = {}
         self._menu_tasks: dict[str, "asyncio.Task[list[SwiggyMenuItem]]"] = {}
 
+    async def list_addresses(self) -> list[dict]:
+        """Return the account's saved delivery addresses (id, label, line)."""
+        raw = await self.client.call_tool("get_addresses", {})
+        out: list[dict] = []
+        for a in _as_list(raw, "addresses", "data"):
+            aid = _first(a, "id", "addressId", "address_id")
+            if aid is None:
+                continue
+            out.append({
+                "id": str(aid),
+                "label": str(_first(a, "addressTag", "addressCategory", "label", default="Address")),
+                "line": str(_first(a, "addressLine", "address", "line", default="")),
+            })
+        return out
+
     async def resolve_address_id(
         self, city: Optional[str] = None, address_id: Optional[str] = None
     ) -> str:

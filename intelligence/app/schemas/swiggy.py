@@ -64,6 +64,18 @@ class EnrichRequest(BaseModel):
 
 # --- Responses ---
 
+class SwiggyAddress(BaseModel):
+    id: str
+    label: str
+    line: str
+
+
+class AddressesResponse(BaseModel):
+    success: bool
+    addresses: list[SwiggyAddress] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
 class RestaurantSearchResponse(BaseModel):
     success: bool
     address_id: Optional[str] = None

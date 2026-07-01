@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # Phase 1: a single service/bootstrap account token (OAuth'd once) used to
     # power discovery. Tokens last 5 days with no refresh in v1 — re-auth via ops.
     swiggy_bootstrap_token: str = ""
+    # Runtime token store (JSON). A freshly minted token written here is picked
+    # up by new requests WITHOUT restarting the service. Takes precedence over
+    # SWIGGY_BOOTSTRAP_TOKEN when it holds a valid (unexpired) token.
+    swiggy_token_file: str = "swiggy_token.json"
     # JSON object mapping a lowercase city name -> the bootstrap account's saved
     # Swiggy addressId, e.g. {"bangalore": "addr_123", "mumbai": "addr_456"}.
     swiggy_city_address_map: str = "{}"

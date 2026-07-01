@@ -134,6 +134,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8723, help="local callback port")
     parser.add_argument("--addresses", action="store_true", help="also list saved addresses")
+    parser.add_argument("--save", action="store_true",
+                        help="write the token to SWIGGY_TOKEN_FILE so the running service picks it up")
     args = parser.parse_args()
 
     redirect_uri = f"http://localhost:{args.port}/callback"
@@ -165,6 +167,16 @@ def main() -> None:
     print(access_token)
     print("\n" + "=" * 70)
     print(f"expires_in={token_data.get('expires_in')}s  user_id={token_data.get('user_id')}")
+
+    if args.save:
+        from app.services.swiggy_token import save_token
+
+        path = save_token(
+            access_token,
+            user_id=token_data.get("user_id"),
+            expires_in=token_data.get("expires_in"),
+        )
+        print(f"\n✓ Saved to {path} — the running service will use it on the next request (no restart).")
 
     if args.addresses:
         _list_addresses(access_token)
