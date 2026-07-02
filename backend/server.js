@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 import characterMatchRouter from "./routes/characterMatch.js";
+import swiggyRouter from "./routes/swiggy.js";
 
 dotenv.config();
 
@@ -51,6 +52,8 @@ app.use("/api", generalLimiter);
 app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
 // Character match route (AI-driven personality matching)
 app.use("/api/character-match", aiLimiter, characterMatchRouter);
+// Swiggy discovery/ordering route (proxied to intelligence service)
+app.use("/api/swiggy", swiggyRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {

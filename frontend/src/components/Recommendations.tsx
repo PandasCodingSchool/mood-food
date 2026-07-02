@@ -18,11 +18,20 @@ import {
   RotateCw,
   Leaf,
   Wallet,
+  ChevronDown,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
+import {
+  enrichRecommendations,
+  isSwiggyLive,
+  getSavedCity,
+  saveCity,
+  SWIGGY_CITIES,
+  type EnrichedMatch,
+} from "../services/swiggy";
 import { trackEvent } from "../utils/analytics";
 import { openSwiggy } from "../utils/deliveryLinks";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { QuizResults, Recommendation } from "../types";
 
 const moodEmojis: Record<string, string> = {
@@ -67,6 +76,20 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Flip card state - tracks which cards are flipped
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
 
+  // Swiggy live discovery (Phase 1): real restaurant matches per dish
+  const swiggyLive = isSwiggyLive();
+  const [city, setCity] = useState<string>(getSavedCity());
+  const [swiggyMatches, setSwiggyMatches] = useState<
+    Record<string, EnrichedMatch>
+  >({});
+  const [enriching, setEnriching] = useState(false);
+  // Hard constraint: when Swiggy is live, cards only render after enrich resolves.
+  const [enriched, setEnriched] = useState(false);
+  // Dedupe enrich so it fires once per (city + recommendation set).
+  const enrichKeyRef = useRef<string>("");
+
+  const matchKey = (item: Recommendation) => item.dish?.id || item.id;
+
   const handleFlipCard = (itemId: string) => {
     setFlippedCards((prev) => {
       const next = new Set(prev);
@@ -103,17 +126,70 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   }, [loading, error, recommendations, results.mood]);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!loading && !enriching) return;
     const interval = setInterval(() => {
       setLoaderStep((s) => (s + 1) % loaderSteps.length);
     }, 900);
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [loading, enriching]);
+
+  // Enrich with live Swiggy matches once recommendations are available.
+  // City is optional — if unset, the intelligence service resolves the bootstrap
+  // account's default/Home address, so this works the moment the flag + token are on.
+  useEffect(() => {
+    if (!swiggyLive || loading || error || recommendations.length === 0) return;
+
+    // One enrich per unique (city + recommendation set); guards React strict-mode
+    // double-mount and re-renders from firing duplicate MCP requests.
+    const key = `${city}|${recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
+    if (enrichKeyRef.current === key) return;
+    enrichKeyRef.current = key;
+
+    // Gate result application on the key (not a per-run cancelled flag) so React
+    // strict-mode's mount→cleanup→remount doesn't discard the only fetch.
+    const isCurrent = () => enrichKeyRef.current === key;
+    setEnriching(true);
+    setEnriched(false);
+    setSwiggyMatches({});
+
+    // Safety net: never let the loader hang if the enrich endpoint stalls.
+    const MAX_ENRICH_WAIT_MS = 10000;
+    const maxWaitTimer = setTimeout(() => {
+      if (isCurrent()) {
+        setEnriching(false);
+        setEnriched(true);
+        trackEvent("swiggy_enrich_timeout", { city });
+      }
+    }, MAX_ENRICH_WAIT_MS);
+
+    enrichRecommendations(recommendations, city)
+      .then((matches) => {
+        if (!isCurrent()) return;
+        setSwiggyMatches(matches);
+        trackEvent("swiggy_enrich_done", {
+          city,
+          matched: Object.keys(matches).length,
+          total: recommendations.length,
+        });
+      })
+      .catch((err) => {
+        if (isCurrent())
+          trackEvent("swiggy_enrich_error", { error: (err as Error).message });
+      })
+      .finally(() => {
+        clearTimeout(maxWaitTimer);
+        if (isCurrent()) {
+          setEnriching(false);
+          setEnriched(true); // resolved (success or failure) — safe to show cards
+        }
+      });
+  }, [swiggyLive, city, loading, error, recommendations]);
 
   const loadRecommendations = async (refresh = false) => {
     setLoading(true);
     setLoaderStep(0);
     setError(null);
+    setEnriched(false); // re-engage the Swiggy gate for the new recommendation set
 
     try {
       trackEvent("recommendations_requested", results);
@@ -242,6 +318,17 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     }
   };
 
+  // Gating: when Swiggy is live, keep the loader up until enrich resolves so
+  // cards only appear with live restaurant data (hard constraint).
+  const preparing =
+    loading ||
+    (swiggyLive && recommendations.length > 0 && !error && !enriched);
+  const showResults =
+    !loading &&
+    !error &&
+    recommendations.length > 0 &&
+    (!swiggyLive || enriched);
+
   return (
     <div className="min-h-screen pt-20 pb-10 px-4 bg-gray-50">
       <div className="max-w-5xl mx-auto">
@@ -296,7 +383,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
         </div>
 
         {/* AI / Fallback badge */}
-        {!loading && (
+        {showResults && (
           <div className="text-center mb-6">
             <span
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${isAi ? "bg-primary-100 text-primary-700" : "bg-amber-100 text-amber-700"}`}
@@ -313,8 +400,44 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
+        {/* Swiggy city selector (Phase 1 — picks the delivery area for live data) */}
+        {swiggyLive && showResults && (
+          <div className="flex items-center justify-center mb-6">
+            <div className="inline-flex items-center gap-2 sm:gap-3 bg-white rounded-full border border-gray-200 shadow-sm px-4 sm:px-5 py-2 sm:py-2.5 text-sm">
+              <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
+              <span className="text-gray-600 font-medium">Deliver to</span>
+
+              <div className="relative">
+                <select
+                  value={city}
+                  onChange={(e) => {
+                    setCity(e.target.value);
+                    saveCity(e.target.value);
+                    trackEvent("swiggy_city_selected", {
+                      city: e.target.value,
+                    });
+                  }}
+                  className="appearance-none pl-3 pr-8 py-1.5 rounded-full bg-orange-50 text-orange-800 font-semibold text-sm focus:ring-2 focus:ring-orange-400 focus:ring-offset-0 outline-none cursor-pointer min-w-[100px]"
+                >
+                  <option value="">Select city</option>
+                  {SWIGGY_CITIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-orange-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {enriching && (
+                <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Animated Loader */}
-        {loading && (
+        {preparing && (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="relative mb-6">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary-400 to-secondary-500 flex items-center justify-center shadow-lg animate-pulse">
@@ -325,7 +448,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               <div className="absolute -inset-2 rounded-full border-4 border-primary-200 border-t-primary-500 animate-spin" />
             </div>
             <p className="text-gray-700 font-medium text-lg transition-all duration-300">
-              {loaderSteps[loaderStep].text}
+              {!loading && enriching
+                ? "Finding real restaurants near you..."
+                : loaderSteps[loaderStep].text}
             </p>
             <div className="flex gap-1.5 mt-4">
               {loaderSteps.map((_, i) => (
@@ -351,17 +476,31 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-        {/* Flip Cards - Mobile Slider / Desktop Grid */}
-        {!loading && !error && (
-          <div
-            className="flex md:grid md:grid-cols-3 gap-4 md:gap-6 mb-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
+
+        {/* Flip Cards */}
+        {showResults && (
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+
             {recommendations.map((item, index) => {
               const d = item.dish;
               const pd = item.practical_details;
-              const r = item.restaurant;
               const ar = item.ai_reasoning;
+              // Live Swiggy match (Phase 1) overrides the AI-fabricated restaurant
+              const match = swiggyMatches[matchKey(item)];
+              const liveRestaurant = match?.restaurant;
+              const liveItem = match?.item;
+              const r = liveRestaurant
+                ? {
+                    name: liveRestaurant.name,
+                    rating: liveRestaurant.rating ?? undefined,
+                    delivery_time_min:
+                      liveRestaurant.eta_min ?? liveItem?.eta_min ?? undefined,
+                  }
+                : item.restaurant;
+              const displayPrice =
+                liveItem?.price ?? pd?.estimated_price ?? undefined;
+              // Prefer the real Swiggy dish photo when we matched one
+              const displayImage = liveItem?.image_url || item.image_url;
               const isFlipped = flippedCards.has(item.id);
               const hasAlternatives =
                 item.alternatives && item.alternatives.length > 0;
@@ -391,9 +530,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                       <div className="bg-white rounded-3xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
                         {/* Image */}
                         <div className="relative h-40 bg-gradient-to-br from-primary-400 to-secondary-500 overflow-hidden flex-shrink-0">
-                          {item.image_url ? (
+                          {displayImage ? (
                             <img
-                              src={item.image_url}
+                              src={displayImage}
                               alt={d.name}
                               className="w-full h-full object-cover"
                               onError={(e) => {
@@ -448,7 +587,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                           <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
                             <div>
                               <h3 className="text-white font-bold text-base leading-tight drop-shadow">
-                                {d.name}
+                                {liveItem?.name || d.name}
                               </h3>
                               <span className="text-white/80 text-xs capitalize">
                                 {d.cuisine}
@@ -504,16 +643,22 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                             <div className="bg-gray-50 rounded-lg p-1.5">
                               <Clock className="w-3 h-3 text-blue-400 mx-auto mb-0.5" />
                               <p className="text-xs font-semibold text-gray-800">
-                                {pd?.preparation_time ?? "—"}
+                                {liveRestaurant
+                                  ? (r?.delivery_time_min ?? "—")
+                                  : (pd?.preparation_time ?? "—")}
                               </p>
-                              <p className="text-[10px] text-gray-400">min</p>
+                              <p className="text-[10px] text-gray-400">
+                                {liveRestaurant ? "delivery" : "prep"}
+                              </p>
                             </div>
                             <div className="bg-gray-50 rounded-lg p-1.5">
                               <Zap className="w-3 h-3 text-green-400 mx-auto mb-0.5" />
                               <p className="text-xs font-semibold text-gray-800">
-                                ₹{pd?.estimated_price ?? "—"}
+                                ₹{displayPrice ?? "—"}
                               </p>
-                              <p className="text-[10px] text-gray-400">est.</p>
+                              <p className="text-[10px] text-gray-400">
+                                {liveItem?.price != null ? "live" : "est."}
+                              </p>
                             </div>
                           </div>
 
@@ -535,27 +680,53 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                             </div>
                           </div>
 
-                          {/* Restaurant - always show placeholder if missing */}
-                          <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 rounded-xl p-2">
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              <span className="font-medium text-gray-700">
-                                {r?.name ?? "Local restaurants"}
+                          {/* Restaurant - live Swiggy match when available */}
+                          <div
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs rounded-xl p-2 ${liveRestaurant ? "bg-orange-50 text-orange-700" : "bg-gray-50 text-gray-500"}`}
+                          >
+                            <div className="flex items-center gap-1 min-w-0">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span
+                                className={`font-medium truncate ${liveRestaurant ? "text-orange-800" : "text-gray-700"}`}
+                                title={r?.name}
+                              >
+                                {r?.name ||
+                                  (swiggyLive && enriching
+                                    ? "Finding restaurants..."
+                                    : "Local restaurants")}
                               </span>
+                              {liveRestaurant && (
+                                <span className="ml-1 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                                  LIVE
+                                </span>
+                              )}
                               {r?.rating && (
-                                <span className="flex items-center gap-0.5 ml-1">
+                                <span className="flex items-center gap-0.5 ml-1 shrink-0">
                                   <Star className="w-3 h-3 text-yellow-400 fill-current" />
                                   {r.rating}
                                 </span>
                               )}
                             </div>
                             {r?.delivery_time_min && (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 shrink-0 sm:ml-2">
                                 <Truck className="w-3 h-3" />
-                                <span>{r.delivery_time_min} min</span>
+                                <span>{r.delivery_time_min} min delivery</span>
                               </div>
                             )}
                           </div>
+
+                          {/* The headline is now the real Swiggy dish; show the
+                              AI pick as the "class" it was matched from. */}
+                          {liveItem?.name &&
+                            liveItem.name.toLowerCase() !==
+                              d.name.toLowerCase() && (
+                              <div className="text-[11px] text-gray-500 px-0.5 truncate">
+                                Matches your pick:{" "}
+                                <span className="font-medium text-gray-700">
+                                  {d.name}
+                                </span>
+                              </div>
+                            )}
 
                           {/* Flip hint */}
                           {hasAlternatives && (
