@@ -88,6 +88,10 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Dedupe enrich so it fires once per (city + recommendation set).
   const enrichKeyRef = useRef<string>("");
 
+  // Mobile carousel scroll tracking
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
   const matchKey = (item: Recommendation) => item.dish?.id || item.id;
 
   const handleFlipCard = (itemId: string) => {
@@ -105,6 +109,32 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   useEffect(() => {
     loadRecommendations();
   }, []);
+
+  // Track which recommendation card is currently visible on mobile.
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || recommendations.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.getAttribute("data-index"));
+            if (!Number.isNaN(index)) setActiveIndex(index);
+          }
+        });
+      },
+      {
+        root: container,
+        threshold: 0.5,
+      },
+    );
+
+    const cards = container.querySelectorAll("[data-index]");
+    cards.forEach((card) => observer.observe(card));
+
+    return () => observer.disconnect();
+  }, [recommendations]);
 
   // Show waitlist popup 10 seconds after recommendations load
   useEffect(() => {
@@ -476,11 +506,17 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-
         {/* Flip Cards */}
         {showResults && (
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-
+          <div
+            ref={scrollRef}
+            className="flex md:grid md:grid-cols-3 gap-4 md:gap-6 mb-2 md:mb-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0"
+            style={{
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
             {recommendations.map((item, index) => {
               const d = item.dish;
               const pd = item.practical_details;
@@ -514,6 +550,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               return (
                 <div
                   key={item.id}
+                  data-index={index}
                   className="relative h-[510px] md:h-[520px] perspective-1000 flex-shrink-0 w-[85vw] md:w-auto snap-center"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
@@ -919,7 +956,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               {recommendations.map((_, index) => (
                 <div
                   key={index}
-                  className={`w-2 h-2 rounded-full transition-colors ${index === 0 ? "bg-primary-500" : "bg-gray-300"}`}
+                  className={`w-2 h-2 rounded-full transition-colors ${index === activeIndex ? "bg-primary-500 scale-125" : "bg-gray-300"}`}
                 />
               ))}
             </div>
