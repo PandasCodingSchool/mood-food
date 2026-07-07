@@ -15,6 +15,7 @@ from app.config import settings
 from app.schemas.swiggy import (
     EnrichDishInput,
     EnrichedMatch,
+    SwiggyAlt,
     SwiggyMenuItem,
     SwiggyRestaurant,
 )
@@ -107,6 +108,7 @@ def normalize_menu_item(raw: dict) -> Optional[SwiggyMenuItem]:
         image_url=_first(raw, "image_url", "imageUrl", "image"),
         is_veg=bool(veg) if veg is not None else None,
         rating=_to_float(_first(raw, "rating", "avgRating")),
+        description=_to_str(_first(raw, "description", "desc")),
         restaurant_id=_to_str(_first(raw, "restaurant_id", "restaurantId")),
         restaurant_name=_to_str(_first(raw, "restaurant_name", "restaurantName")),
         eta_min=_to_int(_first(raw, "eta_min", "deliveryTime", "sla")),
@@ -358,19 +360,15 @@ class SwiggyDiscoveryService:
         address_id: Optional[str] = None,
     ) -> tuple[str, list[EnrichedMatch]]:
         """For each recommended dish, find the best matching Swiggy item."""
-        # How many restaurant menus we're willing to open per dish (cost guard;
-        # kept low to stay well under Swiggy's rate limits).
-        drill_budget = 3
-        # A strong match: 2+ shared words, or 1 shared word for short dish names.
+        drill_budget = 4
         def strong_enough(overlap: int, dish_name: str) -> bool:
-            return overlap >= 2 or (overlap >= 1 and len(dish_words(dish_name)) <= 2)
+            return overlap >= 2 or (overlap >= 1 and len(dish_words(dish_name)) <= 1)
 
-        async def match_one(dish: EnrichDishInput) -> EnrichedMatch:
-            # The MCP only returns real restaurants for broad CATEGORY terms, so:
-            #   1. search inferred category tiers ("Spaghetti Carbonara" -> Pasta, Italian)
-            #   2. drill restaurant menus (get_restaurant_menu) within a budget
-            #   3. keep the restaurant whose menu best matches the dish name
-            #      (real dish + price + itemId — like the Swiggy app).
+        # Shared across concurrent match_one tasks — avoids multiple dishes
+        # claiming the same restaurant. Placeholder for a future MAB policy.
+        claimed_restaurants: set[str] = set()
+
+        async def match_one(dish: EnrichDishInput, idx: int) -> EnrichedMatch:
             best: Optional[tuple[int, SwiggyRestaurant, Optional[SwiggyMenuItem]]] = None
             remaining = drill_budget
 
@@ -385,7 +383,12 @@ class SwiggyDiscoveryService:
                 if not reals:
                     continue
 
-                for restaurant in reals[:2]:  # up to 2 per tier so later tiers get a turn
+                # Rotate by index so concurrent tasks start at different restaurants,
+                # then prefer unclaimed ones (stable sort).
+                pool = reals[idx % len(reals):] + reals[:idx % len(reals)]
+                pool = sorted(pool, key=lambda r: r.id in claimed_restaurants)
+
+                for restaurant in pool[:3]:
                     if remaining <= 0:
                         break
                     remaining -= 1
@@ -396,32 +399,105 @@ class SwiggyDiscoveryService:
                     if strong_enough(overlap, dish.name):
                         remaining = 0
                         break
-                # Stop scanning broader tiers once we have any real dish match.
                 if best is not None and best[0] >= 1:
                     break
 
             if best is not None:
                 overlap, restaurant, item = best
+                if overlap < 1:
+                    logger.info(
+                        "enrich: dish %r — best match %r has no word overlap, skipping",
+                        dish.name, item.name if item else None,
+                    )
+                    return EnrichedMatch(dish_id=dish.id, matched=False)
+                claimed_restaurants.add(restaurant.id)
                 logger.info(
                     "enrich: dish %r -> %r @ %r ₹%s (overlap=%d)",
                     dish.name, item.name if item else None, restaurant.name,
                     item.price if item else None, overlap,
                 )
                 return EnrichedMatch(
-                    dish_id=dish.id, matched=True, restaurant=restaurant, item=item
+                    dish_id=dish.id, matched=True, restaurant=restaurant,
+                    item=item,
                 )
             logger.info("enrich: no real restaurant for dish %r", dish.name)
             return EnrichedMatch(dish_id=dish.id, matched=False)
 
-        # One reused MCP session for the whole enrich (address + all searches +
-        # menu drills) — ~3x fewer HTTP round-trips than a session per call.
         async with self.client.session():
             addr = await self.resolve_address_id(city, address_id)
-            matches = await asyncio.gather(*(match_one(d) for d in dishes))
+            matches = await asyncio.gather(*(match_one(d, i) for i, d in enumerate(dishes)))
+
+            # Pick alternatives in a sequential pass so we can dedup across cards.
+            # Menu fetches are already cached from match_one — no extra API calls.
+            used_alt_ids: set[str] = {m.item.id for m in matches if m.matched and m.item}
+            for m in matches:
+                if not (m.matched and m.item and m.restaurant):
+                    continue
+                all_items = await self._menu_items(m.restaurant.id, addr)
+                alts = _pick_swiggy_alternatives(m.item, all_items, exclude_ids=used_alt_ids)
+                m.swiggy_alternatives = alts
+                used_alt_ids.update(a.item.id for a in alts)
 
         matched_count = sum(1 for m in matches if m.matched)
         logger.info("enrich: matched %d/%d dishes (addressId=%s)", matched_count, len(dishes), addr)
         return addr, list(matches)
+
+
+# Keywords that suggest a lighter / healthier preparation.
+_LIGHTER_HINTS = {
+    "salad", "soup", "bowl", "wrap", "grilled", "steamed", "steam",
+    "toast", "oats", "lite", "light", "veg", "garden", "fresh", "fruit",
+}
+# Keywords that suggest a heavier / indulgent preparation.
+_HEAVIER_HINTS = {
+    "smash", "smashed", "loaded", "double", "triple", "fried", "fry",
+    "crispy", "butter", "cream", "creamy", "cheese", "cheesy",
+}
+
+
+def _lighter_score(item: SwiggyMenuItem) -> int:
+    """Positive = lighter, negative = heavier. Used to pick a healthier alt."""
+    name_l = item.name.lower()
+    return (
+        sum(1 for h in _LIGHTER_HINTS if h in name_l)
+        - sum(1 for h in _HEAVIER_HINTS if h in name_l)
+    )
+
+
+def _pick_swiggy_alternatives(
+    main_item: SwiggyMenuItem,
+    all_items: list[SwiggyMenuItem],
+    exclude_ids: set[str] | frozenset[str] = frozenset(),
+) -> list[SwiggyAlt]:
+    """Pick up to 2 real-menu alternatives from the matched restaurant.
+
+    - healthier: item with the best lighter_score (proxy for less heavy),
+      tie-broken by lower price. Must differ from main_item.
+    - budget: cheapest item strictly cheaper than main_item, distinct from
+      the healthier pick. Omitted if nothing is cheaper.
+    """
+    others = [
+        i for i in all_items
+        if i.id != main_item.id and i.id not in exclude_ids
+        and i.price is not None and i.price > 0
+    ]
+    if not others:
+        return []
+
+    alts: list[SwiggyAlt] = []
+    healthier = max(others, key=lambda i: (_lighter_score(i), -(i.price or 0)))
+    alts.append(SwiggyAlt(type="healthier", item=healthier))
+
+    main_price = main_item.price or 0
+    cheaper = [
+        i for i in others
+        if i.id != healthier.id and (i.price or 0) < main_price
+    ]
+    if cheaper:
+        budget = min(cheaper, key=lambda i: i.price or 0)
+        alts.append(SwiggyAlt(type="budget", item=budget))
+
+    return alts
 
 
 # The MCP returns real restaurant cards only for broad cuisine/CATEGORY terms
@@ -429,11 +505,16 @@ class SwiggyDiscoveryService:
 # So we infer a Swiggy category from words in the dish name, then fall back to
 # the cuisine. Order within each list = search priority.
 _DISH_CATEGORY_HINTS: list[tuple[str, tuple[str, ...]]] = [
+    # Healthy first so "Fresh Fruit Bowl" / "Quinoa Salad" land at salad/health
+    # places, not a burger joint via the cuisine fallback.
+    ("Salad",   ("salad", "fruit", "smoothie", "acai", "granola", "poke",
+                 "quinoa", "buddha bowl", "yogurt", "sprout")),
     ("Pasta",   ("spaghetti", "pasta", "penne", "fettuccine", "lasagne", "lasagna",
                  "carbonara", "alfredo", "macaroni", "ravioli", "noodle pasta")),
     ("Pizza",   ("pizza", "margherita", "pepperoni")),
     ("Biryani", ("biryani", "biriyani", "dum")),
-    ("Burger",  ("burger", "slider")),
+    ("Burger",  ("burger", "slider", "hot dog", "hotdog", "corn dog")),
+    ("Fried Chicken", ("wings", "tenders", "fried chicken", "popcorn chicken", "nuggets")),
     ("Noodles", ("noodles", "hakka", "chowmein", "ramen", "schezwan noodle")),
     ("Sushi",   ("sushi", "maki", "sashimi", "nigiri")),
     ("Tacos",   ("taco", "burrito", "quesadilla", "nachos")),
@@ -513,18 +594,30 @@ def _name_overlap(a: str, b: str) -> int:
     return len(dish_words(a) & dish_words(b))
 
 
-def _best_name_match(items: list[SwiggyMenuItem], name: str) -> Optional[SwiggyMenuItem]:
-    """Pick the menu item whose name shares the most words with the AI dish name.
+def _menu_match_score(item: SwiggyMenuItem, name: str) -> int:
+    """Score a menu item against a dish name.
 
-    If no item overlaps, fall back to the first extracted item — items come in
+    Name-word matches are weighted heavily; description-word matches add a lighter
+    signal (so "Fresh Fruit Bowl" matches an item described as "fresh fruits").
+    """
+    target = dish_words(name)
+    score = len(target & dish_words(item.name)) * 3
+    if item.description:
+        score += len(target & dish_words(item.description))
+    return score
+
+
+def _best_name_match(items: list[SwiggyMenuItem], name: str) -> Optional[SwiggyMenuItem]:
+    """Pick the menu item best matching the dish name (by name + description).
+
+    If nothing matches, fall back to the first extracted item — items come in
     menu order (the "Recommended" category first), so that's the restaurant's
-    representative/closest dish. Always returns a real orderable item (with
-    price, image, id) when the menu has any.
+    representative dish. Always returns a real orderable item when the menu has one.
     """
     if not items:
         return None
-    best = max(items, key=lambda it: _name_overlap(it.name, name))
-    return best if _name_overlap(best.name, name) > 0 else items[0]
+    best = max(items, key=lambda it: _menu_match_score(it, name))
+    return best if _menu_match_score(best, name) > 0 else items[0]
 
 
 def _best_item(items: list[SwiggyMenuItem]) -> Optional[SwiggyMenuItem]:

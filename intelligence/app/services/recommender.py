@@ -54,6 +54,9 @@ RANKING RULES (in priority order):
 4. IF CHARACTER CONTEXT PROVIDED: Strongly boost char_* prefixed dishes (they're personality-aligned favorites)
 5. RANK by: mood_tags match > spice_level vs spice_tolerance > \
 energy_requirement vs energy_level > weather_tags match > adventurousness alignment > health_conscious alignment
+6. DIVERSITY: unless diversity is "low", the selected dishes must span different \
+dish types — never return multiple variants of the same dish (e.g. three fried-chicken \
+dishes). Vary category and preparation across the set.
 
 Return ONLY valid JSON, no markdown fences, no extra text."""
 
@@ -103,13 +106,23 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
             if liked or disliked:
                 game_context += f"  swipe_liked={liked} | swipe_disliked={disliked}\n"
 
+    unavailable_block = ""
+    if ctx.unavailable_dishes:
+        names = "\n".join(f"  - {d}" for d in ctx.unavailable_dishes)
+        unavailable_block = (
+            "\nCRITICAL — the following dishes are NOT available for delivery near the user. "
+            "Do NOT recommend them or anything similar:\n"
+            + names
+            + "\nChoose completely different alternatives.\n"
+        )
+
     return f"""PAYLOAD:
   mood={mood.primary} | energy={mood.energy_level}/10 | social={mood.social_context}
   time_of_day={sit.time_of_day if sit else None} | weather={sit.weather if sit else None} | budget={budget_str} | time_available={sit.time_available if sit else None}min | delivery={sit.delivery_preferred if sit else False}
   cuisines={prefs.cuisine_types if prefs else []} | restrictions={prefs.dietary_restrictions if prefs else []} | allergies={prefs.allergies if prefs else []} | spice_tolerance={prefs.spice_tolerance if prefs else None}
   adventurous_slider={sliders.adventurous if sliders else None}/10 | health_slider={sliders.health_conscious if sliders else None}/10 | spicy_slider={sliders.spicy if sliders else None}/10
   avoid={hist.avoid_these if hist else []}
-{game_context}{character_context}
+{game_context}{character_context}{unavailable_block}
 DISH LIST (id: name | mood_tags | spice | diet | allergens | energy_req | price | weather | meal_time | delivery | adventurousness):
 {get_dishes_for_prompt()}
 
@@ -152,8 +165,9 @@ def _dish_to_summary(dish: DishRecord) -> DishSummary:
     )
 
 
-def _build_fallback(count: int) -> list[DishRecord]:
-    return sorted(DISHES, key=lambda d: d.health_score, reverse=True)[:count]
+def _build_fallback(count: int, restrictions: Optional[list[str]] = None) -> list[DishRecord]:
+    pool = [d for d in DISHES if _diet_allows(d, restrictions or [])]
+    return sorted(pool, key=lambda d: d.health_score, reverse=True)[:count]
 
 
 def get_recommendations(
@@ -161,10 +175,13 @@ def get_recommendations(
     llm: Optional[ChatOpenAI] = None,
 ) -> RecommendationResponse:
     key = _cache_key(request)
-    if key in _CACHE:
+    # Skip cache on retry calls (unavailable_dishes set) — must hit GPT fresh
+    if not request.user_context.unavailable_dishes and key in _CACHE:
         cached = _CACHE[key]
         meta = cached.ai_metadata.model_copy(update={"cache_hit": True}) if cached.ai_metadata else None
         return cached.model_copy(update={"ai_metadata": meta})
+
+    restrictions = _restrictions_of(request)
 
     if llm is None:
         llm = ChatOpenAI(
@@ -184,7 +201,7 @@ def get_recommendations(
     try:
         result = llm.invoke(messages)
     except Exception as exc:
-        return _fallback_response(str(exc), request.recommendation_config.count)
+        return _fallback_response(str(exc), request.recommendation_config.count, restrictions)
 
     elapsed = round(time.time() - start, 2)
     token_usage = result.response_metadata.get("token_usage", {})
@@ -192,12 +209,15 @@ def get_recommendations(
     try:
         data = json.loads(result.content)
     except json.JSONDecodeError:
-        return _fallback_response("Invalid JSON from model", request.recommendation_config.count)
+        return _fallback_response("Invalid JSON from model", request.recommendation_config.count, restrictions)
 
-    ranked = data.get("ranked_dishes", [])
+    ranked = _apply_diet_filter(
+        data.get("ranked_dishes", []), restrictions, request.recommendation_config.count
+    )
     restaurant_pool: list[dict] = data.get("restaurant_suggestions", [])
 
     recommendations: list[Recommendation] = []
+    used_swap_ids: set[str] = set()
     for i, item in enumerate(ranked):
         dish = DISHES_BY_ID.get(item.get("dish_id", ""))
         if dish is None:
@@ -207,6 +227,13 @@ def get_recommendations(
             "name": "Local Kitchen", "rating": 4.0,
             "distance_km": 2.0, "delivery_time_min": 30, "is_open": True,
         }
+
+        alts = (
+            _build_alternatives(dish, restrictions, used_swap_ids)
+            if request.recommendation_config.include_alternatives else []
+        )
+        for a in alts:
+            used_swap_ids.add(a.dish_id)
 
         recommendations.append(Recommendation(
             id=f"rec_{uuid.uuid4().hex[:8]}",
@@ -233,20 +260,7 @@ def get_recommendations(
                 delivery_time_min=int(rest_data.get("delivery_time_min", 30)),
                 is_open=bool(rest_data.get("is_open", True)),
             ),
-            alternatives=[
-                Alternative(
-                    dish_id=_healthier_swap(dish).id,
-                    type="healthier_swap",
-                    name=_healthier_swap(dish).name,
-                    reason="Lower calories, similar comfort profile",
-                ),
-                Alternative(
-                    dish_id=_budget_swap(dish).id,
-                    type="budget_swap",
-                    name=_budget_swap(dish).name,
-                    reason="More wallet-friendly, same cuisine",
-                ),
-            ] if request.recommendation_config.include_alternatives else [],
+            alternatives=alts,
             pairing_suggestions=[
                 _pairing_for(dish),
             ] if request.recommendation_config.include_explanations else [],
@@ -265,23 +279,139 @@ def get_recommendations(
             preference_evolution=data.get("preference_evolution"),
         ),
     )
-    _CACHE[key] = response
+    if not request.user_context.unavailable_dishes:
+        _CACHE[key] = response
     return response
 
 
-def _healthier_swap(dish: DishRecord) -> DishRecord:
-    return max(
-        (d for d in DISHES if d.cuisine == dish.cuisine and d.id != dish.id),
-        key=lambda d: d.health_score,
-        default=dish,
-    )
+# Categories that count as a "main course" — a swap for a main must stay a main
+# (never a drink/dessert). Non-main originals swap within their own group.
+_MAIN_CATEGORIES = {"comfort_food", "indulgent", "light_meal", "street_food"}
 
 
-def _budget_swap(dish: DishRecord) -> DishRecord:
-    return min(
-        (d for d in DISHES if d.cuisine == dish.cuisine and d.id != dish.id and d.price_inr < dish.price_inr),
-        key=lambda d: d.price_inr,
-        default=dish,
+def _course_group(dish: DishRecord) -> set[str]:
+    """The set of categories a swap for this dish is allowed to come from."""
+    return _MAIN_CATEGORIES if dish.category in _MAIN_CATEGORIES else {dish.category}
+
+
+def _diet_allows(dish: DishRecord, restrictions: list[str]) -> bool:
+    """Whether a dish satisfies the user's veg/non-veg preference."""
+    r = {x.lower() for x in (restrictions or [])}
+    tags = {t.lower() for t in dish.dietary_tags}
+    if r & {"vegetarian", "vegan"} and "non_veg" in tags:
+        return False
+    if "non_veg" in r and "non_veg" not in tags:
+        return False
+    return True
+
+
+def _swap_candidates(dish: DishRecord, restrictions: list[str]) -> list[DishRecord]:
+    """Same-course, diet-appropriate candidates — same cuisine first, else any."""
+    group = _course_group(dish)
+    eligible = [
+        d for d in DISHES
+        if d.id != dish.id and d.category in group and _diet_allows(d, restrictions)
+    ]
+    same_cuisine = [d for d in eligible if d.cuisine == dish.cuisine]
+    return same_cuisine or eligible
+
+
+def _healthier_swap(dish: DishRecord, restrictions: Optional[list[str]] = None) -> DishRecord:
+    candidates = [c for c in _swap_candidates(dish, restrictions or []) if c.health_score > dish.health_score]
+    return max(candidates, key=lambda d: d.health_score, default=dish)
+
+
+def _budget_swap(dish: DishRecord, restrictions: Optional[list[str]] = None) -> DishRecord:
+    candidates = [c for c in _swap_candidates(dish, restrictions or []) if c.price_inr < dish.price_inr]
+    return min(candidates, key=lambda d: d.price_inr, default=dish)
+
+
+def _restrictions_of(request: RecommendationRequest) -> list[str]:
+    prefs = request.user_context.preferences
+    return list(prefs.dietary_restrictions) if prefs and prefs.dietary_restrictions else []
+
+
+def _apply_diet_filter(ranked: list[dict], restrictions: list[str], count: int) -> list[dict]:
+    """Deterministically drop diet-violating dishes and backfill to `count`.
+
+    GPT is instructed to exclude but isn't reliable — this guarantees veg-only /
+    non-veg-only when a preference is set. Empty restrictions => unchanged (mixed).
+    """
+    if not restrictions:
+        return ranked
+
+    def ok(item: dict) -> bool:
+        d = DISHES_BY_ID.get(item.get("dish_id", ""))
+        return d is not None and _diet_allows(d, restrictions)
+
+    filtered = [it for it in ranked if ok(it)]
+    if len(filtered) >= count:
+        return filtered
+
+    used = {it.get("dish_id") for it in filtered}
+    for d in DISHES:
+        if len(filtered) >= count:
+            break
+        if d.id in used or not _diet_allows(d, restrictions):
+            continue
+        filtered.append({
+            "dish_id": d.id, "confidence": 0.6,
+            "mood_match": "Fits your dietary preference", "context_fit": "",
+            "psychological_hook": "A solid pick for what you're in the mood for.",
+        })
+        used.add(d.id)
+    return filtered
+
+
+def _build_alternatives(
+    dish: DishRecord,
+    restrictions: list[str],
+    exclude_ids: "set[str] | frozenset[str]" = frozenset(),
+) -> list[Alternative]:
+    """Always offer BOTH a healthier and a second swap when possible.
+
+    - healthier    = healthiest same-course, diet-ok alternative not already used
+                     by another recommendation.
+    - budget_swap  = cheapest option strictly cheaper than the dish.
+    - popular_pick = fallback when nothing is cheaper — closest-priced alternative,
+                     used so budget dishes still show two swap tiles.
+    """
+    pool = [d for d in _swap_candidates(dish, restrictions) if d.id not in exclude_ids]
+    if not pool:
+        return []
+
+    alts: list[Alternative] = []
+    healthier = max(pool, key=lambda d: d.health_score)
+    alts.append(_make_alternative(healthier, "healthier_swap", "Lighter pick, similar vibe"))
+
+    cheaper = [d for d in pool if d.price_inr < dish.price_inr and d.id != healthier.id]
+    if cheaper:
+        budget = min(cheaper, key=lambda d: d.price_inr)
+        alts.append(_make_alternative(budget, "budget_swap", "Cheaper, same course"))
+    else:
+        others = [d for d in pool if d.id != healthier.id]
+        if others:
+            popular = min(others, key=lambda d: abs(d.price_inr - dish.price_inr))
+            alts.append(_make_alternative(popular, "popular_pick", "Fan favourite, similar price"))
+    return alts
+
+
+def _make_alternative(swap: DishRecord, swap_type: str, reason: str) -> Alternative:
+    return Alternative(
+        dish_id=swap.id,
+        type=swap_type,
+        name=swap.name,
+        reason=reason,
+        cuisine=swap.cuisine,
+        category=swap.category,
+        tags=swap.dietary_tags + swap.mood_tags,
+        image_url=swap.image_url,
+        practical_details=PracticalDetails(
+            estimated_price=swap.price_inr,
+            preparation_time=swap.prep_time_min,
+            calories=swap.calories,
+            health_score=swap.health_score,
+        ),
     )
 
 
@@ -289,9 +419,6 @@ def get_dish_detail(dish_id: str) -> DishDetailResponse:
     dish = DISHES_BY_ID.get(dish_id)
     if dish is None:
         return DishDetailResponse(success=False, error=f"Dish '{dish_id}' not found.")
-
-    healthier = _healthier_swap(dish)
-    budget = _budget_swap(dish)
 
     return DishDetailResponse(
         success=True,
@@ -310,26 +437,15 @@ def get_dish_detail(dish_id: str) -> DishDetailResponse:
             delivery_time_min=25,
             is_open=True,
         ),
-        alternatives=[
-            Alternative(
-                dish_id=healthier.id,
-                type="healthier_swap",
-                name=healthier.name,
-                reason="Lower calories, similar comfort profile",
-            ),
-            Alternative(
-                dish_id=budget.id,
-                type="budget_swap",
-                name=budget.name,
-                reason="More wallet-friendly, same cuisine",
-            ),
-        ],
+        alternatives=_build_alternatives(dish, []),
         pairing_suggestions=[_pairing_for(dish)],
     )
 
 
-def _fallback_response(error: str, count: int) -> RecommendationResponse:
-    fallback_dishes = _build_fallback(count)
+def _fallback_response(
+    error: str, count: int, restrictions: Optional[list[str]] = None
+) -> RecommendationResponse:
+    fallback_dishes = _build_fallback(count, restrictions)
     recs = [
         Recommendation(
             id=f"rec_{uuid.uuid4().hex[:8]}",

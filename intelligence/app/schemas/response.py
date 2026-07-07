@@ -31,6 +31,12 @@ class Alternative(BaseModel):
     type: str  # healthier_swap | budget_swap
     name: str
     reason: str
+    # Full dish info so the frontend can render a swap as its own detail card.
+    cuisine: Optional[str] = None
+    category: Optional[str] = None
+    tags: list[str] = Field(default_factory=list)
+    image_url: Optional[str] = None
+    practical_details: Optional[PracticalDetails] = None
 
 
 class PairingSuggestion(BaseModel):
@@ -80,6 +86,8 @@ class RecommendationResponse(BaseModel):
     ai_metadata: Optional[AiMetadata] = None
     insights: Optional[Insights] = None
     error: Optional[str] = None
+    swiggy_matches: Optional[dict] = None
+    swiggy_address_id: Optional[str] = None
 
 
 class DishDetailResponse(BaseModel):

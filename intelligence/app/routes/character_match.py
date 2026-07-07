@@ -7,4 +7,8 @@ router = APIRouter()
 
 @router.post("/api/character-match", response_model=CharacterMatchResponse)
 async def match_character(request: CharacterMatchRequest) -> CharacterMatchResponse:
-    return character_matcher.match_character(request.answers)
+    return character_matcher.match_character(
+        request.answers,
+        character_id=request.character_id,
+        match_percent=request.match_percent,
+    )

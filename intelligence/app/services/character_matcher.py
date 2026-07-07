@@ -24,6 +24,7 @@ _CHARACTERS = [
 ]
 
 _VALID_IDS = {c["id"] for c in _CHARACTERS}
+_CHAR_BY_ID = {c["id"]: c for c in _CHARACTERS}
 
 _SYSTEM_PROMPT = """\
 You are a personality analyst who matches people to their TV/Bollywood spirit animal for the evening.
@@ -61,15 +62,57 @@ AVAILABLE CHARACTERS:
 Pick the best match and write their spirit animal description."""
 
 
+_DESCRIBE_PROMPT = """\
+You write a short, fun "spirit animal" blurb for a food-personality quiz.
+
+The user's character has ALREADY been chosen — do NOT change it. Given the chosen \
+character and the user's 4 answers, write 2-3 punchy sentences (like a horoscope) about \
+who they are tonight and what that means for their food vibe. Keep it warm and specific \
+to their answers.
+
+Return ONLY valid JSON, no markdown:
+{"spirit_animal": "<2-3 punchy sentences>"}"""
+
+
+def _describe_prompt(character: dict, answers: list[AnswerItem]) -> str:
+    qa_lines = "\n".join(f'  Q: {a.question}\n  A: {a.emoji} {a.selected}' for a in answers)
+    return (
+        f"CHOSEN CHARACTER: {character['name']} ({character['show']}) — {character['vibe']}\n\n"
+        f"USER'S ANSWERS TONIGHT:\n{qa_lines}\n\n"
+        "Write their spirit animal blurb."
+    )
+
+
 def match_character(
     answers: list[AnswerItem],
+    character_id: Optional[str] = None,
+    match_percent: Optional[int] = None,
     llm: Optional[ChatOpenAI] = None,
 ) -> CharacterMatchResponse:
     if llm is None:
         llm = ChatOpenAI(
             model=settings.openai_model,
-            temperature=0.4,
+            temperature=0.6,
             model_kwargs={"response_format": {"type": "json_object"}},
+        )
+
+    # Deterministic path: the client already picked the character (unbiased trait
+    # match) — the AI only writes the description for it.
+    if character_id and character_id.lower().strip() in _VALID_IDS:
+        cid = character_id.lower().strip()
+        try:
+            result = llm.invoke([
+                SystemMessage(content=_DESCRIBE_PROMPT),
+                HumanMessage(content=_describe_prompt(_CHAR_BY_ID[cid], answers)),
+            ])
+            spirit = json.loads(result.content).get("spirit_animal", "")
+        except Exception as exc:
+            raise RuntimeError(f"Character description AI failed: {exc}") from exc
+        return CharacterMatchResponse(
+            character_id=cid,
+            match_percent=max(60, min(99, int(match_percent or 82))),
+            spirit_animal=spirit,
+            fallback=False,
         )
 
     messages = [
