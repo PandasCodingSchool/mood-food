@@ -194,8 +194,13 @@ async def test_enrich_two_step_matches_real_item():
 
 
 @pytest.mark.asyncio
-async def test_enrich_falls_back_to_representative_item():
-    """When no item name overlaps, fall back to the first (Recommended) item."""
+async def test_enrich_no_overlap_returns_unmatched():
+    """When no menu item shares a word with the dish name, return matched=False.
+
+    Previously the system fell back to the first (Recommended) item, which caused
+    "Hot Dogs" to match a ₹1689 combo meal that happened to contain "hot".
+    Now we require at least one word overlap or we declare no match.
+    """
     client = SwiggyMCPClient(token="test-token")
 
     async def fake_call(name, args):
@@ -223,10 +228,101 @@ async def test_enrich_falls_back_to_representative_item():
         address_id="a1",
     )
     m = matches[0]
-    assert m.matched is True
-    assert m.item is not None  # representative fallback, not None
-    assert m.item.id == "c1"   # first Recommended item
-    assert m.item.price == 250
+    # "Pho Noodle Soup" shares no words with "Chicken Banh Mi" or "Spring Rolls"
+    # → no match rather than a misleading fallback item.
+    assert m.matched is False
+
+
+# --- Diversity + dedup tests ---
+
+@pytest.mark.asyncio
+async def test_enrich_uses_distinct_restaurants_for_each_dish():
+    """Three dishes sharing one cuisine should match to 3 different restaurants."""
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_restaurants":
+            return {"restaurants": [
+                {"id": "r1", "name": "Wings Hub", "avgRating": 4.5,
+                 "deliveryTimeMinutes": 20, "availabilityStatus": "OPEN", "cuisines": ["American"]},
+                {"id": "r2", "name": "Cluck Palace", "avgRating": 4.3,
+                 "deliveryTimeMinutes": 25, "availabilityStatus": "OPEN", "cuisines": ["American"]},
+                {"id": "r3", "name": "Tender Town", "avgRating": 4.1,
+                 "deliveryTimeMinutes": 30, "availabilityStatus": "OPEN", "cuisines": ["American"]},
+            ]}
+        if name == "get_restaurant_menu":
+            rid = args.get("restaurantId", "")
+            menus = {
+                "r1": [{"id": "i1", "name": "Smoky BBQ Wings", "price": 295, "isVeg": False}],
+                "r2": [{"id": "i2", "name": "Peri Peri Hot Wings", "price": 295, "isVeg": False}],
+                "r3": [{"id": "i3", "name": "Chicken Tenders Basket", "price": 265, "isVeg": False}],
+            }
+            items = menus.get(rid, [])
+            return {"restaurant": {"id": rid}, "categories": [{"title": "Recommended", "items": items}]}
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    from app.schemas.swiggy import EnrichDishInput
+    dishes = [
+        EnrichDishInput(id="d1", name="Smoky BBQ Wings", cuisine="american"),
+        EnrichDishInput(id="d2", name="Peri Hot Wings", cuisine="american"),
+        EnrichDishInput(id="d3", name="Chicken Tenders", cuisine="american"),
+    ]
+    _, matches = await svc.enrich(dishes, address_id="a1")
+    matched = [m for m in matches if m.matched]
+    assert len(matched) == 3
+    restaurant_ids = {m.restaurant.id for m in matched}
+    assert len(restaurant_ids) == 3, f"Expected 3 distinct restaurants, got {restaurant_ids}"
+
+
+@pytest.mark.asyncio
+async def test_enrich_deduplicates_alternatives_across_cards():
+    """When two dishes hit the same restaurant, their alternatives must not overlap."""
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_restaurants":
+            return {"restaurants": [
+                {"id": "r1", "name": "Solo Spot", "avgRating": 4.5,
+                 "deliveryTimeMinutes": 20, "availabilityStatus": "OPEN", "cuisines": ["Italian"]},
+            ]}
+        if name == "get_restaurant_menu":
+            return {"restaurant": {"id": "r1"}, "categories": [{"title": "Menu", "items": [
+                {"id": "i1", "name": "Spaghetti Carbonara", "price": 420, "isVeg": False},
+                {"id": "i2", "name": "Margherita Pizza", "price": 300, "isVeg": True},
+                {"id": "i3", "name": "Caesar Salad", "price": 250, "isVeg": True},
+                {"id": "i4", "name": "Garlic Bread", "price": 150, "isVeg": True},
+                {"id": "i5", "name": "Penne Alfredo", "price": 380, "isVeg": True},
+                {"id": "i6", "name": "Bruschetta", "price": 200, "isVeg": True},
+            ]}]}
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    from app.schemas.swiggy import EnrichDishInput
+    dishes = [
+        EnrichDishInput(id="d1", name="Spaghetti Carbonara", cuisine="italian"),
+        EnrichDishInput(id="d2", name="Margherita Pizza", cuisine="italian"),
+    ]
+    _, matches = await svc.enrich(dishes, address_id="a1")
+    matched = [m for m in matches if m.matched]
+    assert len(matched) == 2
+
+    all_main_ids = {m.item.id for m in matched}
+    all_alt_ids: list[str] = []
+    for m in matched:
+        for alt in m.swiggy_alternatives:
+            # No alternative should be another card's main dish
+            assert alt.item.id not in all_main_ids, \
+                f"Alt {alt.item.name} is a main dish on another card"
+            all_alt_ids.append(alt.item.id)
+
+    # No duplicate alternative item across cards
+    assert len(all_alt_ids) == len(set(all_alt_ids)), \
+        f"Duplicate alt ids found: {all_alt_ids}"
 
 
 # --- Route smoke tests ---

@@ -31,6 +31,7 @@ class SwiggyMenuItem(BaseModel):
     image_url: Optional[str] = None
     is_veg: Optional[bool] = None
     rating: Optional[float] = None
+    description: Optional[str] = None
     restaurant_id: Optional[str] = None
     restaurant_name: Optional[str] = None
     eta_min: Optional[int] = None
@@ -90,11 +91,18 @@ class MenuSearchResponse(BaseModel):
     error: Optional[str] = None
 
 
+class SwiggyAlt(BaseModel):
+    """A real Swiggy menu item suggested as an alternative from the matched restaurant."""
+    type: str  # "healthier" | "budget"
+    item: SwiggyMenuItem
+
+
 class EnrichedMatch(BaseModel):
     dish_id: str
     matched: bool
     item: Optional[SwiggyMenuItem] = None
     restaurant: Optional[SwiggyRestaurant] = None
+    swiggy_alternatives: list[SwiggyAlt] = Field(default_factory=list)
 
 
 class EnrichResponse(BaseModel):

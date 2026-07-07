@@ -1,3 +1,13 @@
 .env
 scratch-note.ipynb
 CLAUDE.mdswiggy_token.json
+
+# Ignore all __pycache__ directories
+__pycache__/
+
+# Ignore all Python bytecode files
+*.py[cod]
+
+# Or explicitly
+*.pyc
+*.pyo

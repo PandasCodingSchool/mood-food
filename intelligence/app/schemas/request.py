@@ -82,6 +82,7 @@ class UserContext(BaseModel):
     situational: Optional[Situational] = None
     game_data: Optional[GameData] = None
     history: Optional[History] = None
+    unavailable_dishes: list[str] = Field(default_factory=list)
 
 
 class RecommendationConfig(BaseModel):
@@ -95,3 +96,4 @@ class RecommendationConfig(BaseModel):
 class RecommendationRequest(BaseModel):
     user_context: UserContext
     recommendation_config: RecommendationConfig = Field(default_factory=RecommendationConfig)
+    swiggy_address_id: Optional[str] = None
