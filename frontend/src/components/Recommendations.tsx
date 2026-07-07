@@ -121,6 +121,11 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Dedupe enrich so it fires once per (city + recommendation set).
   const enrichKeyRef = useRef<string>("");
 
+  // Mobile carousel scroll tracking
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const matchKey = (item: Recommendation) => item.dish?.id || item.id;
 
   const handleFlipCard = (itemId: string) => {
     setFlippedCards((prev) => {
@@ -137,6 +142,32 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   useEffect(() => {
     loadRecommendations();
   }, []);
+
+  // Track which recommendation card is currently visible on mobile.
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || recommendations.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.getAttribute("data-index"));
+            if (!Number.isNaN(index)) setActiveIndex(index);
+          }
+        });
+      },
+      {
+        root: container,
+        threshold: 0.5,
+      },
+    );
+
+    const cards = container.querySelectorAll("[data-index]");
+    cards.forEach((card) => observer.observe(card));
+
+    return () => observer.disconnect();
+  }, [recommendations]);
 
   // Show waitlist popup 10 seconds after recommendations load
   useEffect(() => {
@@ -197,7 +228,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     setEnriched(false);
     setSwiggyMatches({});
     enrichRecommendations(recommendations, addressId)
-
       .then((matches) => {
         if (!isCurrent()) return;
         setSwiggyMatches(matches);
@@ -239,7 +269,11 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
       // Backend already ran the Swiggy availability loop — use its embedded matches
       // and pre-arm enrichKeyRef so the enrich useEffect doesn't re-enrich.
-      if (swiggyLive && data.swiggy_matches && Object.keys(data.swiggy_matches).length > 0) {
+      if (
+        swiggyLive &&
+        data.swiggy_matches &&
+        Object.keys(data.swiggy_matches).length > 0
+      ) {
         setSwiggyMatches(data.swiggy_matches as Record<string, EnrichedMatch>);
         const preKey = `${data.swiggy_address_id || addressId}|${data.recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
         enrichKeyRef.current = preKey;
@@ -459,7 +493,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               onChange={(e) => {
                 setAddressId(e.target.value);
                 saveAddressId(e.target.value);
-                trackEvent("swiggy_address_selected", { addressId: e.target.value });
+                trackEvent("swiggy_address_selected", {
+                  addressId: e.target.value,
+                });
               }}
               className="max-w-[260px] px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-800 font-medium focus:ring-2 focus:ring-orange-400 outline-none truncate"
             >
@@ -515,18 +551,26 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-
         {/* Flip Cards */}
         {showResults && (
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-
+          <div
+            ref={scrollRef}
+            className="flex md:grid md:grid-cols-3 gap-4 md:gap-6 mb-2 md:mb-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0"
+            style={{
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
             {recommendations.map((item, index) => {
               const mainDishId = item.dish?.id || item.id;
               const mainMatch = swiggyMatches[mainDishId];
 
               // Swiggy-sourced alternatives from the matched restaurant menu.
               const swiggyAlts = mainMatch?.swiggy_alternatives ?? [];
-              const swiggyHealthier = swiggyAlts.find((a) => a.type === "healthier");
+              const swiggyHealthier = swiggyAlts.find(
+                (a) => a.type === "healthier",
+              );
               const swiggyBudget = swiggyAlts.find((a) => a.type === "budget");
 
               // AI alternatives — shown as fallback when no Swiggy alts available.
@@ -557,16 +601,15 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                     : null;
 
               // AI alt for fallback path.
-              const activeAiAlt =
-                !useSwiggyAlts
-                  ? activeId === "healthier"
-                    ? aiHealthierAlt
-                    : activeId === "budget"
-                      ? aiBudgetAlt
-                      : activeId === "popular"
-                        ? aiPopularAlt
-                        : undefined
-                  : undefined;
+              const activeAiAlt = !useSwiggyAlts
+                ? activeId === "healthier"
+                  ? aiHealthierAlt
+                  : activeId === "budget"
+                    ? aiBudgetAlt
+                    : activeId === "popular"
+                      ? aiPopularAlt
+                      : undefined
+                : undefined;
 
               // The Swiggy live name/image for the main dish — used for Original Pick tile.
               const mainLiveItem = mainMatch?.item;
@@ -575,10 +618,12 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               const d = activeSwiggyItem
                 ? {
                     name: activeSwiggyItem.name,
-                    cuisine: mainMatch?.restaurant?.cuisines?.[0] || item.dish.cuisine,
-                    tags: activeSwiggyItem.is_veg != null
-                      ? [activeSwiggyItem.is_veg ? "veg" : "non_veg"]
-                      : [],
+                    cuisine:
+                      mainMatch?.restaurant?.cuisines?.[0] || item.dish.cuisine,
+                    tags:
+                      activeSwiggyItem.is_veg != null
+                        ? [activeSwiggyItem.is_veg ? "veg" : "non_veg"]
+                        : [],
                   }
                 : activeAiAlt
                   ? {
@@ -592,23 +637,31 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                       tags: item.dish.tags || [],
                     };
 
-              const pd = activeAiAlt ? activeAiAlt.practical_details : item.practical_details;
-              const baseImage = activeAiAlt ? activeAiAlt.image_url : item.image_url;
+              const pd = activeAiAlt
+                ? activeAiAlt.practical_details
+                : item.practical_details;
+              const baseImage = activeAiAlt
+                ? activeAiAlt.image_url
+                : item.image_url;
 
               // Live Swiggy data: always the main matched restaurant.
               // For Swiggy alts the restaurant is the same; for AI alts there's no live match.
               const liveRestaurant = mainMatch?.restaurant;
-              const liveItem = activeSwiggyItem ?? (activeAiAlt ? null : mainLiveItem);
-              const r = liveRestaurant && !activeAiAlt
-                ? {
-                    name: liveRestaurant.name,
-                    rating: liveRestaurant.rating ?? undefined,
-                    delivery_time_min:
-                      liveRestaurant.eta_min ?? liveItem?.eta_min ?? undefined,
-                  }
-                : activeAiAlt
-                  ? undefined
-                  : item.restaurant;
+              const liveItem =
+                activeSwiggyItem ?? (activeAiAlt ? null : mainLiveItem);
+              const r =
+                liveRestaurant && !activeAiAlt
+                  ? {
+                      name: liveRestaurant.name,
+                      rating: liveRestaurant.rating ?? undefined,
+                      delivery_time_min:
+                        liveRestaurant.eta_min ??
+                        liveItem?.eta_min ??
+                        undefined,
+                    }
+                  : activeAiAlt
+                    ? undefined
+                    : item.restaurant;
               const displayPrice =
                 liveItem?.price ?? pd?.estimated_price ?? undefined;
               const displayImage = liveItem?.image_url || baseImage;
@@ -617,6 +670,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               return (
                 <div
                   key={item.id}
+                  data-index={index}
                   className="relative h-[510px] md:h-[520px] perspective-1000 flex-shrink-0 w-[85vw] md:w-auto snap-center"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
@@ -856,9 +910,20 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                 Flip for{" "}
                                 {[
                                   activeId !== "main" && "original",
-                                  activeId !== "healthier" && (useSwiggyAlts ? swiggyHealthier : aiHealthierAlt) && "healthier",
-                                  activeId !== "budget" && (useSwiggyAlts ? swiggyBudget : aiBudgetAlt) && "budget",
-                                  !useSwiggyAlts && activeId !== "popular" && aiPopularAlt && "popular",
+                                  activeId !== "healthier" &&
+                                    (useSwiggyAlts
+                                      ? swiggyHealthier
+                                      : aiHealthierAlt) &&
+                                    "healthier",
+                                  activeId !== "budget" &&
+                                    (useSwiggyAlts
+                                      ? swiggyBudget
+                                      : aiBudgetAlt) &&
+                                    "budget",
+                                  !useSwiggyAlts &&
+                                    activeId !== "popular" &&
+                                    aiPopularAlt &&
+                                    "popular",
                                 ]
                                   .filter(Boolean)
                                   .join(" & ")}{" "}
@@ -903,7 +968,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                         {/* Header */}
                         <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-4 text-white">
                           <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-lg">Swap your dish</h3>
+                            <h3 className="font-bold text-lg">
+                              Swap your dish
+                            </h3>
                             <button
                               onClick={() => handleFlipCard(item.id)}
                               className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
@@ -927,11 +994,14 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                               // Use Swiggy live name so it matches what was shown on the front.
                               name: mainLiveItem?.name || item.dish.name,
                               sub: "Back to your original recommendation",
-                              price: mainLiveItem?.price ?? item.practical_details?.estimated_price,
+                              price:
+                                mainLiveItem?.price ??
+                                item.practical_details?.estimated_price,
                             },
                             // Healthier tile — Swiggy-sourced when available, AI fallback otherwise.
                             useSwiggyAlts
-                              ? swiggyHealthier && activeId !== "healthier" && {
+                              ? swiggyHealthier &&
+                                activeId !== "healthier" && {
                                   key: "healthier" as const,
                                   theme: "green",
                                   Icon: Leaf,
@@ -940,18 +1010,22 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                   sub: "Lighter pick from the same restaurant",
                                   price: swiggyHealthier.item.price,
                                 }
-                              : aiHealthierAlt && activeId !== "healthier" && {
+                              : aiHealthierAlt &&
+                                activeId !== "healthier" && {
                                   key: "healthier" as const,
                                   theme: "green",
                                   Icon: Leaf,
                                   label: "Healthier Swap",
                                   name: aiHealthierAlt.name,
                                   sub: aiHealthierAlt.reason,
-                                  price: aiHealthierAlt.practical_details?.estimated_price,
+                                  price:
+                                    aiHealthierAlt.practical_details
+                                      ?.estimated_price,
                                 },
                             // Budget tile — Swiggy-sourced when available, AI fallback otherwise.
                             useSwiggyAlts
-                              ? swiggyBudget && activeId !== "budget" && {
+                              ? swiggyBudget &&
+                                activeId !== "budget" && {
                                   key: "budget" as const,
                                   theme: "amber",
                                   Icon: Wallet,
@@ -968,21 +1042,29 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                     label: "Budget Pick",
                                     name: aiBudgetAlt.name,
                                     sub: aiBudgetAlt.reason,
-                                    price: aiBudgetAlt.practical_details?.estimated_price,
+                                    price:
+                                      aiBudgetAlt.practical_details
+                                        ?.estimated_price,
                                   }
-                                : aiPopularAlt && activeId !== "popular" && {
+                                : aiPopularAlt &&
+                                  activeId !== "popular" && {
                                     key: "popular" as const,
                                     theme: "amber",
                                     Icon: Sparkles,
                                     label: "Popular Pick",
                                     name: aiPopularAlt.name,
                                     sub: aiPopularAlt.reason,
-                                    price: aiPopularAlt.practical_details?.estimated_price,
+                                    price:
+                                      aiPopularAlt.practical_details
+                                        ?.estimated_price,
                                   },
                           ]
                             .filter(Boolean)
                             .map((opt) => {
-                              const o = opt as Extract<typeof opt, { key: string }>;
+                              const o = opt as Extract<
+                                typeof opt,
+                                { key: string }
+                              >;
                               const themes: Record<
                                 string,
                                 { bg: string; icon: string; label: string }
@@ -1092,7 +1174,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               {recommendations.map((_, index) => (
                 <div
                   key={index}
-                  className={`w-2 h-2 rounded-full transition-colors ${index === 0 ? "bg-primary-500" : "bg-gray-300"}`}
+                  className={`w-2 h-2 rounded-full transition-colors ${index === activeIndex ? "bg-primary-500 scale-125" : "bg-gray-300"}`}
                 />
               ))}
             </div>
