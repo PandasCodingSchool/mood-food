@@ -277,7 +277,11 @@ function buildAiRequest(body) {
     ...(cfg.temperature != null && { temperature: cfg.temperature }),
   };
 
-  return { user_context, recommendation_config };
+  return {
+    user_context,
+    recommendation_config,
+    ...(body?.swiggy_address_id && { swiggy_address_id: body.swiggy_address_id }),
+  };
 }
 
 function mapTimeOfDay(timeOfDay) {

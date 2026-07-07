@@ -18,7 +18,6 @@ import {
   RotateCw,
   Leaf,
   Wallet,
-  ChevronDown,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import {
@@ -197,22 +196,8 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     setEnriching(true);
     setEnriched(false);
     setSwiggyMatches({});
-<<<<<<< HEAD
     enrichRecommendations(recommendations, addressId)
-=======
 
-    // Safety net: never let the loader hang if the enrich endpoint stalls.
-    const MAX_ENRICH_WAIT_MS = 10000;
-    const maxWaitTimer = setTimeout(() => {
-      if (isCurrent()) {
-        setEnriching(false);
-        setEnriched(true);
-        trackEvent("swiggy_enrich_timeout", { city });
-      }
-    }, MAX_ENRICH_WAIT_MS);
-
-    enrichRecommendations(recommendations, city)
->>>>>>> 7fbf1038b44129258fd10e3aa849ece1276d8579
       .then((matches) => {
         if (!isCurrent()) return;
         setSwiggyMatches(matches);
@@ -227,7 +212,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           trackEvent("swiggy_enrich_error", { error: (err as Error).message });
       })
       .finally(() => {
-        clearTimeout(maxWaitTimer);
         if (isCurrent()) {
           setEnriching(false);
           setEnriched(true); // resolved (success or failure) — safe to show cards
@@ -465,7 +449,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-<<<<<<< HEAD
         {/* Swiggy delivery-address picker (changes addressId → re-fetches restaurants) */}
         {swiggyLive && showResults && addresses.length > 0 && (
           <div className="flex items-center justify-center gap-2 mb-6 text-sm">
@@ -489,41 +472,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             {enriching && (
               <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
             )}
-=======
-        {/* Swiggy city selector (Phase 1 — picks the delivery area for live data) */}
-        {swiggyLive && showResults && (
-          <div className="flex items-center justify-center mb-6">
-            <div className="inline-flex items-center gap-2 sm:gap-3 bg-white rounded-full border border-gray-200 shadow-sm px-4 sm:px-5 py-2 sm:py-2.5 text-sm">
-              <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
-              <span className="text-gray-600 font-medium">Deliver to</span>
-
-              <div className="relative">
-                <select
-                  value={city}
-                  onChange={(e) => {
-                    setCity(e.target.value);
-                    saveCity(e.target.value);
-                    trackEvent("swiggy_city_selected", {
-                      city: e.target.value,
-                    });
-                  }}
-                  className="appearance-none pl-3 pr-8 py-1.5 rounded-full bg-orange-50 text-orange-800 font-semibold text-sm focus:ring-2 focus:ring-orange-400 focus:ring-offset-0 outline-none cursor-pointer min-w-[100px]"
-                >
-                  <option value="">Select city</option>
-                  {SWIGGY_CITIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-orange-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-
-              {enriching && (
-                <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
-              )}
-            </div>
->>>>>>> 7fbf1038b44129258fd10e3aa849ece1276d8579
           </div>
         )}
 
