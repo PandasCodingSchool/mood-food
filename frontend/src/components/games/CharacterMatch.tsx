@@ -156,39 +156,37 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
 
     const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+    // The character is chosen deterministically from the trait vector (unbiased);
+    // the AI is only asked to write the spirit-animal blurb for that character.
+    const localBlurb = (c: (typeof CHARACTERS)[number]) =>
+      `${c.tagline} ${c.vibe}`;
+
     const runMatch = async () => {
+      const local = resolveWithFallback();
+      setMatchResult(local);
+
       try {
         const resp = await fetch(`${API_BASE}/character-match`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers: fullAnswers }),
+          body: JSON.stringify({
+            answers: fullAnswers,
+            character_id: local.character.id,
+            match_percent: local.matchPercent,
+          }),
           signal: AbortSignal.timeout(12000),
         });
-
-        if (!resp.ok) throw new Error("ai_unavailable");
-
-        const data: AIMatchResult = await resp.json();
-        const character = CHARACTERS.find((c) => c.id === data.character_id);
-        if (!character) throw new Error("unknown character_id");
-
-        const userVector = buildUserVector(selections);
-        // Runner-ups: top 2 from local cosine excluding AI winner
-        const { runnerUps } = matchCharacter(userVector);
-        const filteredRunnerUps = runnerUps.filter(
-          (r) => r.character.id !== data.character_id,
+        const data: AIMatchResult | null = resp.ok ? await resp.json() : null;
+        // Only trust the AI blurb if it describes the character WE chose — a stale
+        // backend may re-pick and return a description for the wrong character.
+        const matchesChosen =
+          !!data?.spirit_animal &&
+          (!data.character_id || data.character_id === local.character.id);
+        setSpiritAnimal(
+          matchesChosen ? data!.spirit_animal : localBlurb(local.character),
         );
-
-        setSpiritAnimal(data.spirit_animal);
-        setMatchResult({
-          character,
-          score: data.match_percent / 100,
-          matchPercent: data.match_percent,
-          runnerUps: filteredRunnerUps,
-          userVector,
-        });
       } catch {
-        // Fallback to local cosine similarity
-        setMatchResult(resolveWithFallback());
+        setSpiritAnimal(localBlurb(local.character));
       }
 
       setPhase("reveal");

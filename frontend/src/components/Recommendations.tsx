@@ -23,10 +23,11 @@ import { fetchRecommendations } from "../services/aiRecommendations";
 import {
   enrichRecommendations,
   isSwiggyLive,
-  getSavedCity,
-  saveCity,
-  SWIGGY_CITIES,
+  fetchAddresses,
+  getSavedAddressId,
+  saveAddressId,
   type EnrichedMatch,
+  type SwiggyAddress,
 } from "../services/swiggy";
 import { trackEvent } from "../utils/analytics";
 import { openSwiggy } from "../utils/deliveryLinks";
@@ -41,6 +42,19 @@ const moodEmojis: Record<string, string> = {
   relaxed: "😌",
   adventurous: "🤩",
 };
+
+// Pretty labels for dietary tags shown on cards (e.g. "non_veg" -> "Non-Veg").
+const TAG_LABELS: Record<string, string> = {
+  non_veg: "Non-Veg",
+  "non-veg": "Non-Veg",
+  nonveg: "Non-Veg",
+  veg: "Veg",
+  vegetarian: "Veg",
+  vegan: "Vegan",
+};
+function formatTag(tag: string): string {
+  return TAG_LABELS[tag.toLowerCase()] || tag.replace(/_/g, " ");
+}
 
 const loaderSteps = [
   { emoji: "🧠", text: "Reading your mood..." },
@@ -74,10 +88,30 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
   // Flip card state - tracks which cards are flipped
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
+  // Which dish is active on each card: the main pick or a chosen swap.
+  const [activeDish, setActiveDish] = useState<
+    Record<string, "main" | "healthier" | "budget" | "popular">
+  >({});
+
+  // Switch the active dish on a card (main ⇄ swap) and flip back to the front.
+  // Alternatives are enriched upfront so no lazy fetch needed here.
+  const selectDish = (
+    item: Recommendation,
+    target: "main" | "healthier" | "budget" | "popular",
+  ) => {
+    setActiveDish((prev) => ({ ...prev, [item.id]: target }));
+    setFlippedCards((prev) => {
+      const next = new Set(prev);
+      next.delete(item.id);
+      return next;
+    });
+    trackEvent("recommendation_swap_selected", { target });
+  };
 
   // Swiggy live discovery (Phase 1): real restaurant matches per dish
   const swiggyLive = isSwiggyLive();
-  const [city, setCity] = useState<string>(getSavedCity());
+  const [addresses, setAddresses] = useState<SwiggyAddress[]>([]);
+  const [addressId, setAddressId] = useState<string>(getSavedAddressId());
   const [swiggyMatches, setSwiggyMatches] = useState<
     Record<string, EnrichedMatch>
   >({});
@@ -87,7 +121,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Dedupe enrich so it fires once per (city + recommendation set).
   const enrichKeyRef = useRef<string>("");
 
-  const matchKey = (item: Recommendation) => item.dish?.id || item.id;
 
   const handleFlipCard = (itemId: string) => {
     setFlippedCards((prev) => {
@@ -132,15 +165,28 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     return () => clearInterval(interval);
   }, [loading, enriching]);
 
+  // Load the connected account's saved delivery addresses for the picker.
+  useEffect(() => {
+    if (!swiggyLive) return;
+    fetchAddresses().then((list) => {
+      setAddresses(list);
+      if (list.length && !getSavedAddressId()) {
+        const home =
+          list.find((a) => a.label.toLowerCase().includes("home")) || list[0];
+        setAddressId(home.id);
+        saveAddressId(home.id);
+      }
+    });
+  }, [swiggyLive]);
+
   // Enrich with live Swiggy matches once recommendations are available.
-  // City is optional — if unset, the intelligence service resolves the bootstrap
-  // account's default/Home address, so this works the moment the flag + token are on.
+  // Re-runs whenever the selected delivery address changes.
   useEffect(() => {
     if (!swiggyLive || loading || error || recommendations.length === 0) return;
 
-    // One enrich per unique (city + recommendation set); guards React strict-mode
+    // One enrich per unique (address + recommendation set); guards React strict-mode
     // double-mount and re-renders from firing duplicate MCP requests.
-    const key = `${city}|${recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
+    const key = `${addressId}|${recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
     if (enrichKeyRef.current === key) return;
     enrichKeyRef.current = key;
 
@@ -150,12 +196,12 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     setEnriching(true);
     setEnriched(false);
     setSwiggyMatches({});
-    enrichRecommendations(recommendations, city)
+    enrichRecommendations(recommendations, addressId)
       .then((matches) => {
         if (!isCurrent()) return;
         setSwiggyMatches(matches);
         trackEvent("swiggy_enrich_done", {
-          city,
+          addressId,
           matched: Object.keys(matches).length,
           total: recommendations.length,
         });
@@ -170,7 +216,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           setEnriched(true); // resolved (success or failure) — safe to show cards
         }
       });
-  }, [swiggyLive, city, loading, error, recommendations]);
+  }, [swiggyLive, addressId, loading, error, recommendations]);
 
   const loadRecommendations = async (refresh = false) => {
     setLoading(true);
@@ -180,10 +226,25 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
     try {
       trackEvent("recommendations_requested", results);
-      const data = await fetchRecommendations(results, null, refresh);
+      const data = await fetchRecommendations(
+        results,
+        null,
+        refresh,
+        swiggyLive ? addressId : undefined,
+      );
       setRecommendations(data.recommendations);
       setIsAi(data.success === true && !data.error);
       setInsights(data.insights || null);
+
+      // Backend already ran the Swiggy availability loop — use its embedded matches
+      // and pre-arm enrichKeyRef so the enrich useEffect doesn't re-enrich.
+      if (swiggyLive && data.swiggy_matches && Object.keys(data.swiggy_matches).length > 0) {
+        setSwiggyMatches(data.swiggy_matches as Record<string, EnrichedMatch>);
+        const preKey = `${data.swiggy_address_id || addressId}|${data.recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
+        enrichKeyRef.current = preKey;
+        setEnriched(true);
+      }
+
       trackEvent("recommendations_received", {
         count: data.recommendations.length,
       });
@@ -383,24 +444,23 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-        {/* Swiggy city selector (Phase 1 — picks the delivery area for live data) */}
-        {swiggyLive && showResults && (
+        {/* Swiggy delivery-address picker (changes addressId → re-fetches restaurants) */}
+        {swiggyLive && showResults && addresses.length > 0 && (
           <div className="flex items-center justify-center gap-2 mb-6 text-sm">
             <MapPin className="w-4 h-4 text-orange-500" />
             <span className="text-gray-600">Deliver to</span>
             <select
-              value={city}
+              value={addressId}
               onChange={(e) => {
-                setCity(e.target.value);
-                saveCity(e.target.value);
-                trackEvent("swiggy_city_selected", { city: e.target.value });
+                setAddressId(e.target.value);
+                saveAddressId(e.target.value);
+                trackEvent("swiggy_address_selected", { addressId: e.target.value });
               }}
-              className="px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-800 font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+              className="max-w-[260px] px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-800 font-medium focus:ring-2 focus:ring-orange-400 outline-none truncate"
             >
-              <option value="">Select your city</option>
-              {SWIGGY_CITIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              {addresses.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} · {a.line.slice(0, 40)}
                 </option>
               ))}
             </select>
@@ -454,34 +514,98 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
         {showResults && (
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             {recommendations.map((item, index) => {
-              const d = item.dish;
-              const pd = item.practical_details;
-              const ar = item.ai_reasoning;
-              // Live Swiggy match (Phase 1) overrides the AI-fabricated restaurant
-              const match = swiggyMatches[matchKey(item)];
-              const liveRestaurant = match?.restaurant;
-              const liveItem = match?.item;
-              const r = liveRestaurant
+              const mainDishId = item.dish?.id || item.id;
+              const mainMatch = swiggyMatches[mainDishId];
+
+              // Swiggy-sourced alternatives from the matched restaurant menu.
+              const swiggyAlts = mainMatch?.swiggy_alternatives ?? [];
+              const swiggyHealthier = swiggyAlts.find((a) => a.type === "healthier");
+              const swiggyBudget = swiggyAlts.find((a) => a.type === "budget");
+
+              // AI alternatives — shown as fallback when no Swiggy alts available.
+              const aiHealthierAlt = item.alternatives?.find(
+                (a) => a.type === "healthier_swap",
+              );
+              const aiBudgetAlt = item.alternatives?.find(
+                (a) => a.type === "budget_swap",
+              );
+              const aiPopularAlt = item.alternatives?.find(
+                (a) => a.type === "popular_pick",
+              );
+
+              // Prefer Swiggy-sourced alternatives when main dish matched.
+              const useSwiggyAlts = swiggyAlts.length > 0;
+              const hasAlternatives = useSwiggyAlts
+                ? true
+                : !!(aiHealthierAlt || aiBudgetAlt || aiPopularAlt);
+
+              const activeId = activeDish[item.id] || "main";
+
+              // Determine the active Swiggy alt item (when a Swiggy alt is chosen).
+              const activeSwiggyItem =
+                useSwiggyAlts && activeId === "healthier" && swiggyHealthier
+                  ? swiggyHealthier.item
+                  : useSwiggyAlts && activeId === "budget" && swiggyBudget
+                    ? swiggyBudget.item
+                    : null;
+
+              // AI alt for fallback path.
+              const activeAiAlt =
+                !useSwiggyAlts
+                  ? activeId === "healthier"
+                    ? aiHealthierAlt
+                    : activeId === "budget"
+                      ? aiBudgetAlt
+                      : activeId === "popular"
+                        ? aiPopularAlt
+                        : undefined
+                  : undefined;
+
+              // The Swiggy live name/image for the main dish — used for Original Pick tile.
+              const mainLiveItem = mainMatch?.item;
+
+              // The dish currently shown on the front.
+              const d = activeSwiggyItem
+                ? {
+                    name: activeSwiggyItem.name,
+                    cuisine: mainMatch?.restaurant?.cuisines?.[0] || item.dish.cuisine,
+                    tags: activeSwiggyItem.is_veg != null
+                      ? [activeSwiggyItem.is_veg ? "veg" : "non_veg"]
+                      : [],
+                  }
+                : activeAiAlt
+                  ? {
+                      name: activeAiAlt.name,
+                      cuisine: activeAiAlt.cuisine || "",
+                      tags: activeAiAlt.tags || [],
+                    }
+                  : {
+                      name: item.dish.name,
+                      cuisine: item.dish.cuisine,
+                      tags: item.dish.tags || [],
+                    };
+
+              const pd = activeAiAlt ? activeAiAlt.practical_details : item.practical_details;
+              const baseImage = activeAiAlt ? activeAiAlt.image_url : item.image_url;
+
+              // Live Swiggy data: always the main matched restaurant.
+              // For Swiggy alts the restaurant is the same; for AI alts there's no live match.
+              const liveRestaurant = mainMatch?.restaurant;
+              const liveItem = activeSwiggyItem ?? (activeAiAlt ? null : mainLiveItem);
+              const r = liveRestaurant && !activeAiAlt
                 ? {
                     name: liveRestaurant.name,
                     rating: liveRestaurant.rating ?? undefined,
                     delivery_time_min:
                       liveRestaurant.eta_min ?? liveItem?.eta_min ?? undefined,
                   }
-                : item.restaurant;
+                : activeAiAlt
+                  ? undefined
+                  : item.restaurant;
               const displayPrice =
                 liveItem?.price ?? pd?.estimated_price ?? undefined;
-              // Prefer the real Swiggy dish photo when we matched one
-              const displayImage = liveItem?.image_url || item.image_url;
+              const displayImage = liveItem?.image_url || baseImage;
               const isFlipped = flippedCards.has(item.id);
-              const hasAlternatives =
-                item.alternatives && item.alternatives.length > 0;
-              const healthierAlt = item.alternatives?.find(
-                (a) => a.type === "healthier_swap",
-              );
-              const budgetAlt = item.alternatives?.find(
-                (a) => a.type === "budget_swap",
-              );
 
               return (
                 <div
@@ -575,32 +699,46 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
                         {/* Body */}
                         <div className="p-4 flex flex-col gap-2 flex-1 overflow-hidden">
-                          {/* Tags */}
-                          {d.tags && d.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {d.tags.slice(0, 3).map((tag) => (
+                          {/* Veg/Non-Veg (real, from the matched Swiggy item) + tags */}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {liveItem?.is_veg != null && (
+                              <span
+                                className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${liveItem.is_veg ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}
+                              >
+                                <span
+                                  className={`inline-flex w-3 h-3 items-center justify-center border rounded-sm ${liveItem.is_veg ? "border-green-600" : "border-red-600"}`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${liveItem.is_veg ? "bg-green-600" : "bg-red-600"}`}
+                                  />
+                                </span>
+                                {liveItem.is_veg ? "Veg" : "Non-Veg"}
+                              </span>
+                            )}
+                            {(d.tags || [])
+                              .filter(
+                                (t) =>
+                                  !(
+                                    liveItem?.is_veg != null &&
+                                    [
+                                      "veg",
+                                      "vegetarian",
+                                      "vegan",
+                                      "non_veg",
+                                      "non-veg",
+                                      "nonveg",
+                                    ].includes(t.toLowerCase())
+                                  ),
+                              )
+                              .slice(0, 3)
+                              .map((tag) => (
                                 <span
                                   key={tag}
                                   className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize"
                                 >
-                                  {tag}
+                                  {formatTag(tag)}
                                 </span>
                               ))}
-                            </div>
-                          )}
-
-                          {/* AI Reasoning */}
-                          <div className="bg-primary-50 rounded-xl p-2.5 min-h-[60px]">
-                            <div className="flex items-center gap-1 mb-0.5">
-                              <Sparkles className="w-3 h-3 text-primary-500" />
-                              <span className="text-xs font-semibold text-primary-600">
-                                Why this?
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-700 leading-snug line-clamp-2">
-                              {ar?.psychological_hook ||
-                                "Perfect match for your mood and cravings"}
-                            </p>
                           </div>
 
                           {/* Practical details - always show grid for consistency */}
@@ -695,21 +833,34 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                               </div>
                             )}
 
-                          {/* Flip hint */}
+                          {/* Flip hint — offers whatever isn't currently active */}
                           {hasAlternatives && (
                             <button
                               onClick={() => handleFlipCard(item.id)}
                               className="flex items-center justify-center gap-1 text-xs text-primary-500 hover:text-primary-600 transition-colors mt-auto pt-1"
                             >
                               <RotateCw className="w-3.5 h-3.5" />
-                              <span>Flip for healthy & budget options</span>
+                              <span>
+                                Flip for{" "}
+                                {[
+                                  activeId !== "main" && "original",
+                                  activeId !== "healthier" && (useSwiggyAlts ? swiggyHealthier : aiHealthierAlt) && "healthier",
+                                  activeId !== "budget" && (useSwiggyAlts ? swiggyBudget : aiBudgetAlt) && "budget",
+                                  !useSwiggyAlts && activeId !== "popular" && aiPopularAlt && "popular",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" & ")}{" "}
+                                options
+                              </span>
                             </button>
                           )}
 
                           {/* Delivery CTA */}
                           <div className="pt-2 border-t border-gray-100 mt-1">
                             <button
-                              onClick={() => handleOrderOnSwiggy(d.name)}
+                              onClick={() =>
+                                handleOrderOnSwiggy(liveItem?.name || d.name)
+                              }
                               className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
                             >
                               <span className="flex items-center justify-center gap-2">
@@ -740,7 +891,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                         {/* Header */}
                         <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-4 text-white">
                           <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-lg">Alternatives</h3>
+                            <h3 className="font-bold text-lg">Swap your dish</h3>
                             <button
                               onClick={() => handleFlipCard(item.id)}
                               className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
@@ -749,96 +900,139 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                             </button>
                           </div>
                           <p className="text-white/80 text-xs mt-1">
-                            for {d.name}
+                            Tap an option to make it your pick · now: {d.name}
                           </p>
                         </div>
 
-                        {/* Alternatives content */}
+                        {/* Swap options — tap to make it the active dish */}
                         <div className="p-4 flex flex-col gap-3 flex-1">
-                          {/* Healthier option */}
-                          {healthierAlt ? (
-                            <div className="bg-green-50 rounded-2xl p-4 border border-green-100">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                                  <Leaf className="w-4 h-4 text-green-600" />
-                                </div>
-                                <span className="text-xs font-bold text-green-700 uppercase tracking-wide">
-                                  Healthier Swap
-                                </span>
-                              </div>
-                              <h4 className="font-bold text-gray-900 text-sm mb-1">
-                                {healthierAlt.name}
-                              </h4>
-                              <p className="text-xs text-gray-600 leading-snug">
-                                {healthierAlt.reason}
-                              </p>
-                              <button
-                                onClick={() =>
-                                  handleOrderOnSwiggy(
-                                    healthierAlt.name,
-                                    "healthier",
-                                  )
+                          {[
+                            activeId !== "main" && {
+                              key: "main" as const,
+                              theme: "gray",
+                              Icon: RotateCw,
+                              label: "Original Pick",
+                              // Use Swiggy live name so it matches what was shown on the front.
+                              name: mainLiveItem?.name || item.dish.name,
+                              sub: "Back to your original recommendation",
+                              price: mainLiveItem?.price ?? item.practical_details?.estimated_price,
+                            },
+                            // Healthier tile — Swiggy-sourced when available, AI fallback otherwise.
+                            useSwiggyAlts
+                              ? swiggyHealthier && activeId !== "healthier" && {
+                                  key: "healthier" as const,
+                                  theme: "green",
+                                  Icon: Leaf,
+                                  label: "Healthier Swap",
+                                  name: swiggyHealthier.item.name,
+                                  sub: "Lighter pick from the same restaurant",
+                                  price: swiggyHealthier.item.price,
                                 }
-                                className="mt-3 w-full py-2 bg-green-500 text-white rounded-xl text-xs font-bold hover:bg-green-600 transition-colors"
-                              >
-                                Order This Instead
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="bg-green-50 rounded-2xl p-4 border border-green-100 opacity-60">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Leaf className="w-4 h-4 text-green-600" />
-                                <span className="text-xs font-bold text-green-700">
-                                  No healthier swap available
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Budget option */}
-                          {budgetAlt ? (
-                            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                                  <Wallet className="w-4 h-4 text-amber-600" />
-                                </div>
-                                <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">
-                                  Budget Pick
-                                </span>
-                              </div>
-                              <h4 className="font-bold text-gray-900 text-sm mb-1">
-                                {budgetAlt.name}
-                              </h4>
-                              <p className="text-xs text-gray-600 leading-snug">
-                                {budgetAlt.reason}
-                              </p>
-                              <button
-                                onClick={() =>
-                                  handleOrderOnSwiggy(budgetAlt.name, "budget")
+                              : aiHealthierAlt && activeId !== "healthier" && {
+                                  key: "healthier" as const,
+                                  theme: "green",
+                                  Icon: Leaf,
+                                  label: "Healthier Swap",
+                                  name: aiHealthierAlt.name,
+                                  sub: aiHealthierAlt.reason,
+                                  price: aiHealthierAlt.practical_details?.estimated_price,
+                                },
+                            // Budget tile — Swiggy-sourced when available, AI fallback otherwise.
+                            useSwiggyAlts
+                              ? swiggyBudget && activeId !== "budget" && {
+                                  key: "budget" as const,
+                                  theme: "amber",
+                                  Icon: Wallet,
+                                  label: "Budget Pick",
+                                  name: swiggyBudget.item.name,
+                                  sub: "Cheaper option from the same restaurant",
+                                  price: swiggyBudget.item.price,
                                 }
-                                className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 transition-colors"
-                              >
-                                Order This Instead
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 opacity-60">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Wallet className="w-4 h-4 text-amber-600" />
-                                <span className="text-xs font-bold text-amber-700">
-                                  No budget swap available
-                                </span>
-                              </div>
-                            </div>
-                          )}
+                              : aiBudgetAlt && activeId !== "budget"
+                                ? {
+                                    key: "budget" as const,
+                                    theme: "amber",
+                                    Icon: Wallet,
+                                    label: "Budget Pick",
+                                    name: aiBudgetAlt.name,
+                                    sub: aiBudgetAlt.reason,
+                                    price: aiBudgetAlt.practical_details?.estimated_price,
+                                  }
+                                : aiPopularAlt && activeId !== "popular" && {
+                                    key: "popular" as const,
+                                    theme: "amber",
+                                    Icon: Sparkles,
+                                    label: "Popular Pick",
+                                    name: aiPopularAlt.name,
+                                    sub: aiPopularAlt.reason,
+                                    price: aiPopularAlt.practical_details?.estimated_price,
+                                  },
+                          ]
+                            .filter(Boolean)
+                            .map((opt) => {
+                              const o = opt as Extract<typeof opt, { key: string }>;
+                              const themes: Record<
+                                string,
+                                { bg: string; icon: string; label: string }
+                              > = {
+                                green: {
+                                  bg: "bg-green-50 border-green-100 hover:border-green-300",
+                                  icon: "bg-green-100 text-green-600",
+                                  label: "text-green-700",
+                                },
+                                amber: {
+                                  bg: "bg-amber-50 border-amber-100 hover:border-amber-300",
+                                  icon: "bg-amber-100 text-amber-600",
+                                  label: "text-amber-700",
+                                },
+                                gray: {
+                                  bg: "bg-gray-50 border-gray-200 hover:border-gray-300",
+                                  icon: "bg-gray-200 text-gray-600",
+                                  label: "text-gray-700",
+                                },
+                              };
+                              const t = themes[o.theme];
+                              return (
+                                <button
+                                  key={o.key}
+                                  onClick={() => selectDish(item, o.key)}
+                                  className={`text-left rounded-2xl p-4 border transition-all hover:scale-[1.01] ${t.bg}`}
+                                >
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <div
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center ${t.icon}`}
+                                      >
+                                        <o.Icon className="w-4 h-4" />
+                                      </div>
+                                      <span
+                                        className={`text-xs font-bold uppercase tracking-wide ${t.label}`}
+                                      >
+                                        {o.label}
+                                      </span>
+                                    </div>
+                                    {o.price != null && (
+                                      <span className="text-sm font-bold text-gray-800">
+                                        ₹{o.price}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <h4 className="font-bold text-gray-900 text-sm mb-0.5">
+                                    {o.name}
+                                  </h4>
+                                  <p className="text-xs text-gray-600 leading-snug">
+                                    {o.sub}
+                                  </p>
+                                </button>
+                              );
+                            })}
 
-                          {/* Back button */}
                           <button
                             onClick={() => handleFlipCard(item.id)}
                             className="mt-auto flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors py-2"
                           >
                             <RotateCw className="w-4 h-4" />
-                            Back to main recommendation
+                            Back
                           </button>
                         </div>
                       </div>

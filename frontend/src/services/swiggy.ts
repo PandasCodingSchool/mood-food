@@ -10,24 +10,32 @@ export function isSwiggyLive(): boolean {
   return import.meta.env.VITE_SWIGGY_LIVE === "true";
 }
 
-/** Cities we have a saved bootstrap-account address for (mirrors backend map). */
-export const SWIGGY_CITIES = [
-  "Bangalore",
-  "Mumbai",
-  "Delhi",
-  "Hyderabad",
-  "Pune",
-  "Chennai",
-] as const;
-
-const CITY_STORAGE_KEY = "moodfood.swiggy.city";
-
-export function getSavedCity(): string {
-  return localStorage.getItem(CITY_STORAGE_KEY) || "";
+export interface SwiggyAddress {
+  id: string;
+  label: string;
+  line: string;
 }
 
-export function saveCity(city: string): void {
-  localStorage.setItem(CITY_STORAGE_KEY, city);
+const ADDRESS_STORAGE_KEY = "moodfood.swiggy.addressId";
+
+export function getSavedAddressId(): string {
+  return localStorage.getItem(ADDRESS_STORAGE_KEY) || "";
+}
+
+export function saveAddressId(id: string): void {
+  localStorage.setItem(ADDRESS_STORAGE_KEY, id);
+}
+
+/** The connected account's saved delivery addresses (drives the picker). */
+export async function fetchAddresses(): Promise<SwiggyAddress[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/addresses`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.success ? (data.addresses as SwiggyAddress[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface SwiggyMenuItem {
@@ -59,6 +67,7 @@ export interface EnrichedMatch {
   matched: boolean;
   item?: SwiggyMenuItem | null;
   restaurant?: SwiggyRestaurant | null;
+  swiggy_alternatives?: SwiggyAlt[];
 }
 
 export interface EnrichResponse {
@@ -72,9 +81,14 @@ export interface EnrichResponse {
  * Enrich recommendations with real Swiggy matches (price / rating / ETA).
  * Returns a map keyed by dish id for easy lookup in the UI.
  */
+export interface SwiggyAlt {
+  type: "healthier" | "budget";
+  item: SwiggyMenuItem;
+}
+
 export async function enrichRecommendations(
   recommendations: Recommendation[],
-  city: string,
+  addressId: string,
 ): Promise<Record<string, EnrichedMatch>> {
   const dishes = recommendations
     .filter((r) => r.dish?.name)
@@ -89,7 +103,7 @@ export async function enrichRecommendations(
   const response = await fetch(`${API_BASE_URL}/swiggy/enrich`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dishes, city }),
+    body: JSON.stringify({ dishes, address_id: addressId || undefined }),
   });
 
   if (!response.ok) {

@@ -45,9 +45,19 @@ export interface Recommendation {
   } | null;
   alternatives?: Array<{
     dish_id: string;
-    type: "healthier_swap" | "budget_swap";
+    type: "healthier_swap" | "budget_swap" | "popular_pick";
     name: string;
     reason: string;
+    cuisine?: string;
+    category?: string;
+    tags?: string[];
+    image_url?: string | null;
+    practical_details?: {
+      estimated_price?: number;
+      preparation_time?: number;
+      calories?: number;
+      health_score?: number;
+    } | null;
   }>;
   pairing_suggestions?: Array<{
     type: "drink" | "dessert" | "side";
@@ -73,6 +83,8 @@ export interface RecommendationResponse {
     cache_hit?: boolean;
   } | null;
   error?: string;
+  swiggy_matches?: Record<string, unknown>;
+  swiggy_address_id?: string;
 }
 
 export interface UserContext {

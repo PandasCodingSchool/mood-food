@@ -40,19 +40,24 @@ export function buildUserVector(
   return vec;
 }
 
-function dot(a: TraitVector, b: TraitVector): number {
-  return TRAIT_KEYS.reduce((sum, k) => sum + a[k] * b[k], 0);
+// Mean-center a vector by its own average across the 6 traits. Comparing the
+// centered vectors (Pearson correlation) matches on the SHAPE of the preferences
+// rather than raw magnitude/positivity — so a broadly-high archetype (e.g. Barney)
+// no longer wins every path, and distinctive characters (Rancho=health, Kabir=spice)
+// win when the user's answers lean their way.
+function centered(v: TraitVector): number[] {
+  const mean = TRAIT_KEYS.reduce((s, k) => s + v[k], 0) / TRAIT_KEYS.length;
+  return TRAIT_KEYS.map((k) => v[k] - mean);
 }
 
-function magnitude(v: TraitVector): number {
-  return Math.sqrt(TRAIT_KEYS.reduce((s, k) => s + v[k] * v[k], 0));
-}
-
-function cosineSimilarity(a: TraitVector, b: TraitVector): number {
-  const ma = magnitude(a);
-  const mb = magnitude(b);
+function correlation(a: TraitVector, b: TraitVector): number {
+  const ca = centered(a);
+  const cb = centered(b);
+  const dot = ca.reduce((s, x, i) => s + x * cb[i], 0);
+  const ma = Math.sqrt(ca.reduce((s, x) => s + x * x, 0));
+  const mb = Math.sqrt(cb.reduce((s, x) => s + x * x, 0));
   if (ma === 0 || mb === 0) return 0;
-  return dot(a, b) / (ma * mb);
+  return dot / (ma * mb); // -1..1
 }
 
 export interface ScoredCharacter {
@@ -72,12 +77,12 @@ export interface CharacterMatchResult {
 export function matchCharacter(userVector: TraitVector): CharacterMatchResult {
   const scored = CHARACTERS.map((c) => ({
     character: c,
-    score: cosineSimilarity(userVector, c.traits),
+    score: correlation(userVector, c.traits),
   })).sort((a, b) => b.score - a.score);
 
-  // Convert cosine similarity (0..1) to a friendly percentage (60..99)
+  // Convert correlation (-1..1) to a friendly percentage (60..99)
   const toPercent = (s: number) =>
-    Math.max(60, Math.min(99, Math.round(60 + s * 39)));
+    Math.max(60, Math.min(99, Math.round(78 + s * 21)));
 
   const top = scored[0];
   const runnerUp = scored[1];

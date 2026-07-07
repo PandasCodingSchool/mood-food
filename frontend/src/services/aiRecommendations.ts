@@ -15,6 +15,7 @@ export async function fetchRecommendations(
   quizResults: QuizResults,
   gameData: GameData | null = null,
   refresh = false,
+  swiggyAddressId?: string,
 ): Promise<RecommendationResponse> {
   // Use gameData from quizResults if available (GameResult includes gameData)
   const finalGameData =
@@ -22,6 +23,10 @@ export async function fetchRecommendations(
     ((quizResults as any).gameData as GameData | undefined) ||
     null;
   const context = buildRequestContext(quizResults, finalGameData, refresh);
+  const body: Record<string, unknown> = { ...context };
+  if (swiggyAddressId) {
+    body.swiggy_address_id = swiggyAddressId;
+  }
 
   try {
     const response = await fetch(`${API_BASE_URL}/ai-recommendations`, {
@@ -29,7 +34,7 @@ export async function fetchRecommendations(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(context),
+      body: JSON.stringify(body),
     });
 
     if (response.status === 429) {
