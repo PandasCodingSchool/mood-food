@@ -17,6 +17,7 @@ import {
   CharacterMatch,
 } from "./components/games";
 import { trackEvent } from "./utils/analytics";
+import { initSession } from "./utils/session";
 import type { QuizResults, GameData } from "./types";
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
   const [showContact, setShowContact] = useState(false);
 
   useEffect(() => {
+    initSession();
     trackEvent("landing_page_viewed");
   }, []);
 

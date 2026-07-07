@@ -18,6 +18,8 @@ import {
   RotateCw,
   Leaf,
   Wallet,
+  Link2,
+  Unlink,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import {
@@ -26,8 +28,12 @@ import {
   fetchAddresses,
   getSavedAddressId,
   saveAddressId,
+  fetchUser,
+  initiateSwiggyOAuth,
+  unlinkSwiggyOAuth,
   type EnrichedMatch,
   type SwiggyAddress,
+  type MoodFoodUser,
 } from "../services/swiggy";
 import { trackEvent } from "../utils/analytics";
 import { openSwiggy } from "../utils/deliveryLinks";
@@ -110,6 +116,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
   // Swiggy live discovery (Phase 1): real restaurant matches per dish
   const swiggyLive = isSwiggyLive();
+  const [user, setUser] = useState<MoodFoodUser | null>(null);
   const [addresses, setAddresses] = useState<SwiggyAddress[]>([]);
   const [addressId, setAddressId] = useState<string>(getSavedAddressId());
   const [swiggyMatches, setSwiggyMatches] = useState<
@@ -124,8 +131,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Mobile carousel scroll tracking
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-
-  const matchKey = (item: Recommendation) => item.dish?.id || item.id;
 
   const handleFlipCard = (itemId: string) => {
     setFlippedCards((prev) => {
@@ -196,19 +201,57 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     return () => clearInterval(interval);
   }, [loading, enriching]);
 
-  // Load the connected account's saved delivery addresses for the picker.
+  // Load the current MoodFood user + connected account's saved addresses.
   useEffect(() => {
     if (!swiggyLive) return;
-    fetchAddresses().then((list) => {
-      setAddresses(list);
-      if (list.length && !getSavedAddressId()) {
-        const home =
-          list.find((a) => a.label.toLowerCase().includes("home")) || list[0];
-        setAddressId(home.id);
-        saveAddressId(home.id);
+    fetchUser().then((me) => {
+      setUser(me);
+      if (me?.swiggyLinked) {
+        fetchAddresses().then((list) => {
+          setAddresses(list);
+          if (list.length && !getSavedAddressId()) {
+            const home =
+              list.find((a) => a.label.toLowerCase().includes("home")) ||
+              list[0];
+            setAddressId(home.id);
+            saveAddressId(home.id);
+          }
+        });
       }
     });
   }, [swiggyLive]);
+
+  // Listen for the Swiggy OAuth popup callback.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.data?.type !== "swiggy-oauth"
+      ) {
+        return;
+      }
+      if (event.data.status === "success") {
+        trackEvent("swiggy_connected");
+        fetchUser().then((me) => {
+          setUser(me);
+          if (me?.swiggyLinked) {
+            fetchAddresses().then((list) => {
+              setAddresses(list);
+              if (list.length) {
+                const home =
+                  list.find((a) => a.label.toLowerCase().includes("home")) ||
+                  list[0];
+                setAddressId(home.id);
+                saveAddressId(home.id);
+              }
+            });
+          }
+        });
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   // Enrich with live Swiggy matches once recommendations are available.
   // Re-runs whenever the selected delivery address changes.
@@ -316,6 +359,42 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       }),
     }).catch(() => {}); // Silent fail - don't block user experience
     openSwiggy(dishName);
+  };
+
+  const handleConnectSwiggy = async () => {
+    trackEvent("swiggy_connect_clicked");
+    const authUrl = await initiateSwiggyOAuth();
+    if (!authUrl) {
+      trackEvent("swiggy_connect_failed", { reason: "no_auth_url" });
+      return;
+    }
+    const width = 500;
+    const height = 650;
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    window.open(
+      authUrl,
+      "swiggyOAuth",
+      `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`,
+    );
+  };
+
+  const handleUnlinkSwiggy = async () => {
+    const ok = await unlinkSwiggyOAuth();
+    if (ok) {
+      trackEvent("swiggy_unlinked");
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              swiggyLinked: false,
+              swiggyUserId: null,
+              swiggyExpiresAt: null,
+            }
+          : null,
+      );
+      setAddresses([]);
+    }
   };
 
   const handleShare = (item: Recommendation) => {
@@ -483,30 +562,57 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
 
-        {/* Swiggy delivery-address picker (changes addressId → re-fetches restaurants) */}
-        {swiggyLive && showResults && addresses.length > 0 && (
-          <div className="flex items-center justify-center gap-2 mb-6 text-sm">
-            <MapPin className="w-4 h-4 text-orange-500" />
-            <span className="text-gray-600">Deliver to</span>
-            <select
-              value={addressId}
-              onChange={(e) => {
-                setAddressId(e.target.value);
-                saveAddressId(e.target.value);
-                trackEvent("swiggy_address_selected", {
-                  addressId: e.target.value,
-                });
-              }}
-              className="max-w-[260px] px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-800 font-medium focus:ring-2 focus:ring-orange-400 outline-none truncate"
-            >
-              {addresses.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label} · {a.line.slice(0, 40)}
-                </option>
-              ))}
-            </select>
-            {enriching && (
-              <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
+        {/* Swiggy delivery-address picker / Connect CTA */}
+        {swiggyLive && showResults && (
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6 text-sm">
+            {!user?.swiggyLinked ? (
+              <button
+                onClick={handleConnectSwiggy}
+                className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full px-5 py-2.5 font-semibold shadow-sm transition-colors"
+              >
+                <Link2 className="w-4 h-4" />
+                Connect Swiggy for live prices & ETA
+              </button>
+            ) : (
+              <>
+                <div className="inline-flex items-center gap-2 bg-white rounded-full border border-gray-200 shadow-sm px-4 py-2">
+                  <MapPin className="w-4 h-4 text-orange-500" />
+                  <span className="text-gray-600">Deliver to</span>
+                  {addresses.length > 0 ? (
+                    <select
+                      value={addressId}
+                      onChange={(e) => {
+                        setAddressId(e.target.value);
+                        saveAddressId(e.target.value);
+                        trackEvent("swiggy_address_selected", {
+                          addressId: e.target.value,
+                        });
+                      }}
+                      className="max-w-[220px] bg-transparent text-gray-800 font-medium outline-none truncate"
+                    >
+                      {addresses.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label} · {a.line.slice(0, 40)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-gray-500 italic">
+                      No saved addresses
+                    </span>
+                  )}
+                  {enriching && (
+                    <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
+                  )}
+                </div>
+                <button
+                  onClick={handleUnlinkSwiggy}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-600 transition-colors"
+                >
+                  <Unlink className="w-3.5 h-3.5" />
+                  Disconnect
+                </button>
+              </>
             )}
           </div>
         )}

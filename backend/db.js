@@ -63,6 +63,30 @@ export async function initDb() {
         ip_address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
+
+      // Anonymous/lightweight MoodFood user sessions
+      await db.query(`CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE,
+        phone VARCHAR(50) UNIQUE,
+        name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+
+      // Encrypted per-user Swiggy OAuth tokens
+      await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        swiggy_user_id VARCHAR(255) NOT NULL,
+        access_token_encrypted TEXT NOT NULL,
+        expires_at TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, swiggy_user_id)
+      )`);
+
       await db.query(
         `CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(event_name)`,
       );
@@ -129,6 +153,27 @@ export async function initDb() {
         user_agent TEXT,
         ip_address TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        session_id TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE,
+        phone TEXT UNIQUE,
+        name TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        swiggy_user_id TEXT NOT NULL,
+        access_token_encrypted TEXT NOT NULL,
+        expires_at DATETIME,
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, swiggy_user_id)
       );
 
       CREATE INDEX IF NOT EXISTS idx_order_clicks_created ON order_clicks(created_at);

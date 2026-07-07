@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.schemas.swiggy import (
     AddressesResponse,
@@ -27,8 +27,9 @@ logger = logging.getLogger("swiggy_routes")
 router = APIRouter(prefix="/api/swiggy", tags=["swiggy"])
 
 
-def _service() -> SwiggyDiscoveryService:
-    return SwiggyDiscoveryService()
+def _service(request: Request) -> SwiggyDiscoveryService:
+    user_token = request.headers.get("x-swiggy-user-token")
+    return SwiggyDiscoveryService(token=user_token)
 
 
 @router.get("/status")
@@ -41,19 +42,19 @@ async def status() -> dict:
 
 
 @router.get("/addresses", response_model=AddressesResponse)
-async def addresses() -> AddressesResponse:
+async def addresses(request: Request) -> AddressesResponse:
     """Saved delivery addresses for the connected account (drives the picker)."""
     try:
-        return AddressesResponse(success=True, addresses=await _service().list_addresses())
+        return AddressesResponse(success=True, addresses=await _service(request).list_addresses())
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("addresses failed: %s", exc)
         return AddressesResponse(success=False, error=str(exc))
 
 
 @router.post("/restaurants", response_model=RestaurantSearchResponse)
-async def restaurants(req: RestaurantSearchRequest) -> RestaurantSearchResponse:
+async def restaurants(req: RestaurantSearchRequest, request: Request) -> RestaurantSearchResponse:
     try:
-        addr, results = await _service().search_restaurants(
+        addr, results = await _service(request).search_restaurants(
             req.query, city=req.city, address_id=req.address_id
         )
         return RestaurantSearchResponse(success=True, address_id=addr, restaurants=results)
@@ -63,9 +64,9 @@ async def restaurants(req: RestaurantSearchRequest) -> RestaurantSearchResponse:
 
 
 @router.post("/menu-search", response_model=MenuSearchResponse)
-async def menu_search(req: MenuSearchRequest) -> MenuSearchResponse:
+async def menu_search(req: MenuSearchRequest, request: Request) -> MenuSearchResponse:
     try:
-        addr, items = await _service().search_menu(
+        addr, items = await _service(request).search_menu(
             req.query, city=req.city, address_id=req.address_id
         )
         return MenuSearchResponse(success=True, address_id=addr, items=items)
@@ -76,13 +77,14 @@ async def menu_search(req: MenuSearchRequest) -> MenuSearchResponse:
 
 @router.get("/restaurant/{restaurant_id}/menu")
 async def restaurant_menu(
+    request: Request,
     restaurant_id: str,
     city: str | None = None,
     address_id: str | None = None,
     page: int = 1,
 ) -> dict:
     try:
-        data = await _service().get_restaurant_menu(
+        data = await _service(request).get_restaurant_menu(
             restaurant_id, city=city, address_id=address_id, page=page
         )
         return {"success": True, "menu": data}
@@ -92,10 +94,10 @@ async def restaurant_menu(
 
 
 @router.post("/enrich", response_model=EnrichResponse)
-async def enrich(req: EnrichRequest) -> EnrichResponse:
+async def enrich(req: EnrichRequest, request: Request) -> EnrichResponse:
     """Match each recommended dish to a real Swiggy item (price/rating/ETA)."""
     try:
-        addr, matches = await _service().enrich(
+        addr, matches = await _service(request).enrich(
             req.dishes, city=req.city, address_id=req.address_id
         )
         return EnrichResponse(success=True, address_id=addr, matches=matches)

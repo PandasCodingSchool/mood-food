@@ -8,6 +8,8 @@ import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 import characterMatchRouter from "./routes/characterMatch.js";
 import swiggyRouter from "./routes/swiggy.js";
+import swiggyAuthRouter from "./routes/swiggyAuth.js";
+import { sessionMiddleware, getUserMe } from "./middleware/session.js";
 
 dotenv.config();
 
@@ -18,8 +20,14 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+);
 app.use(express.json());
+app.use(sessionMiddleware());
 
 // General rate limit — all API routes
 const generalLimiter = rateLimit({
@@ -52,6 +60,8 @@ app.use("/api", generalLimiter);
 app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
 // Character match route (AI-driven personality matching)
 app.use("/api/character-match", aiLimiter, characterMatchRouter);
+// Swiggy OAuth endpoints (handled locally, not proxied)
+app.use("/api/swiggy/oauth", swiggyAuthRouter);
 // Swiggy discovery/ordering route (proxied to intelligence service)
 app.use("/api/swiggy", swiggyRouter);
 
@@ -87,6 +97,21 @@ app.get("/api/health", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// Current user session info (Swiggy connection status)
+app.get("/api/user/me", async (req, res) => {
+  try {
+    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
+    if (!sessionId) {
+      return res.status(400).json({ error: "No session id provided" });
+    }
+    const me = await getUserMe(sessionId);
+    res.json({ success: true, user: me });
+  } catch (error) {
+    console.error("/api/user/me error:", error);
+    res.status(500).json({ error: "Failed to fetch user" });
   }
 });
 
