@@ -6,6 +6,7 @@ import {
   QUIZ_FIRST_QUESTION_ID,
   QUIZ_TOTAL_QUESTIONS,
 } from '../constants/quizQuestions';
+import { buildGameSignals } from '../utils/gameSignals';
 
 function Quiz({ onComplete, onBack }) {
   // Track question by ID + history stack for back navigation
@@ -37,12 +38,23 @@ function Quiz({ onComplete, onBack }) {
     } else {
       // Terminal question — build results and complete
       trackEvent('quiz_complete', nextAnswers);
+      const mood = nextAnswers.mood || 'happy';
+      const craving = nextAnswers.craving || 'comfort';
+      const budget = nextAnswers.budget || 'moderate';
+      const preference = nextAnswers.preference || 'both';
       onComplete({
-        mood: nextAnswers.mood || 'happy',
-        craving: nextAnswers.craving || 'comfort',
-        budget: nextAnswers.budget || 'medium',
-        preference: nextAnswers.preference || 'both',
-        gameData: { type: 'quiz', ...nextAnswers },
+        mood,
+        craving,
+        budget,
+        preference,
+        gameData: buildGameSignals({
+          type: 'quiz',
+          liked: [mood, craving],
+          cravings: [craving],
+          budgetTier: budget,
+          dietPreference: preference,
+          raw: { answers: nextAnswers },
+        }),
       });
     }
   };

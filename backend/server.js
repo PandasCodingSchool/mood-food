@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 import characterMatchRouter from "./routes/characterMatch.js";
+import gameAssistRouter from "./routes/gameAssist.js";
 import swiggyRouter from "./routes/swiggy.js";
 
 dotenv.config();
@@ -52,6 +53,9 @@ app.use("/api", generalLimiter);
 app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
 // Character match route (AI-driven personality matching)
 app.use("/api/character-match", aiLimiter, characterMatchRouter);
+// Lightweight mid-game LLM assists (gpt-4o-mini — cheap, cached server-side,
+// so only the general limiter applies)
+app.use("/api/game-assist", gameAssistRouter);
 // Swiggy discovery/ordering route (proxied to intelligence service)
 app.use("/api/swiggy", swiggyRouter);
 

@@ -21,6 +21,7 @@ if settings.swiggy_debug:
 from app.routes.recommendations import router as recommendations_router
 from app.routes.dish import router as dish_router
 from app.routes.character_match import router as character_match_router
+from app.routes.game_assist import router as game_assist_router
 from app.routes.swiggy import router as swiggy_router
 
 app = FastAPI(title="FoodMood API", version="1.0.0")
@@ -35,6 +36,7 @@ app.add_middleware(
 app.include_router(recommendations_router)
 app.include_router(dish_router)
 app.include_router(character_match_router)
+app.include_router(game_assist_router)
 app.include_router(swiggy_router)
 
 

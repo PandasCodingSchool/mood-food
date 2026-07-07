@@ -44,23 +44,43 @@ class SliderValues(BaseModel):
     spicy: Optional[int] = Field(default=None, ge=1, le=10)
 
 
-class CharacterContext(BaseModel):
+class MoodVector(BaseModel):
+    energy: float = Field(default=0, ge=-1, le=1)
+    valence: float = Field(default=0, ge=-1, le=1)
+    social: float = Field(default=0, ge=-1, le=1)
+
+
+class GameCharacter(BaseModel):
     id: str
     name: str
     show: Optional[str] = None
     emoji: Optional[str] = None
     traits: Optional[dict] = None
     match_percentage: Optional[int] = None
+    runner_ups: list[dict] = Field(default_factory=list)  # [{id, match_percent}]
 
     model_config = {"extra": "ignore"}
 
 
+# Kept as an alias so existing imports keep working.
+CharacterContext = GameCharacter
+
+
 class GameData(BaseModel):
+    """Unified game-signal payload emitted by every frontend game."""
+
     type: Optional[str] = None
-    selections: list[str] = Field(default_factory=list)  # emoji or keyword selections
+    liked: list[str] = Field(default_factory=list)  # accepted segments, right-swipes, chosen options
+    disliked: list[str] = Field(default_factory=list)  # rejected segments, left-swipes
+    cravings: list[str] = Field(default_factory=list)  # ordered, strongest first
+    cuisines: list[str] = Field(default_factory=list)
+    budget_tier: Optional[Literal["budget", "moderate", "splurge"]] = None
+    diet_preference: Optional[Literal["veg", "non-veg", "both"]] = None
+    mood_vector: Optional[MoodVector] = None
     swipes: list[SwipeItem] = Field(default_factory=list)
     slider_values: Optional[SliderValues] = None
-    character: Optional[CharacterContext] = None  # populated for character_match games
+    character: Optional[GameCharacter] = None  # populated for character_match games
+    raw: Optional[dict] = None  # per-game payload: storyChoices, answers, spins…
 
     model_config = {"extra": "ignore"}
 

@@ -17,7 +17,7 @@ import {
   CharacterMatch,
 } from "./components/games";
 import { trackEvent } from "./utils/analytics";
-import type { QuizResults, GameData } from "./types";
+import type { QuizResults, GameResult } from "./types";
 
 function App() {
   const [showQuiz, setShowQuiz] = useState(false);
@@ -46,9 +46,7 @@ function App() {
     }
   };
 
-  const handleGameComplete = (
-    results: QuizResults & { gameData: GameData },
-  ) => {
+  const handleGameComplete = (results: GameResult) => {
     trackEvent("game_completed", { game: activeGame, results });
     setQuizResults(results);
     setActiveGame(null);

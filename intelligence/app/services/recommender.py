@@ -52,11 +52,19 @@ RANKING RULES (in priority order):
    IF dietary_restrictions contains "non_veg": STRONGLY PREFER dishes with non_veg dietary_tag; exclude purely vegetarian/vegan dishes unless nothing else fits
 3. HARD EXCLUDE dishes priced above budget.max (if provided)
 4. IF CHARACTER CONTEXT PROVIDED: Strongly boost char_* prefixed dishes (they're personality-aligned favorites)
-5. RANK by: mood_tags match > spice_level vs spice_tolerance > \
-energy_requirement vs energy_level > weather_tags match > adventurousness alignment > health_conscious alignment
-6. DIVERSITY: unless diversity is "low", the selected dishes must span different \
+5. NEGATIVE SIGNALS: strongly demote dishes whose category, cuisine, or name matches \
+any keyword in the AVOID/disliked lists — never rank them in the top results unless \
+nothing else satisfies the hard constraints.
+6. RANK by: POSITIVE SIGNALS (liked/cravings/cuisines keyword match) > mood_tags match > \
+spice_level vs spice_tolerance > energy_requirement vs energy_level > weather_tags match > \
+adventurousness alignment > health_conscious alignment
+7. DIVERSITY: unless diversity is "low", the selected dishes must span different \
 dish types — never return multiple variants of the same dish (e.g. three fried-chicken \
 dishes). Vary category and preparation across the set.
+8. context_tags: for each dish, generate 2-3 short tags (1-2 words each) that describe \
+WHY this dish fits the user's current emotional state and context — NOT generic dish \
+descriptors. Examples for stressed+comfort: ["Stress Relief", "Soul Food", "Comfort Pick"]. \
+Tags must be personalized to THIS user's mood, NOT reused from the dish's own mood_tags.
 
 Return ONLY valid JSON, no markdown fences, no extra text."""
 
@@ -70,6 +78,9 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
 
     sliders = (game.slider_values if game and game.slider_values else None)
     budget_max = (sit.budget.max if sit and sit.budget else None)
+    # No explicit budget: synthesize from the game's budget tier.
+    if budget_max is None and game and game.budget_tier:
+        budget_max = {"budget": 300, "moderate": 800, "splurge": 2000}[game.budget_tier]
     budget_str = f"₹{budget_max}" if budget_max else "not specified"
 
     # Character context: look up dish IDs from the mapping and inject into prompt
@@ -95,11 +106,38 @@ def _build_user_message(ctx: UserContext, config: RecommendationConfig) -> str:
                 f"  Rank these dishes above others when they satisfy hard constraints.\n"
             )
 
-    # Game-specific context lines
+    # Runner-up characters as a soft hint
+    if game and game.character and game.character.runner_ups:
+        echo_names = [
+            str(r.get("id") or r.get("name", ""))
+            for r in game.character.runner_ups
+            if isinstance(r, dict)
+        ]
+        echo_names = [n for n in echo_names if n]
+        if echo_names and character_context:
+            character_context += f"  Secondary personality echoes (soft hint): {echo_names}\n"
+
+    # Unified game-signal context lines
     game_context = ""
     if game:
-        if game.selections:
-            game_context += f"  game_selections={game.selections}\n"
+        positives = []
+        if game.liked:
+            positives.append(f"liked={game.liked}")
+        if game.cravings:
+            positives.append(f"cravings={game.cravings} (ordered, strongest first)")
+        if game.cuisines:
+            positives.append(f"cuisines={game.cuisines}")
+        if positives:
+            game_context += f"  POSITIVE SIGNALS: {' | '.join(positives)}\n"
+        avoid = list(game.disliked) + (hist.avoid_these if hist else [])
+        if avoid:
+            game_context += f"  NEGATIVE SIGNALS (avoid): {avoid}\n"
+        if game.mood_vector:
+            mv = game.mood_vector
+            game_context += (
+                f"  mood_vector: energy={mv.energy:+.2f} valence={mv.valence:+.2f} "
+                f"social={mv.social:+.2f} (each -1..1)\n"
+            )
         if game.swipes:
             liked = [s.item for s in game.swipes if s.liked]
             disliked = [s.item for s in game.swipes if not s.liked]
@@ -134,8 +172,9 @@ Return exactly {config.count} dishes as JSON:
       "confidence": 0.0,
       "mood_match": "one sentence",
       "context_fit": "one sentence",
-      "psychological_hook": "one sentence",
-      "nostalgia_factor": "one sentence or null"
+      "psychological_hook": "one sentence why this dish fits the user's current state",
+      "nostalgia_factor": "one sentence or null",
+      "context_tags": ["tag1", "tag2", "tag3"]
     }}
   ],
   "mood_profile": "one sentence describing the user's emotional state",
@@ -246,6 +285,7 @@ def get_recommendations(
                 context_fit=item.get("context_fit", ""),
                 psychological_hook=item.get("psychological_hook", ""),
                 nostalgia_factor=item.get("nostalgia_factor"),
+                context_tags=item.get("context_tags", []),
             ),
             practical_details=PracticalDetails(
                 estimated_price=dish.price_inr,

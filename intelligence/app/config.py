@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+    # Lightweight model for fast mid-game assists (option copy, flavor text).
+    openai_mini_model: str = "gpt-4o-mini"
     unsplash_access_key: str = ""
 
     # --- Swiggy MCP (Food server) ---

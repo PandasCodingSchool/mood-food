@@ -66,6 +66,42 @@ class TestSliderValues:
         assert s.adventurous is None
 
 
+class TestGameData:
+    def test_unified_signal_fields(self):
+        g = GameData(
+            type="swipe_vibe",
+            liked=["Ramen Bowl"],
+            disliked=["Dessert Spread"],
+            cravings=["comfort"],
+            cuisines=["japanese"],
+            budget_tier="budget",
+            diet_preference="veg",
+        )
+        assert g.liked == ["Ramen Bowl"]
+        assert g.budget_tier == "budget"
+
+    def test_legacy_selections_ignored(self):
+        # Clean break: old payload shape is absorbed by extra="ignore".
+        g = GameData(type="quiz", selections=["happy", "comfort"])
+        assert not hasattr(g, "selections")
+
+    def test_invalid_budget_tier_rejected(self):
+        with pytest.raises(ValidationError):
+            GameData(type="quiz", budget_tier="cheap")
+
+    def test_mood_vector_bounds(self):
+        from app.schemas.request import MoodVector
+        with pytest.raises(ValidationError):
+            MoodVector(energy=1.5)
+        mv = MoodVector(energy=-1, valence=1, social=0)
+        assert mv.energy == -1
+
+    def test_character_runner_ups(self):
+        from app.schemas.request import GameCharacter
+        c = GameCharacter(id="joey", name="Joey", runner_ups=[{"id": "chandler", "match_percent": 71}])
+        assert c.runner_ups[0]["id"] == "chandler"
+
+
 class TestRecommendationConfig:
     def test_defaults(self):
         cfg = RecommendationConfig()

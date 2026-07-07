@@ -10,6 +10,16 @@ import {
 } from "lucide-react";
 import { trackEvent } from "../../utils/analytics";
 import type { WheelSegment, BudgetOption, GameResult } from "../../types";
+import {
+  initWeights,
+  applyReject,
+  applyAccept,
+  weightedPick,
+  suggestBudgetTier,
+  type Weights,
+} from "../../utils/wheelWeights";
+import { buildGameSignals, mostFrequent } from "../../utils/gameSignals";
+import { BUDGET_TIER_BY_VALUE } from "../../constants/budget";
 
 // Sound utility using Web Audio API
 const playSound = (
@@ -187,6 +197,11 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [streakCount, setStreakCount] = useState(0);
+  // Adaptive wheel: rejects zero a segment (and dampen related), accepts
+  // boost related — the spin picks the landing segment from these weights.
+  const [weights, setWeights] = useState<Weights>(() =>
+    initWeights(WHEEL_SEGMENTS.map((s) => s.id)),
+  );
   const [showStreakBonus, setShowStreakBonus] = useState(false);
 
   const wheelRef = useRef<HTMLDivElement>(null);
@@ -213,7 +228,7 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     return () => clearInterval(tickInterval);
   }, [isSpinning, playTick]);
 
-  const spin = useCallback(() => {
+  const spin = useCallback((weightsOverride?: Weights) => {
     if (isSpinning) return;
 
     setIsSpinning(true);
@@ -221,8 +236,20 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     setShowStreakBonus(false);
 
     const segmentAngle = 360 / WHEEL_SEGMENTS.length;
-    const randomOffset = Math.random() * segmentAngle;
-    const newRotation = rotation + 1800 + randomOffset;
+    // Pick the landing segment from the adaptive weights, then derive a
+    // rotation that visually lands the pointer on it.
+    const targetId = weightedPick(
+      weightsOverride ?? weights,
+      WHEEL_SEGMENTS.map((s) => s.id),
+    );
+    const targetIndex = WHEEL_SEGMENTS.findIndex((s) => s.id === targetId);
+    const offset =
+      segmentAngle * 0.15 + Math.random() * segmentAngle * 0.7; // stay inside the slice
+    const targetRotation =
+      (360 - (targetIndex * segmentAngle + offset) + 360) % 360;
+    const base = rotation + 1800;
+    const delta = (targetRotation - (base % 360) + 360) % 360;
+    const newRotation = base + delta;
 
     setRotation(newRotation);
     setSpinCount((prev) => prev + 1);
@@ -230,11 +257,7 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
     trackEvent("wheel_spun", { spinCount: spinCount + 1 });
 
     setTimeout(() => {
-      const actualRotation = newRotation % 360;
-      const segmentIndex =
-        Math.floor((360 - actualRotation) / segmentAngle) %
-        WHEEL_SEGMENTS.length;
-      const segment = WHEEL_SEGMENTS[segmentIndex];
+      const segment = WHEEL_SEGMENTS[targetIndex];
 
       setSelectedSegment(segment);
       setIsSpinning(false);
@@ -270,16 +293,23 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
 
       trackEvent("wheel_landed", { segment: segment.id, label: segment.label });
     }, 3000);
-  }, [isSpinning, rotation, spinCount, playWin, streakCount]);
+  }, [isSpinning, rotation, spinCount, playWin, streakCount, weights]);
 
   const handleAccept = () => {
     if (!selectedSegment) return;
 
-    setAcceptedSegments((prev) => [...prev, selectedSegment]);
+    const accepted = [...acceptedSegments, selectedSegment];
+    setAcceptedSegments(accepted);
+    setWeights((w) => applyAccept(w, selectedSegment.id));
+    // Craving/mood come from the MOST FREQUENT accepted segment, not the last.
+    const dominantId =
+      mostFrequent(accepted.map((s) => s.id)) ?? selectedSegment.id;
+    const dominant =
+      accepted.find((s) => s.id === dominantId) ?? selectedSegment;
     setFinalSelections((prev) => ({
       ...prev,
-      craving: selectedSegment.id,
-      mood: selectedSegment.mood,
+      craving: dominant.id,
+      mood: dominant.mood,
     }));
 
     trackEvent("wheel_accepted", { segment: selectedSegment.id });
@@ -294,14 +324,18 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
   const handleReject = () => {
     if (!selectedSegment) return;
 
+    const nextWeights = applyReject(weights, selectedSegment.id);
     setRejectedSegments((prev) => [...prev, selectedSegment]);
+    setWeights(nextWeights);
     setStreakCount(0); // Reset streak on reject
     playReject();
     trackEvent("wheel_rejected", { segment: selectedSegment.id });
 
     setSelectedSegment(null);
 
-    setTimeout(() => spin(), 500);
+    // Pass the updated weights explicitly — the spin closure is from this
+    // render and would otherwise still see the pre-reject weights.
+    setTimeout(() => spin(nextWeights), 500);
   };
 
   const handleBudgetSelect = (budget: string) => {
@@ -358,20 +392,37 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
           9,
     );
 
+    const acceptedIds = acceptedSegments.map((s) => s.id);
+    const rejectedIds = rejectedSegments.map((s) => s.id);
+    const craving = finalSelections.craving || "comfort";
+    const budget = (selectedBudget || "moderate") as
+      | "budget"
+      | "moderate"
+      | "splurge";
     const results: GameResult = {
       mood: finalSelections.mood || "happy",
-      craving: finalSelections.craving || "comfort",
-      budget: selectedBudget || "moderate",
+      craving,
+      budget,
       preference,
-      gameData: {
+      gameData: buildGameSignals({
         type: "spin_wheel",
-        spins: spinCount,
-        accepted: acceptedSegments.map((s) => s.id),
-        rejected: rejectedSegments.map((s) => s.id),
-        finalCraving: finalSelections.craving,
-        finalMood: finalSelections.mood,
-        sliderValues: { adventurous, healthConscious: health_conscious, spicy },
-      },
+        liked: acceptedIds,
+        disliked: rejectedIds,
+        // Dominant craving first, then the other accepted segments.
+        cravings: [craving, ...acceptedIds.filter((id) => id !== craving)],
+        budgetTier: budget,
+        dietPreference: preference as "veg" | "non-veg" | "both",
+        sliderValues: {
+          adventurous,
+          healthConscious: health_conscious,
+          spicy,
+        },
+        raw: {
+          spins: spinCount,
+          accepted: acceptedIds,
+          rejected: rejectedIds,
+        },
+      }),
     };
     trackEvent("wheel_complete", results);
     onComplete(results);
@@ -382,6 +433,7 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
   );
 
   if (showBudgetPicker) {
+    const suggestedTier = suggestBudgetTier(acceptedSegments.map((s) => s.id));
     return (
       <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-orange-50 via-white to-yellow-50">
         <div className="max-w-md mx-auto">
@@ -403,23 +455,48 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
           </div>
 
           <div className="space-y-4">
-            {BUDGET_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => handleBudgetSelect(option.id)}
-                className="w-full p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-between"
-              >
-                <div className="flex items-center">
-                  <span className="text-3xl mr-4">{option.emoji}</span>
-                  <span className="text-xl font-semibold text-gray-800">
-                    {option.label}
-                  </span>
-                </div>
-                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center text-primary-600">
-                  <Check className="w-5 h-5" />
-                </div>
-              </button>
-            ))}
+            {[...BUDGET_OPTIONS]
+              .sort((a, b) =>
+                a.id === suggestedTier ? -1 : b.id === suggestedTier ? 1 : 0,
+              )
+              .map((option) => {
+                const isSuggested = option.id === suggestedTier;
+                const tier =
+                  BUDGET_TIER_BY_VALUE[
+                    option.id as keyof typeof BUDGET_TIER_BY_VALUE
+                  ];
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => handleBudgetSelect(option.id)}
+                    className={`relative w-full p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-between ${
+                      isSuggested ? "ring-2 ring-orange-400" : ""
+                    }`}
+                  >
+                    {isSuggested && (
+                      <span className="absolute -top-2.5 left-6 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        Suggested from your picks
+                      </span>
+                    )}
+                    <div className="flex items-center">
+                      <span className="text-3xl mr-4">{option.emoji}</span>
+                      <div className="text-left">
+                        <span className="text-xl font-semibold text-gray-800 block">
+                          {option.label}
+                        </span>
+                        {tier && (
+                          <span className="text-xs text-gray-500">
+                            {tier.subtitle}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center text-primary-600">
+                      <Check className="w-5 h-5" />
+                    </div>
+                  </button>
+                );
+              })}
           </div>
 
           <div className="mt-8 p-4 bg-white/70 rounded-2xl">
@@ -745,7 +822,7 @@ function SpinWheel({ onComplete, onBack }: SpinWheelProps) {
 
           {/* Center hub */}
           <button
-            onClick={spin}
+            onClick={() => spin()}
             disabled={isSpinning || availableSegments.length === 0}
             className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full shadow-xl ring-4 ring-white flex items-center justify-center z-20 transition-transform ${
               isSpinning ? "" : "hover:scale-110 active:scale-95 cursor-pointer"
