@@ -62,6 +62,52 @@ export interface Recommendation {
     name: string;
     reason: string;
   }>;
+  /** Populated client-side after a successful /api/swiggy/enrich match — real menu photo/restaurant, not the static Unsplash placeholder above. */
+  swiggy?: EnrichedMatch | null;
+}
+
+export interface SwiggyMenuItem {
+  id: string;
+  name: string;
+  price?: number | null;
+  image_url?: string | null;
+  is_veg?: boolean | null;
+  rating?: number | null;
+  restaurant_id?: string | null;
+  restaurant_name?: string | null;
+  eta_min?: number | null;
+}
+
+export interface SwiggyRestaurant {
+  id: string;
+  name: string;
+  rating?: number | null;
+  eta_min?: number | null;
+  distance_km?: number | null;
+  cuisines?: string[];
+  image_url?: string | null;
+  is_open?: boolean;
+  cost_for_two?: number | null;
+}
+
+export interface SwiggyAlt {
+  type: 'healthier' | 'budget';
+  item: SwiggyMenuItem;
+}
+
+export interface EnrichedMatch {
+  dish_id: string;
+  matched: boolean;
+  item?: SwiggyMenuItem | null;
+  restaurant?: SwiggyRestaurant | null;
+  swiggy_alternatives?: SwiggyAlt[];
+}
+
+export interface EnrichResponse {
+  success: boolean;
+  address_id?: string | null;
+  matches: EnrichedMatch[];
+  error?: string;
 }
 
 export interface RecommendationResponse {

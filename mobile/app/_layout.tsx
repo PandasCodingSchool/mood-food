@@ -3,6 +3,14 @@ import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Component, type ReactNode } from "react";
 import { View, Text } from "react-native";
+import {
+  useFonts,
+  Nunito_400Regular,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+  Nunito_900Black,
+} from "@expo-google-fonts/nunito";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -37,13 +45,25 @@ class ErrorBoundary extends Component<
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Nunito_400Regular,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+    Nunito_900Black,
+  });
+
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: "#f97316" }} />;
+  }
+
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: "#fff7ed" },
+            contentStyle: { backgroundColor: "transparent" },
             animation: "slide_from_right",
           }}
         />

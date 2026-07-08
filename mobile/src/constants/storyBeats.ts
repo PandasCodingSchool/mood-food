@@ -1,332 +1,161 @@
-export interface MoodDeltas {
-  energy: number;
-  valence: number;
-  social: number;
-}
-export interface StoryChoice {
-  id: string;
-  label: string;
+export interface DayChoice {
   emoji: string;
-  deltas: MoodDeltas;
-}
-export type TimeSlot = "morning" | "afternoon" | "evening" | "night";
-export type BeatId = "morning" | "lunch" | "evening" | "night";
-
-export interface StoryBeat {
-  id: BeatId;
-  segmentLabel: string;
-  weight: number;
-  narratives: Record<"past" | "present" | "future", string>;
-  choices: StoryChoice[];
+  label: string;
 }
 
-export interface ActiveStoryBeat {
-  id: BeatId;
-  segmentLabel: string;
-  weight: number;
+export interface DayScene {
+  time: string;
+  location: string;
+  emoji: string;
+  colors: readonly [string, string, ...string[]];
+  locations?: readonly [number, number, ...number[]];
   narrative: string;
-  choices: StoryChoice[];
+  subtext: string;
+  choices: DayChoice[];
 }
 
-export interface ActiveStory {
-  timeSlot: TimeSlot;
-  coldOpen: { title: string; subtitle: string };
-  beats: ActiveStoryBeat[];
-  segments: string[];
-  followUp: typeof STORY_FOLLOW_UP;
+export interface DayMoodTag {
+  emoji: string;
+  label: string;
 }
 
-const STORY_BEATS_CATALOG: StoryBeat[] = [
+export interface DayMood {
+  emoji: string;
+  label: string;
+  desc: string;
+  tags: DayMoodTag[];
+  mood: string;
+  craving: string;
+  budget: string;
+  preference: string;
+}
+
+/** Matches the design's exact 5 scenes, one per moment of the day. */
+export const DAY_SCENES: DayScene[] = [
   {
-    id: "morning",
-    segmentLabel: "Morning",
-    weight: 1,
-    narratives: {
-      present:
-        "Your alarm just went off. The calendar says back-to-back meetings till lunch.",
-      past: "This morning had back-to-back meetings the moment you opened your laptop.",
-      future:
-        "Tomorrow morning will hit fast. Meetings stack up before you've even had coffee.",
-    },
+    time: '7:15 AM',
+    location: 'Bedroom',
+    emoji: '⏰',
+    colors: ['#1e3a5f', '#f59e0b'],
+    narrative: "Your alarm goes off. The sun's barely up.",
+    subtext: 'How do you start this day?',
     choices: [
-      {
-        id: "morning_coffee",
-        label: "Grab coffee and power through",
-        emoji: "☕",
-        deltas: { energy: 0.12, valence: 0.05, social: 0.05 },
-      },
-      {
-        id: "morning_snooze",
-        label: "Snooze once. You need the sleep.",
-        emoji: "😴",
-        deltas: { energy: -0.1, valence: 0.02, social: -0.05 },
-      },
-      {
-        id: "morning_skip",
-        label: "Skip breakfast, dive into inbox",
-        emoji: "📧",
-        deltas: { energy: 0.05, valence: -0.08, social: -0.08 },
-      },
+      { emoji: '😴', label: 'Snooze 3 more times... okay maybe 4' },
+      { emoji: '🏃', label: 'Up and at it — morning run!' },
+      { emoji: '📱', label: 'Scroll phone for 20 min first' },
     ],
   },
   {
-    id: "lunch",
-    segmentLabel: "Lunch",
-    weight: 1,
-    narratives: {
-      present:
-        "It's around lunch. Your stomach reminds you the morning was intense.",
-      past: "By lunchtime, the morning had already taken its toll.",
-      future: "Lunch is coming up. How do you usually handle it?",
-    },
+    time: '8:30 AM',
+    location: 'Kitchen',
+    emoji: '☕',
+    colors: ['#92400e', '#fbbf24'],
+    narrative: "You stumble to the kitchen. What's breakfast?",
+    subtext: "Choose wisely... or don't.",
     choices: [
-      {
-        id: "lunch_team",
-        label: "Team lunch with good energy at the table",
-        emoji: "👥",
-        deltas: { energy: 0.08, valence: 0.15, social: 0.2 },
-      },
-      {
-        id: "lunch_desk",
-        label: "Eat at desk between calls",
-        emoji: "💻",
-        deltas: { energy: -0.05, valence: -0.05, social: -0.1 },
-      },
-      {
-        id: "lunch_skip",
-        label: "Skip lunch, too much to finish",
-        emoji: "⏭️",
-        deltas: { energy: -0.12, valence: -0.12, social: -0.05 },
-      },
+      { emoji: '🥣', label: 'Proper breakfast — eggs, toast, the works' },
+      { emoji: '☕', label: 'Just coffee. Coffee IS breakfast.' },
+      { emoji: '🍩', label: "Leftover pizza? Don't judge me." },
     ],
   },
   {
-    id: "evening",
-    segmentLabel: "Evening",
-    weight: 1.5,
-    narratives: {
-      present: "Evening is rolling in. The day is mostly behind you.",
-      past: "By evening, the day had really stacked up.",
-      future: "Tonight is still ahead. Picture how you'd want it to go.",
-    },
+    time: '12:30 PM',
+    location: 'Work / Desk',
+    emoji: '💻',
+    colors: ['#1e40af', '#60a5fa'],
+    narrative: "It's lunchtime. Your coworker wants to try a new place.",
+    subtext: "But you're in the middle of something...",
     choices: [
-      {
-        id: "evening_treat",
-        label: "Treat yourself. You earned it.",
-        emoji: "🎁",
-        deltas: { energy: 0.1, valence: 0.2, social: 0.1 },
-      },
-      {
-        id: "evening_couch",
-        label: "Couch, show, something easy",
-        emoji: "🛋️",
-        deltas: { energy: -0.15, valence: 0.1, social: -0.1 },
-      },
-      {
-        id: "evening_still",
-        label: "Still finishing work, dinner can wait",
-        emoji: "💼",
-        deltas: { energy: 0.05, valence: -0.15, social: -0.05 },
-      },
+      { emoji: '🤝', label: "Let's go! I need a break anyway" },
+      { emoji: '🥡', label: "Order delivery — I'm in the zone" },
+      { emoji: '😅', label: 'I forgot to eat... is it 12:30 already?' },
     ],
   },
   {
-    id: "night",
-    segmentLabel: "Late Night",
-    weight: 1.2,
-    narratives: {
-      present: "It's late. The world's quiet and you're still up.",
-      past: "Last night ran long. You were up later than planned.",
-      future: "Late tonight, after everything winds down...",
-    },
+    time: '3:45 PM',
+    location: 'Break Room',
+    emoji: '🥱',
+    colors: ['#6d28d9', '#a78bfa'],
+    narrative: 'The afternoon slump hits HARD. You need fuel.',
+    subtext: 'Your energy is fading fast.',
     choices: [
-      {
-        id: "night_chill",
-        label: "Chill mode, screen and snacks",
-        emoji: "📺",
-        deltas: { energy: -0.1, valence: 0.15, social: -0.05 },
-      },
-      {
-        id: "night_crave",
-        label: "Late-night craving hitting hard",
-        emoji: "🌙",
-        deltas: { energy: 0.05, valence: 0.1, social: -0.02 },
-      },
-      {
-        id: "night_wired",
-        label: "Wired, can't sleep yet",
-        emoji: "👀",
-        deltas: { energy: 0.15, valence: -0.05, social: -0.05 },
-      },
+      { emoji: '🍫', label: 'Vending machine raid — chocolate saves' },
+      { emoji: '🍵', label: 'Green tea & a handful of nuts' },
+      { emoji: '💪', label: 'Walk it off, no snack needed' },
+    ],
+  },
+  {
+    time: '6:30 PM',
+    location: 'Home',
+    emoji: '🌆',
+    colors: ['#7c2d12', '#f97316', '#fbbf24'],
+    locations: [0, 0.6, 1],
+    narrative: "You're finally home. The day is done.",
+    subtext: 'How are you feeling right now?',
+    choices: [
+      { emoji: '🛋️', label: 'Exhausted — comfort food and chill' },
+      { emoji: '🎉', label: "Wired — let's go OUT tonight" },
+      { emoji: '😌', label: 'Peaceful — something light and easy' },
     ],
   },
 ];
 
-const SEQUENCES: Record<
-  TimeSlot,
-  Array<{ id: BeatId; perspective: "past" | "present" | "future" }>
-> = {
-  morning: [
-    { id: "morning", perspective: "present" },
-    { id: "lunch", perspective: "future" },
-    { id: "evening", perspective: "future" },
-  ],
-  afternoon: [
-    { id: "morning", perspective: "past" },
-    { id: "lunch", perspective: "present" },
-    { id: "evening", perspective: "future" },
-  ],
-  evening: [
-    { id: "morning", perspective: "past" },
-    { id: "lunch", perspective: "past" },
-    { id: "evening", perspective: "present" },
-  ],
-  night: [
-    { id: "lunch", perspective: "past" },
-    { id: "evening", perspective: "past" },
-    { id: "night", perspective: "present" },
-  ],
-};
-
-const COLD_OPENS: Record<TimeSlot, { title: string; subtitle: string }> = {
-  morning: {
-    title: "Good morning. Let's set the scene.",
-    subtitle:
-      "Walk us through how today's likely to unfold. We'll pick food that fits.",
-  },
-  afternoon: {
-    title: "Hey, mid-day check-in",
-    subtitle:
-      "Tell us how your day's gone so far. We'll suggest something that fits the rest of it.",
-  },
-  evening: {
-    title: "Long day? Let's wrap it right.",
-    subtitle:
-      "Walk us through your day. We'll find food that matches the mood.",
-  },
-  night: {
-    title: "Still up? Same.",
-    subtitle: "Tell us how the day landed. We'll find something for right now.",
-  },
-};
-
-export const MOOD_REVEAL_COPY: Record<string, string> = {
-  happy: "Bright day. You're riding good energy into your next meal.",
-  tired: "Long day. Your body is asking for something easy and comforting.",
-  stressed: "Full-on day. Let's find food that takes the edge off.",
-  celebrating: "You turned the day into a win. Time to eat like it.",
-  relaxed: "Steady, unhurried vibes. Food should feel unforced.",
-  adventurous: "Your day had twists. You're ready for something bold.",
-};
-
-export const STORY_FOLLOW_UP = {
-  craving: {
-    title: "What sounds good right now?",
-    subtitle: "Pick the vibe your stomach is asking for.",
-    options: [
-      { value: "spicy", label: "Spicy", emoji: "🌶️" },
-      { value: "sweet", label: "Sweet", emoji: "🍯" },
-      { value: "comfort", label: "Comfort Food", emoji: "🍲" },
-      { value: "healthy", label: "Healthy", emoji: "🥗" },
-      { value: "light", label: "Light", emoji: "🌿" },
-      { value: "indulgent", label: "Indulgent", emoji: "🍰" },
+/** Index order matters — matched by the scorer in storyEngine.ts (0=comfort,1=social,2=balanced,3=chaotic). */
+export const DAY_MOODS: DayMood[] = [
+  {
+    emoji: '😌',
+    label: 'Cozy & Drained',
+    desc: 'You had a long one. Your body wants warmth, comfort, and zero decision-making. Let us handle dinner.',
+    tags: [
+      { emoji: '🔋', label: 'Low energy' },
+      { emoji: '🧸', label: 'Comfort zone' },
+      { emoji: '🍲', label: 'Warm foods' },
     ],
+    mood: 'tired',
+    craving: 'comfort',
+    budget: 'medium',
+    preference: 'both',
   },
-  budget: {
-    title: "What's realistic right now?",
-    subtitle: "No judgment. We'll match spots to your spend.",
-    options: [
-      { value: "low", label: "Budget", subtitle: "Under ₹200", emoji: "💰" },
-      {
-        value: "medium",
-        label: "Moderate",
-        subtitle: "₹200 – ₹500",
-        emoji: "💰💰",
-      },
-      {
-        value: "high",
-        label: "Splurge",
-        subtitle: "Above ₹500",
-        emoji: "💰💰💰",
-      },
+  {
+    emoji: '⚡',
+    label: 'Hyped & Social',
+    desc: "You're buzzing! Today gave you energy and you want to keep the momentum going with bold, fun food.",
+    tags: [
+      { emoji: '🔥', label: 'High energy' },
+      { emoji: '🎯', label: 'Adventurous' },
+      { emoji: '🌮', label: 'Bold flavors' },
     ],
+    mood: 'celebrating',
+    craving: 'spicy',
+    budget: 'medium',
+    preference: 'both',
   },
-  preference: {
-    title: "Any dietary lines?",
-    subtitle: "So we only suggest what works for you.",
-    options: [
-      { value: "veg", label: "Vegetarian", emoji: "🥬" },
-      { value: "non-veg", label: "Non-Veg", emoji: "🍗" },
-      { value: "both", label: "No Preference", emoji: "🍽️" },
+  {
+    emoji: '🧘',
+    label: 'Balanced & Mindful',
+    desc: 'You navigated the day with intention. You want something nourishing that matches your centered state.',
+    tags: [
+      { emoji: '✨', label: 'Centered' },
+      { emoji: '🥗', label: 'Clean eats' },
+      { emoji: '💚', label: 'Feel-good' },
     ],
+    mood: 'relaxed',
+    craving: 'healthy',
+    budget: 'medium',
+    preference: 'both',
   },
-};
-
-export function getCurrentTimeSlot(now: Date = new Date()): TimeSlot {
-  const h = now.getHours();
-  if (h >= 5 && h < 11) return "morning";
-  if (h >= 11 && h < 17) return "afternoon";
-  if (h >= 17 && h < 22) return "evening";
-  return "night";
-}
-
-export function getActiveStory(now: Date = new Date()): ActiveStory {
-  const timeSlot = getCurrentTimeSlot(now);
-  const sequence = SEQUENCES[timeSlot];
-  const beats: ActiveStoryBeat[] = sequence.map((step) => {
-    const beat = STORY_BEATS_CATALOG.find((b) => b.id === step.id)!;
-    return {
-      id: beat.id,
-      segmentLabel: beat.segmentLabel,
-      weight: beat.weight,
-      narrative: beat.narratives[step.perspective],
-      choices: beat.choices,
-    };
-  });
-  return {
-    timeSlot,
-    coldOpen: COLD_OPENS[timeSlot],
-    beats,
-    segments: beats.map((b) => b.segmentLabel),
-    followUp: STORY_FOLLOW_UP,
-  };
-}
-
-export function getChoiceById(choiceId: string) {
-  for (const beat of STORY_BEATS_CATALOG) {
-    const choice = beat.choices.find((c) => c.id === choiceId);
-    if (choice) return { choice, beat };
-  }
-  return null;
-}
-
-export function getMoodCravingFollowUp(mood: string) {
-  const copies: Record<string, { title: string; subtitle: string }> = {
-    stressed: {
-      title: "What kind of fix sounds right?",
-      subtitle: "Food helps. Let's find the right one.",
-    },
-    happy: {
-      title: "What amplifies the good mood?",
-      subtitle: "You're on a roll — keep it going.",
-    },
-    tired: {
-      title: "What would actually help right now?",
-      subtitle: "Low energy. No pressure — pick honestly.",
-    },
-    celebrating: {
-      title: "What matches the moment?",
-      subtitle: "Tonight deserves something special.",
-    },
-    relaxed: {
-      title: "What fits the chill?",
-      subtitle: "No rush. What sounds just right?",
-    },
-    adventurous: {
-      title: "How bold are we going?",
-      subtitle: "You're up for anything — what calls you?",
-    },
-  };
-  const copy = copies[mood] ?? copies.relaxed;
-  return { ...copy, options: STORY_FOLLOW_UP.craving.options };
-}
+  {
+    emoji: '🤪',
+    label: 'Chaotic & Hungry',
+    desc: "What a wild ride. You forgot to eat, made impulsive choices, and now you're STARVING. Feed the chaos.",
+    tags: [
+      { emoji: '🌪️', label: 'Chaotic' },
+      { emoji: '😈', label: 'No rules' },
+      { emoji: '🍔', label: 'MAX portions' },
+    ],
+    mood: 'adventurous',
+    craving: 'comfort',
+    budget: 'medium',
+    preference: 'both',
+  },
+];

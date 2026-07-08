@@ -1,37 +1,80 @@
-import { useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  ScrollView,
-  Animated,
-} from 'react-native';
+import { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  CHARACTER_QUESTION_BANK,
-  FIRST_QUESTION_ID,
-  TOTAL_QUESTIONS,
-  type CharacterQuestionOption,
-} from '../../src/constants/characters';
-import { buildUserVector, matchCharacter } from '../../src/utils/characterEngine';
+import { LinearGradient } from 'expo-linear-gradient';
+import { CHAR_QUESTIONS, TOTAL_CHAR_QUESTIONS, type CharacterProfile } from '../../src/constants/characters';
+import { getCharacterMatch } from '../../src/utils/characterEngine';
+import { fw } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
+import { bounceIn, floatLoop } from '../../src/utils/animations';
 
-type Phase = 'questions' | 'reveal';
+function Sparkle({ style, emoji, duration }: { style: object; emoji: string; duration: number }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = floatLoop(translateY, 10, duration);
+    return () => loop.stop();
+  }, []);
+  return <Animated.Text style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>{emoji}</Animated.Text>;
+}
+
+function Reveal({ character, onContinue }: { character: CharacterProfile; onContinue: () => void }) {
+  const emojiScale = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    bounceIn(emojiScale);
+  }, []);
+
+  return (
+    <LinearGradient colors={character.bg} style={{ flex: 1 }}>
+      <Sparkle emoji="✨" duration={3000} style={{ top: 40, left: 30, fontSize: 24, opacity: 0.6 }} />
+      <Sparkle emoji="⭐" duration={2500} style={{ top: 80, right: 40, fontSize: 20, opacity: 0.4 }} />
+      <Sparkle emoji="✨" duration={2000} style={{ top: 200, left: 20, fontSize: 16, opacity: 0.3 }} />
+
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 }}>
+        <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 3, textTransform: 'uppercase' }]}>
+          Tonight you are
+        </Text>
+        <Animated.Text style={{ fontSize: 80, marginVertical: 8, transform: [{ scale: emojiScale }] }}>
+          {character.emoji}
+        </Animated.Text>
+        <Text style={[fw(900), { fontSize: 32, color: '#fff', textAlign: 'center' }]}>{character.name}</Text>
+        <Text style={[fw(700), { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>{character.show}</Text>
+
+        <View style={{ marginTop: 24, padding: 20, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', width: '100%' }}>
+          <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }]}>
+            Their signature order
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Text style={{ fontSize: 40 }}>{character.mealEmoji}</Text>
+            <View>
+              <Text style={[fw(800), { fontSize: 18, color: '#fff' }]}>{character.mealName}</Text>
+              <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }]}>{character.mealDesc}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 12, maxWidth: 280, lineHeight: 20 }]}>
+          {character.quote}
+        </Text>
+
+        <TouchableOpacity onPress={onContinue} activeOpacity={0.85} style={{ width: '100%', marginTop: 20 }}>
+          <View style={{ height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={[fw(900), { fontSize: 16, color: '#1a1a2e' }]}>🍽️ Find meals like this</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </LinearGradient>
+  );
+}
 
 export default function CharacterMatchScreen() {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>('questions');
-  const [currentQuestionId, setCurrentQuestionId] = useState(FIRST_QUESTION_ID);
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [selectedOptions, setSelectedOptions] = useState<CharacterQuestionOption[]>([]);
-  const [matchResult, setMatchResult] = useState<ReturnType<typeof matchCharacter> | null>(null);
-  const [budget, setBudget] = useState<string | null>(null);
-  const [preference, setPreference] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<number[]>([]);
+  const [match, setMatch] = useState<CharacterProfile | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const question = CHARACTER_QUESTION_BANK[currentQuestionId];
+  const question = CHAR_QUESTIONS[step];
 
   const animateNext = (cb: () => void) => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
@@ -40,206 +83,107 @@ export default function CharacterMatchScreen() {
     });
   };
 
-  const handleSelect = (option: CharacterQuestionOption) => {
-    const newSelections = [...selectedOptions, option];
-    setSelectedOptions(newSelections);
+  const handleSelect = (optionIndex: number) => {
+    const newAnswers = [...answers, optionIndex];
+    setAnswers(newAnswers);
 
-    if (!option.next) {
-      // Terminal — compute match
-      const userVec = buildUserVector(newSelections);
-      const result = matchCharacter(userVec);
-      setMatchResult(result);
-      trackEvent('character_matched', { character: result.character.id, match: result.matchPercent });
-      animateNext(() => setPhase('reveal'));
-    } else {
-      animateNext(() => {
-        setCurrentQuestionId(option.next!);
-        setQuestionIndex((i) => i + 1);
-      });
-    }
+    setTimeout(() => {
+      if (step < CHAR_QUESTIONS.length - 1) {
+        animateNext(() => setStep((s) => s + 1));
+      } else {
+        const result = getCharacterMatch(newAnswers);
+        trackEvent('character_matched', { character: result.name });
+        setMatch(result);
+      }
+    }, 400);
   };
 
-  const handleConfirm = () => {
-    if (!matchResult || !budget || !preference) return;
-    const char = matchResult.character;
-    const results = {
-      mood: char.mood,
-      craving: char.craving,
-      budget,
-      preference,
-      gameData: {
-        type: 'character_match',
-        characterId: char.id,
-        characterName: char.name,
-        matchPercent: matchResult.matchPercent,
-      },
-    };
-    trackEvent('game_completed', { game: 'character', results });
-    router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
-  };
+  if (match) {
+    return (
+      <Reveal
+        character={match}
+        onContinue={() => {
+          const results = {
+            mood: match.mood,
+            craving: match.craving,
+            budget: match.budget,
+            preference: match.preference,
+            gameData: { type: 'character_match', character: match.name },
+          };
+          trackEvent('game_completed', { game: 'character', results });
+          router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
+        }}
+      />
+    );
+  }
 
-  const progress = (questionIndex / TOTAL_QUESTIONS) * 100;
+  const progress = ((step + 1) / TOTAL_CHAR_QUESTIONS) * 100;
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" />
-
-      {/* Header */}
-      <View className="flex-row items-center px-6 pt-4 pb-2">
+    <LinearGradient colors={['#1e1b4b', '#312e81']} style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" />
+      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
-          onPress={() => router.back()}
-          className="mr-4 w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+          onPress={() => router.push('/home')}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text className="text-gray-700 text-lg">←</Text>
+          <Text style={{ fontSize: 18, color: '#fff' }}>←</Text>
         </TouchableOpacity>
-        <View className="flex-1">
-          <Text className="text-xl font-bold text-gray-900">Character Match</Text>
-          {phase === 'questions' && (
-            <Text className="text-gray-400 text-sm">
-              Question {questionIndex + 1} of {TOTAL_QUESTIONS}
-            </Text>
-          )}
+        <View style={{ flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={['#a78bfa', '#c084fc']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ height: '100%', width: `${progress}%`, borderRadius: 3 }}
+          />
         </View>
+        <Text style={[fw(800), { fontSize: 13, color: 'rgba(255,255,255,0.5)' }]}>
+          {step + 1}/{TOTAL_CHAR_QUESTIONS}
+        </Text>
       </View>
 
-      {phase === 'questions' && (
-        <View className="mx-6 h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-          <View className="h-1.5 bg-orange-500 rounded-full" style={{ width: `${progress}%` }} />
-        </View>
-      )}
-
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 24, paddingBottom: 48 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={{ opacity: fadeAnim }}>
-
-          {/* QUESTIONS */}
-          {phase === 'questions' && question && (
-            <View>
-              <Text className="text-2xl font-bold text-gray-900 mb-2 leading-snug">
-                {question.prompt}
+      <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 28 }} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: fadeAnim, gap: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 36 }}>{question.emoji}</Text>
+            <View style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.2)' }}>
+              <Text style={[fw(800), { fontSize: 11, color: '#c4b5fd', letterSpacing: 1, textTransform: 'uppercase' }]}>
+                Character Match
               </Text>
-              {question.subtitle ? (
-                <Text className="text-gray-500 text-base mb-8">{question.subtitle}</Text>
-              ) : (
-                <View className="mb-8" />
-              )}
-              {question.options.map((option) => (
-                <TouchableOpacity
-                  key={option.id}
-                  onPress={() => handleSelect(option)}
-                  className="border-2 border-gray-100 rounded-2xl p-4 mb-3 flex-row items-center bg-white"
-                  activeOpacity={0.75}
-                  style={{ elevation: 1 }}
-                >
-                  <Text style={{ fontSize: 28 }} className="mr-4">{option.emoji}</Text>
-                  <Text className="flex-1 text-gray-800 font-medium text-base">{option.label}</Text>
-                  <Text className="text-gray-300 text-xl">›</Text>
-                </TouchableOpacity>
-              ))}
             </View>
-          )}
+          </View>
+          <Text style={[fw(900), { fontSize: 22, color: '#fff', lineHeight: 28 }]}>{question.question}</Text>
 
-          {/* REVEAL */}
-          {phase === 'reveal' && matchResult && (
-            <View>
-              <View className="items-center py-6 bg-orange-50 rounded-3xl mb-6">
-                <Text style={{ fontSize: 64 }}>{matchResult.character.emoji}</Text>
-                <Text className="text-xl font-bold text-gray-900 mt-3">
-                  You are {matchResult.character.name}
-                </Text>
-                <Text className="text-orange-500 font-semibold text-sm mt-1">
-                  {matchResult.matchPercent}% match
-                </Text>
-                <Text className="text-gray-500 text-xs mt-0.5">{matchResult.character.show}</Text>
-                <Text className="text-gray-600 text-sm text-center mt-3 px-6 italic">
-                  "{matchResult.character.tagline}"
-                </Text>
-                <Text className="text-gray-500 text-sm text-center mt-2 px-6">
-                  {matchResult.character.vibe}
-                </Text>
-              </View>
-
-              <Text className="text-gray-700 font-semibold mb-2 text-center">
-                🍽️ Signature food: {matchResult.character.signatureFood}
-              </Text>
-
-              {/* Runner-ups */}
-              {matchResult.runnerUps.length > 0 && (
-                <View className="flex-row gap-3 mb-6">
-                  {matchResult.runnerUps.map((r) => (
-                    <View key={r.character.id} className="flex-1 bg-gray-50 rounded-xl p-3 items-center">
-                      <Text style={{ fontSize: 24 }}>{r.character.emoji}</Text>
-                      <Text className="text-xs text-gray-600 font-medium mt-1 text-center">{r.character.name}</Text>
-                      <Text className="text-xs text-gray-400">{r.matchPercent}%</Text>
-                    </View>
-                  ))}
+          <View style={{ gap: 10, marginTop: 4 }}>
+            {question.options.map((opt, i) => (
+              <TouchableOpacity
+                key={i}
+                activeOpacity={0.8}
+                onPress={() => handleSelect(i)}
+                style={{
+                  padding: 14,
+                  paddingHorizontal: 18,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  borderWidth: 2,
+                  borderColor: 'rgba(255,255,255,0.08)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: opt.iconBg, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
                 </View>
-              )}
-
-              {/* Budget */}
-              {!budget && (
-                <View className="mt-2">
-                  <Text className="text-lg font-bold text-gray-900 mb-4 text-center">
-                    What's your budget tonight?
-                  </Text>
-                  <View className="flex-row gap-3">
-                    {[
-                      { v: 'low', label: '💰\nBudget' },
-                      { v: 'medium', label: '💰💰\nModerate' },
-                      { v: 'high', label: '💰💰💰\nSplurge' },
-                    ].map(({ v, label }) => (
-                      <TouchableOpacity
-                        key={v}
-                        onPress={() => setBudget(v)}
-                        className="flex-1 border-2 border-orange-200 rounded-xl py-3 items-center bg-orange-50"
-                      >
-                        <Text className="text-center text-xs font-semibold text-gray-700">{label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[fw(800), { fontSize: 14, color: '#fff' }]}>{opt.label}</Text>
+                  <Text style={[fw(600), { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }]}>{opt.sub}</Text>
                 </View>
-              )}
-
-              {/* Preference */}
-              {budget && !preference && (
-                <View className="mt-4">
-                  <Text className="text-lg font-bold text-gray-900 mb-4 text-center">
-                    Dietary preference?
-                  </Text>
-                  <View className="flex-row gap-3">
-                    {[
-                      { v: 'veg', label: '🥬\nVeg' },
-                      { v: 'non-veg', label: '🍗\nNon-Veg' },
-                      { v: 'both', label: '🍽️\nBoth' },
-                    ].map(({ v, label }) => (
-                      <TouchableOpacity
-                        key={v}
-                        onPress={() => setPreference(v)}
-                        className="flex-1 border-2 border-orange-200 rounded-xl py-3 items-center bg-orange-50"
-                      >
-                        <Text className="text-center text-xs font-semibold text-gray-700">{label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Confirm */}
-              {budget && preference && (
-                <TouchableOpacity
-                  onPress={handleConfirm}
-                  className="mt-6 bg-orange-500 rounded-2xl py-4 items-center"
-                >
-                  <Text className="text-white text-lg font-bold">Get My Meals ✨</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
+              </TouchableOpacity>
+            ))}
+          </View>
         </Animated.View>
       </ScrollView>
-    </SafeAreaView>
+    </LinearGradient>
   );
 }
