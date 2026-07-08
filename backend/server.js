@@ -110,16 +110,14 @@ app.get("/api/waitlist/count", async (req, res) => {
 app.post("/api/waitlist", async (req, res) => {
   const { name, email, city, cuisine } = req.body;
 
-  if (!name || !email || !city) {
-    return res
-      .status(400)
-      .json({ error: "Name, email, and city are required" });
+  if (!name || !email) {
+    return res.status(400).json({ error: "Name and email are required" });
   }
 
   try {
     const result = await query(
       "INSERT INTO waitlist (name, email, city, cuisine) VALUES ($1, $2, $3, $4) RETURNING *",
-      [name, email, city, cuisine || null],
+      [name, email, city || null, cuisine || null],
     );
     res.status(201).json({
       success: true,
