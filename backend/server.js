@@ -9,7 +9,11 @@ import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 import characterMatchRouter from "./routes/characterMatch.js";
 import swiggyRouter from "./routes/swiggy.js";
 import swiggyAuthRouter from "./routes/swiggyAuth.js";
-import { sessionMiddleware, getUserMe } from "./middleware/session.js";
+import {
+  sessionMiddleware,
+  getUserMe,
+  updateUserProfile,
+} from "./middleware/session.js";
 
 dotenv.config();
 
@@ -112,6 +116,44 @@ app.get("/api/user/me", async (req, res) => {
   } catch (error) {
     console.error("/api/user/me error:", error);
     res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
+
+// Update user profile (name, email, phone)
+app.put("/api/user/me", async (req, res) => {
+  try {
+    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
+    if (!sessionId) {
+      return res.status(400).json({ error: "No session id provided" });
+    }
+
+    const { name, email, phone } = req.body || {};
+    const trimmedEmail = typeof email === "string" ? email.trim() : email;
+    const trimmedPhone = typeof phone === "string" ? phone.trim() : phone;
+
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
+    if (trimmedPhone && !/^[\d\s+\-()]{6,20}$/.test(trimmedPhone)) {
+      return res.status(400).json({ error: "Invalid phone number" });
+    }
+
+    const me = await updateUserProfile(sessionId, {
+      name: name === undefined ? undefined : name?.trim() || null,
+      email: trimmedEmail === undefined ? undefined : trimmedEmail || null,
+      phone: trimmedPhone === undefined ? undefined : trimmedPhone || null,
+    });
+    res.json({ success: true, user: me });
+  } catch (error) {
+    console.error("PUT /api/user/me error:", error);
+    const isUnique = /unique/i.test(error.message);
+    res
+      .status(isUnique ? 409 : 500)
+      .json({
+        error: isUnique
+          ? "Email or phone already in use"
+          : "Failed to update profile",
+      });
   }
 });
 

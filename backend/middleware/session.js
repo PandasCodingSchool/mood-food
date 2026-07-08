@@ -97,6 +97,49 @@ export async function getUserMe(sessionId) {
   };
 }
 
+export async function updateUserProfile(sessionId, profile) {
+  const user = await getOrCreateUser(sessionId);
+  const db = getDb();
+  const pg = isPostgres();
+
+  const setFields = [];
+  const values = [];
+  let idx = 1;
+
+  if (profile.name !== undefined) {
+    setFields.push(pg ? `name = $${idx++}` : "name = ?");
+    values.push(profile.name || null);
+  }
+  if (profile.email !== undefined) {
+    setFields.push(pg ? `email = $${idx++}` : "email = ?");
+    values.push(profile.email || null);
+  }
+  if (profile.phone !== undefined) {
+    setFields.push(pg ? `phone = $${idx++}` : "phone = ?");
+    values.push(profile.phone || null);
+  }
+  if (setFields.length === 0) {
+    return getUserMe(sessionId);
+  }
+
+  setFields.push(
+    pg ? `updated_at = CURRENT_TIMESTAMP` : "updated_at = CURRENT_TIMESTAMP",
+  );
+  values.push(user.id);
+
+  const sql = pg
+    ? `UPDATE users SET ${setFields.join(", ")} WHERE id = $${idx} RETURNING *`
+    : `UPDATE users SET ${setFields.join(", ")} WHERE id = ?`;
+
+  if (pg) {
+    await db.query(sql, values);
+  } else {
+    await db.run(sql, values);
+  }
+
+  return getUserMe(sessionId);
+}
+
 export function sessionMiddleware() {
   return async (req, res, next) => {
     try {

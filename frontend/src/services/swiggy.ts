@@ -195,3 +195,26 @@ export async function unlinkSwiggyOAuth(): Promise<boolean> {
     return false;
   }
 }
+
+export type UserProfileUpdate = {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+export async function updateUserProfile(
+  profile: UserProfileUpdate,
+): Promise<MoodFoodUser | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/user/me`, {
+      method: "PUT",
+      headers: headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify(profile),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? (data.user as MoodFoodUser) : null;
+  } catch {
+    return null;
+  }
+}

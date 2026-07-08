@@ -20,6 +20,7 @@ import {
   Wallet,
   Link2,
   Unlink,
+  Pencil,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import {
@@ -31,9 +32,11 @@ import {
   fetchUser,
   initiateSwiggyOAuth,
   unlinkSwiggyOAuth,
+  updateUserProfile,
   type EnrichedMatch,
   type SwiggyAddress,
   type MoodFoodUser,
+  type UserProfileUpdate,
 } from "../services/swiggy";
 import { trackEvent } from "../utils/analytics";
 import { openSwiggy } from "../utils/deliveryLinks";
@@ -117,6 +120,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // Swiggy live discovery (Phase 1): real restaurant matches per dish
   const swiggyLive = isSwiggyLive();
   const [user, setUser] = useState<MoodFoodUser | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState<UserProfileUpdate>({});
+  const [profileError, setProfileError] = useState<string>("");
   const [addresses, setAddresses] = useState<SwiggyAddress[]>([]);
   const [addressId, setAddressId] = useState<string>(getSavedAddressId());
   const [swiggyMatches, setSwiggyMatches] = useState<
@@ -203,21 +209,18 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
   // Load the current MoodFood user + connected account's saved addresses.
   useEffect(() => {
-    if (!swiggyLive) return;
     fetchUser().then((me) => {
       setUser(me);
-      if (me?.swiggyLinked) {
-        fetchAddresses().then((list) => {
-          setAddresses(list);
-          if (list.length && !getSavedAddressId()) {
-            const home =
-              list.find((a) => a.label.toLowerCase().includes("home")) ||
-              list[0];
-            setAddressId(home.id);
-            saveAddressId(home.id);
-          }
-        });
-      }
+      if (!swiggyLive || !me?.swiggyLinked) return;
+      fetchAddresses().then((list) => {
+        setAddresses(list);
+        if (list.length && !getSavedAddressId()) {
+          const home =
+            list.find((a) => a.label.toLowerCase().includes("home")) || list[0];
+          setAddressId(home.id);
+          saveAddressId(home.id);
+        }
+      });
     });
   }, [swiggyLive]);
 
@@ -394,6 +397,37 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           : null,
       );
       setAddresses([]);
+    }
+  };
+
+  const startEditingProfile = () => {
+    setProfileForm({
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+    });
+    setProfileError("");
+    setIsEditingProfile(true);
+  };
+
+  const cancelEditingProfile = () => {
+    setIsEditingProfile(false);
+    setProfileError("");
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileError("");
+    const updated = await updateUserProfile({
+      name: profileForm.name?.trim() || null,
+      email: profileForm.email?.trim() || null,
+      phone: profileForm.phone?.trim() || null,
+    });
+    if (updated) {
+      setUser(updated);
+      setIsEditingProfile(false);
+      trackEvent("profile_saved");
+    } else {
+      setProfileError("Could not save profile. Please try again.");
     }
   };
 
@@ -613,6 +647,105 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                   Disconnect
                 </button>
               </>
+            )}
+          </div>
+        )}
+
+        {/* User profile card */}
+        {showResults && user && (
+          <div className="max-w-md mx-auto mb-6 bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-sm">
+            {!isEditingProfile ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {user.name || "Guest Foodie"}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {user.email ||
+                        user.phone ||
+                        "Add your profile for a personalized experience"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={startEditingProfile}
+                  className="inline-flex items-center gap-1 text-gray-500 hover:text-primary-600 transition-colors"
+                >
+                  <Pencil className="w-4 h-4" />
+                  {user.name || user.email || user.phone ? "Edit" : "Add"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-gray-900">
+                    Your profile
+                  </span>
+                  <button
+                    onClick={cancelEditingProfile}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={profileForm.name || ""}
+                  onChange={(e) =>
+                    setProfileForm((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary-400 outline-none"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={profileForm.email || ""}
+                  onChange={(e) =>
+                    setProfileForm((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary-400 outline-none"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone"
+                  value={profileForm.phone || ""}
+                  onChange={(e) =>
+                    setProfileForm((prev) => ({
+                      ...prev,
+                      phone: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary-400 outline-none"
+                />
+                {profileError && (
+                  <p className="text-red-500 text-xs">{profileError}</p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={cancelEditingProfile}
+                    className="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    className="px-4 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors font-medium"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
