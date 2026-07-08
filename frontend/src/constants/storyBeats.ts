@@ -22,6 +22,12 @@ export interface StoryBeat {
   weight: number;
   /** Narrative copy for each perspective (past/present/future). */
   narratives: Record<Perspective, string>;
+  /**
+   * Optional per-previous-choice narrative variants — when the user's last
+   * pick has an entry here, it replaces the perspective narrative so the
+   * story reacts to what they just chose.
+   */
+  narrativeOverrides?: Record<string, string>;
   choices: StoryChoice[];
 }
 
@@ -74,6 +80,14 @@ export const STORY_BEATS: StoryBeat[] = [
       past: "By lunchtime, the morning had already taken its toll.",
       future: "Lunch is coming up. How do you usually handle it?",
     },
+    narrativeOverrides: {
+      morning_skip:
+        "Lunchtime — and your stomach hasn't forgiven you for skipping breakfast.",
+      morning_snooze:
+        "Lunch already? That extra snooze made the morning fly by.",
+      morning_coffee:
+        "The coffee carried you this far, but by lunch it's wearing thin.",
+    },
     choices: [
       {
         id: "lunch_team",
@@ -106,6 +120,14 @@ export const STORY_BEATS: StoryBeat[] = [
       future:
         "Tonight is still ahead. Picture how you'd want it to go.",
     },
+    narrativeOverrides: {
+      lunch_skip:
+        "Evening now — and you still haven't eaten properly today. Tonight matters.",
+      lunch_team:
+        "Evening's here. The good lunch energy carried the afternoon.",
+      lunch_desk:
+        "Evening at last. Eating at your desk didn't count as a break, did it?",
+    },
     choices: [
       {
         id: "evening_treat",
@@ -136,6 +158,14 @@ export const STORY_BEATS: StoryBeat[] = [
       present: "It's late. The world's quiet and you're still up.",
       past: "Last night ran long. You were up later than planned.",
       future: "Late tonight, after everything winds down...",
+    },
+    narrativeOverrides: {
+      evening_still:
+        "It's late and you only just closed the laptop. The night is finally yours.",
+      evening_treat:
+        "Still up, still riding the treat-yourself high from earlier.",
+      evening_couch:
+        "The couch session rolled straight into late night. No regrets.",
     },
     choices: [
       {
@@ -248,6 +278,7 @@ export interface ActiveStoryBeat {
   scene: StoryBeat["scene"];
   weight: number;
   narrative: string;
+  narrativeOverrides?: Record<string, string>;
   choices: StoryChoice[];
 }
 
@@ -272,6 +303,7 @@ export function getActiveStory(now: Date = new Date()): ActiveStory {
       scene: beat.scene,
       weight: beat.weight,
       narrative: beat.narratives[step.perspective],
+      narrativeOverrides: beat.narrativeOverrides,
       choices: beat.choices,
     };
   });

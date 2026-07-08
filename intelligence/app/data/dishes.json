@@ -1693,7 +1693,7 @@
   },
   {
     "id": "am_004",
-    "name": "Clam Chowder",
+    "name": "Mac and Cheese",
     "cuisine": "american",
     "category": "comfort_food",
     "mood_tags": [
@@ -1702,10 +1702,9 @@
       "sad"
     ],
     "dietary_tags": [
-      "non_veg"
+      "vegetarian"
     ],
     "allergens": [
-      "shellfish",
       "dairy",
       "gluten"
     ],
@@ -1729,7 +1728,7 @@
     "calories": 420,
     "prep_time_min": 15,
     "health_score": 6.0,
-    "image_url": "https://images.unsplash.com/photo-1560684352-8497838a2229?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDbGFtJTIwQ2hvd2RlcnxlbnwwfHx8fDE3ODAzMTIxMjJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "image_url": "https://images.unsplash.com/photo-1667499989723-c4ab9549d63c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxNYWMlMjBhbmQlMjBDaGVlc2V8ZW58MHx8fHwxNzgzNTAxNjYwfDA&ixlib=rb-4.1.0&q=80&w=1080",
     "img_processed": true
   },
   {
@@ -1855,7 +1854,7 @@
   },
   {
     "id": "am_008",
-    "name": "Lobster Roll",
+    "name": "Philly Cheesesteak",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -1866,7 +1865,6 @@
       "non_veg"
     ],
     "allergens": [
-      "shellfish",
       "gluten",
       "dairy"
     ],
@@ -1884,13 +1882,13 @@
       "lunch",
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 7,
     "price_inr": 1200,
     "calories": 480,
     "prep_time_min": 15,
     "health_score": 6.5,
-    "image_url": "https://images.unsplash.com/photo-1666380510734-c81855f0afdb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxMb2JzdGVyJTIwUm9sbHxlbnwwfHx8fDE3ODAzMTIxMjl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "image_url": "https://images.unsplash.com/photo-1734769853702-c7444c039c8c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxQaGlsbHklMjBDaGVlc2VzdGVha3xlbnwwfHx8fDE3ODM1MDE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
     "img_processed": true
   },
   {
@@ -2175,7 +2173,7 @@
   },
   {
     "id": "md_006",
-    "name": "Lamb Kofta",
+    "name": "Chicken Kofta",
     "cuisine": "mediterranean",
     "category": "indulgent",
     "mood_tags": [
@@ -2209,7 +2207,7 @@
     "calories": 480,
     "prep_time_min": 25,
     "health_score": 6.0,
-    "image_url": "https://images.unsplash.com/photo-1771285119318-b342c3ecc51c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxMYW1iJTIwS29mdGF8ZW58MHx8fHwxNzgwMzE2MjUwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "image_url": "https://images.unsplash.com/photo-1603496987351-f84a3ba5ec85?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDaGlja2VuJTIwS29mdGF8ZW58MHx8fHwxNzgzNTAxNjY0fDA&ixlib=rb-4.1.0&q=80&w=1080",
     "img_processed": true
   },
   {
@@ -2639,7 +2637,7 @@
   },
   {
     "id": "cn_008",
-    "name": "Char Siu Bao (BBQ Pork Bun)",
+    "name": "Chicken Bao Bun",
     "cuisine": "chinese",
     "category": "snack",
     "mood_tags": [
@@ -2672,7 +2670,7 @@
     "calories": 280,
     "prep_time_min": 10,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1623130094330-611c88b31bf6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDaGFyJTIwU2l1JTIwQmFvJTIwJTI4QkJRJTIwUG9yayUyMEJ1biUyOXxlbnwwfHx8fDE3ODAzMTYyNzB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "image_url": "https://images.unsplash.com/photo-1670404160617-8ca76c8cc2be?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDaGlja2VuJTIwQmFvJTIwQnVufGVufDB8fHx8MTc4MzUwMTY2N3ww&ixlib=rb-4.1.0&q=80&w=1080",
     "img_processed": true
   },
   {
@@ -3188,11 +3186,12 @@
     "calories": 680,
     "prep_time_min": 25,
     "health_score": 3.5,
-    "image_url": "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDcmlzcHklMjBGcmllZCUyMENoaWNrZW58ZW58MHx8fHwxNzgzNTAxNjY5fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_012",
-    "name": "Ribeye Steak",
+    "name": "Grilled BBQ Chicken Steak",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -3216,13 +3215,14 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 3,
     "price_inr": 900,
     "calories": 750,
     "prep_time_min": 20,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1546964124-0cce460b38f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxHcmlsbGVkJTIwQkJRJTIwQ2hpY2tlbiUyMFN0ZWFrfGVufDB8fHx8MTc4MzUwMTY3Mnww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_013",
@@ -3258,7 +3258,8 @@
     "calories": 320,
     "prep_time_min": 10,
     "health_score": 2.5,
-    "image_url": "https://images.unsplash.com/photo-1573080496219-bb964701c394?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxGcmVuY2glMjBGcmllc3xlbnwwfHx8fDE3ODM1MDE2NzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_014",
@@ -3294,7 +3295,8 @@
     "calories": 350,
     "prep_time_min": 5,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1551024601-bec78aea704b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1601585099780-6b176dc702af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxCYWdlbCUyMHdpdGglMjBDcmVhbSUyMENoZWVzZXxlbnwwfHx8fDE3ODM1MDE2NzZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_015",
@@ -3334,7 +3336,8 @@
     "calories": 420,
     "prep_time_min": 2,
     "health_score": 2.5,
-    "image_url": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1560008581-09826d1de69e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxJY2UlMjBDcmVhbSUyMFN1bmRhZXxlbnwwfHx8fDE3ODM1MDE2Nzh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_016",
@@ -3376,7 +3379,8 @@
     "calories": 240,
     "prep_time_min": 5,
     "health_score": 3.0,
-    "image_url": "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDaG9jb2xhdGUlMjBDaGlwJTIwQ29va2llc3xlbnwwfHx8fDE3ODM1MDE2ODB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_017",
@@ -3416,7 +3420,8 @@
     "calories": 450,
     "prep_time_min": 5,
     "health_score": 3.5,
-    "image_url": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1676300185983-d5f242babe34?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxOZXclMjBZb3JrJTIwQ2hlZXNlY2FrZXxlbnwwfHx8fDE3ODM1MDE2ODJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_018",
@@ -3455,7 +3460,8 @@
     "calories": 300,
     "prep_time_min": 2,
     "health_score": 2.0,
-    "image_url": "https://images.unsplash.com/photo-1551024506-0bccd828d307?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1551024601-bec78aea704b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxHbGF6ZWQlMjBEb251dHN8ZW58MHx8fHwxNzgzNTAxNjg1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_019",
@@ -3492,7 +3498,8 @@
     "calories": 280,
     "prep_time_min": 5,
     "health_score": 4.0,
-    "image_url": "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1607103058027-4c5b42b86a60?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTb2Z0JTIwUHJldHplbHN8ZW58MHx8fHwxNzgzNTAxNjg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_020",
@@ -3530,11 +3537,12 @@
     "calories": 290,
     "prep_time_min": 5,
     "health_score": 3.0,
-    "image_url": "https://images.unsplash.com/photo-1612392062631-94ae9d49edd3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1638368593249-7cadb261e8b3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxIb3QlMjBEb2dzfGVufDB8fHx8MTc4MzUwMTY4OXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_021",
-    "name": "Beef Chili",
+    "name": "Chicken Chili",
     "cuisine": "american",
     "category": "comfort_food",
     "mood_tags": [
@@ -3566,11 +3574,12 @@
     "calories": 420,
     "prep_time_min": 20,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1716535232842-d10da4eb33d5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDaGlja2VuJTIwQ2hpbGl8ZW58MHx8fHwxNzgzNTAxNjkxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_022",
-    "name": "Beef Wellington",
+    "name": "Baked Mac and Cheese with Chicken",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -3596,17 +3605,18 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 7,
     "price_inr": 1200,
     "calories": 680,
     "prep_time_min": 60,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1559847844-5315695dadae?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1701484185547-a71576b65e1a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxCYWtlZCUyME1hYyUyMGFuZCUyMENoZWVzZSUyMHdpdGglMjBDaGlja2VufGVufDB8fHx8MTc4MzUwMTY5NHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_023",
-    "name": "Filet Mignon",
+    "name": "Grilled Chicken Breast Platter",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -3628,17 +3638,18 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 6,
     "price_inr": 1800,
     "calories": 500,
     "prep_time_min": 20,
     "health_score": 6.0,
-    "image_url": "https://images.unsplash.com/photo-1600891964092-4316c288032e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxHcmlsbGVkJTIwQ2hpY2tlbiUyMEJyZWFzdCUyMFBsYXR0ZXJ8ZW58MHx8fHwxNzgzNTAxNjk2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "am_024",
-    "name": "Prime Rib",
+    "name": "Smoked BBQ Chicken",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -3662,13 +3673,14 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 5,
     "price_inr": 1500,
     "calories": 820,
     "prep_time_min": 30,
     "health_score": 4.5,
-    "image_url": "https://images.unsplash.com/photo-1544025162-d76694265947?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1630564510761-a560db92a09b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTbW9rZWQlMjBCQlElMjBDaGlja2VufGVufDB8fHx8MTc4MzUwMTY5OXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "it_011",
@@ -3709,7 +3721,8 @@
     "calories": 560,
     "prep_time_min": 20,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": false
   },
   {
     "id": "it_012",
@@ -3745,7 +3758,8 @@
     "calories": 540,
     "prep_time_min": 35,
     "health_score": 7.0,
-    "image_url": "https://images.unsplash.com/photo-1476124369491-e7addf5db371?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1578935149228-66b184c83e69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTZWFmb29kJTIwUmlzb3R0b3xlbnwwfHx8fDE3ODM1MDE3MDN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "it_013",
@@ -3782,12 +3796,13 @@
     "calories": 480,
     "prep_time_min": 20,
     "health_score": 6.5,
-    "image_url": "https://images.unsplash.com/photo-1626082927389-6cd097cee6a8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1625943553852-781c6dd46faa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTaHJpbXAlMjBTY2FtcGl8ZW58MHx8fHwxNzgzNTAxNzA2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "fr_001",
-    "name": "Duck Confit",
-    "cuisine": "french",
+    "name": "Herb-Roasted Chicken",
+    "cuisine": "mediterranean",
     "category": "indulgent",
     "mood_tags": [
       "romantic",
@@ -3811,13 +3826,14 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 8,
     "price_inr": 900,
     "calories": 620,
     "prep_time_min": 40,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1580554530778-ca36943938b2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1615557960916-5f4791effe9d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxIZXJiLVJvYXN0ZWQlMjBDaGlja2VufGVufDB8fHx8MTc4MzUwMTcwOHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "fr_002",
@@ -3858,21 +3874,24 @@
     "calories": 300,
     "prep_time_min": 10,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1519676867240-f03562e64548?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1656057205408-4a0a62cf2dfb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDcmVwZXN8ZW58MHx8fHwxNzgzNTAxNzEwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "fr_003",
-    "name": "Foie Gras",
-    "cuisine": "french",
+    "name": "Stuffed Mushrooms",
+    "cuisine": "mediterranean",
     "category": "indulgent",
     "mood_tags": [
       "celebratory",
       "romantic"
     ],
     "dietary_tags": [
-      "non_veg"
+      "vegetarian"
     ],
-    "allergens": [],
+    "allergens": [
+      "dairy"
+    ],
     "spice_level": "mild",
     "energy_requirement": 3,
     "social_context_tags": [
@@ -3884,13 +3903,14 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 9,
     "price_inr": 2500,
     "calories": 480,
     "prep_time_min": 10,
     "health_score": 4.0,
-    "image_url": "https://images.unsplash.com/photo-1625944525533-473f1a3d54e7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1622268805718-ca073548d4ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTdHVmZmVkJTIwTXVzaHJvb21zfGVufDB8fHx8MTc4MzUwMTcxMnww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "sf_001",
@@ -3925,12 +3945,13 @@
     "calories": 350,
     "prep_time_min": 20,
     "health_score": 9.0,
-    "image_url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxHcmlsbGVkJTIwU2FsbW9ufGVufDB8fHx8MTc4MzUwMTcxNHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "sf_002",
-    "name": "Lobster",
-    "cuisine": "american",
+    "name": "Butter Garlic Prawns",
+    "cuisine": "indian",
     "category": "indulgent",
     "mood_tags": [
       "celebratory",
@@ -3954,17 +3975,18 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 8,
     "price_inr": 2000,
     "calories": 400,
     "prep_time_min": 20,
     "health_score": 7.0,
-    "image_url": "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1559742811-822873691df8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxCdXR0ZXIlMjBHYXJsaWMlMjBQcmF3bnN8ZW58MHx8fHwxNzgzNTAxNzE2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "sf_003",
-    "name": "Wagyu Beef Steak",
+    "name": "Grilled Fish Steak",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -3987,17 +4009,18 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 8,
     "price_inr": 2500,
     "calories": 700,
     "prep_time_min": 20,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1546964124-0cce460b38f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1641898378716-1f38ec04bb0f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxHcmlsbGVkJTIwRmlzaCUyMFN0ZWFrfGVufDB8fHx8MTc4MzUwMTcxOXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "sf_004",
-    "name": "Oysters on the Half Shell",
+    "name": "Prawn Cocktail",
     "cuisine": "american",
     "category": "indulgent",
     "mood_tags": [
@@ -4021,18 +4044,19 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 8,
     "price_inr": 1200,
     "calories": 100,
     "prep_time_min": 5,
     "health_score": 8.0,
-    "image_url": "https://images.unsplash.com/photo-1621949763386-09aa66605b33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1563223771-5fe4038fbfc9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxQcmF3biUyMENvY2t0YWlsfGVufDB8fHx8MTc4MzUwMTcyMXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "sf_005",
-    "name": "Caviar Platter",
-    "cuisine": "french",
+    "name": "Smoked Salmon Platter",
+    "cuisine": "mediterranean",
     "category": "indulgent",
     "mood_tags": [
       "celebratory",
@@ -4053,13 +4077,14 @@
     "meal_time": [
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 9,
     "price_inr": 3000,
     "calories": 150,
     "prep_time_min": 2,
     "health_score": 7.5,
-    "image_url": "https://images.unsplash.com/photo-1607189200299-f7a83d6c7b3d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1606503136331-ece171077d82?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTbW9rZWQlMjBTYWxtb24lMjBQbGF0dGVyfGVufDB8fHx8MTc4MzUwMTcyNHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_011",
@@ -4097,7 +4122,8 @@
     "calories": 450,
     "prep_time_min": 30,
     "health_score": 7.0,
-    "image_url": "https://images.unsplash.com/photo-1574484284002-952d92456975?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1727280376746-b89107a5b0df?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxUYW5kb29yaSUyMENoaWNrZW58ZW58MHx8fHwxNzgzNTAxNzI2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_012",
@@ -4139,7 +4165,8 @@
     "calories": 80,
     "prep_time_min": 5,
     "health_score": 6.0,
-    "image_url": "https://images.unsplash.com/photo-1567922045116-2a00fae2ed03?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1683533698664-12ee473e8c9d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxNYXNhbGElMjBDaGFpfGVufDB8fHx8MTc4MzUwMTcyOHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_013",
@@ -4177,7 +4204,8 @@
     "calories": 380,
     "prep_time_min": 20,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1683533761804-5fc12be0f684?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxBbG9vJTIwUGFyYXRoYXxlbnwwfHx8fDE3ODM1MDE3MzB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_014",
@@ -4215,7 +4243,8 @@
     "calories": 200,
     "prep_time_min": 10,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1601050690597-df0568f70950?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1653850280260-aa3b9e00b230?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDaGFhdHxlbnwwfHx8fDE3ODM1MDE3MzJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_015",
@@ -4252,7 +4281,8 @@
     "calories": 280,
     "prep_time_min": 20,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1557714605-d48e5d83b741?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1574097596053-4cfe574d3a36?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxLaGVlcnxlbnwwfHx8fDE3ODM1MDE3MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_016",
@@ -4290,7 +4320,8 @@
     "calories": 220,
     "prep_time_min": 20,
     "health_score": 6.0,
-    "image_url": "https://images.unsplash.com/photo-1625398407796-30b1c8d58b05?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1625220194771-7ebdea0b70b9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxNb21vc3xlbnwwfHx8fDE3ODM1MDE3MzZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_017",
@@ -4327,7 +4358,8 @@
     "calories": 350,
     "prep_time_min": 10,
     "health_score": 3.0,
-    "image_url": "https://images.unsplash.com/photo-1666400987234-d5aced8b4ab7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1622715395476-3dbcd161df05?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxKYWxlYml8ZW58MHx8fHwxNzgzNTAxNzM4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_018",
@@ -4366,7 +4398,8 @@
     "calories": 250,
     "prep_time_min": 10,
     "health_score": 4.5,
-    "image_url": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1559561724-4ea348cd867f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxCdXR0ZXIlMjBOYWFufGVufDB8fHx8MTc4MzUwMTc0MXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_019",
@@ -4404,7 +4437,8 @@
     "calories": 400,
     "prep_time_min": 20,
     "health_score": 7.5,
-    "image_url": "https://images.unsplash.com/photo-1645177628172-a4f6d33c0b6e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1668236534990-73c4ed23043c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxSYWptYSUyMENoYXdhbHxlbnwwfHx8fDE3ODM1MDE3NDN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_020",
@@ -4440,7 +4474,8 @@
     "calories": 200,
     "prep_time_min": 15,
     "health_score": 8.0,
-    "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxJZGxpJTIwU2FtYmFyfGVufDB8fHx8MTc4MzUwMTc0NXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_021",
@@ -4475,7 +4510,8 @@
     "calories": 180,
     "prep_time_min": 10,
     "health_score": 7.5,
-    "image_url": "https://images.unsplash.com/photo-1614777735417-4bc6f8e2d9a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1607893579544-c205660b5b79?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxQb2hhfGVufDB8fHx8MTc4MzUwMTc0N3ww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_022",
@@ -4511,7 +4547,8 @@
     "calories": 200,
     "prep_time_min": 10,
     "health_score": 7.0,
-    "image_url": "https://images.unsplash.com/photo-1630409351211-d62ab2d24da4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1665660710687-b44c50751054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxVcG1hfGVufDB8fHx8MTc4MzUwMTc0OXww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_023",
@@ -4550,7 +4587,8 @@
     "calories": 580,
     "prep_time_min": 40,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1596797038530-2c107229654b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxNdXR0b24lMjBDdXJyeXxlbnwwfHx8fDE3ODM1MDE3NTJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_024",
@@ -4585,7 +4623,8 @@
     "calories": 520,
     "prep_time_min": 35,
     "health_score": 5.0,
-    "image_url": "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1547592180-85f173990554?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": false
   },
   {
     "id": "in_025",
@@ -4621,7 +4660,8 @@
     "calories": 380,
     "prep_time_min": 25,
     "health_score": 6.5,
-    "image_url": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxTZWVraCUyMEtlYmFic3xlbnwwfHx8fDE3ODM1MDE3NTR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_026",
@@ -4658,7 +4698,8 @@
     "calories": 80,
     "prep_time_min": 5,
     "health_score": 9.0,
-    "image_url": "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1651217611748-7e0d467eec9b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxLYWNodW1iZXIlMjBTYWxhZHxlbnwwfHx8fDE3ODM1MDE3NTd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_027",
@@ -4698,7 +4739,8 @@
     "calories": 460,
     "prep_time_min": 25,
     "health_score": 5.5,
-    "image_url": "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxQYW5lZXIlMjBUaWtrYSUyME1hc2FsYXxlbnwwfHx8fDE3ODM1MDE3NTl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "in_028",
@@ -4735,7 +4777,8 @@
     "calories": 700,
     "prep_time_min": 50,
     "health_score": 4.5,
-    "image_url": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": false
   },
   {
     "id": "hh_001",
@@ -4770,7 +4813,8 @@
     "calories": 280,
     "prep_time_min": 5,
     "health_score": 9.0,
-    "image_url": "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1490371475955-4cb3bfc72f71?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxPdmVybmlnaHQlMjBPYXRzfGVufDB8fHx8MTc4MzUwMTc2Mnww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "hh_002",
@@ -4806,7 +4850,8 @@
     "calories": 350,
     "prep_time_min": 15,
     "health_score": 9.5,
-    "image_url": "https://images.unsplash.com/photo-1546069901-d5bfd2cbfb1f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1623428187969-5da2dcea5ebf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxRdWlub2ElMjBCb3dsfGVufDB8fHx8MTc4MzUwMTc2NHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "hh_003",
@@ -4842,7 +4887,8 @@
     "calories": 150,
     "prep_time_min": 5,
     "health_score": 9.5,
-    "image_url": "https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1519996529931-28324d5a630e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxGcmVzaCUyMEZydWl0JTIwQm93bHxlbnwwfHx8fDE3ODM1MDE3NjZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "hh_004",
@@ -4876,7 +4922,8 @@
     "calories": 200,
     "prep_time_min": 5,
     "health_score": 8.5,
-    "image_url": "https://images.unsplash.com/photo-1488477181946-6428a0291777?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1488477181946-6428a0291777?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": false
   },
   {
     "id": "hh_005",
@@ -4909,7 +4956,8 @@
     "calories": 120,
     "prep_time_min": 10,
     "health_score": 9.5,
-    "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": false
   },
   {
     "id": "hh_006",
@@ -4943,12 +4991,13 @@
     "calories": 250,
     "prep_time_min": 15,
     "health_score": 8.5,
-    "image_url": "https://images.unsplash.com/photo-1516684732162-798a0062be99?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1516684732162-798a0062be99?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": false
   },
   {
     "id": "vn_001",
-    "name": "Pho Bo",
-    "cuisine": "vietnamese",
+    "name": "Chicken Pho",
+    "cuisine": "thai",
     "category": "comfort_food",
     "mood_tags": [
       "adventurous",
@@ -4984,12 +5033,13 @@
     "calories": 380,
     "prep_time_min": 15,
     "health_score": 7.5,
-    "image_url": "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1631709497146-a239ef373cf1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "vn_002",
-    "name": "Banh Mi",
-    "cuisine": "vietnamese",
+    "name": "Vietnamese Chicken Sandwich",
+    "cuisine": "thai",
     "category": "street_food",
     "mood_tags": [
       "adventurous",
@@ -5021,12 +5071,13 @@
     "calories": 320,
     "prep_time_min": 10,
     "health_score": 6.5,
-    "image_url": "https://images.unsplash.com/photo-1600271886742-f049cd451bba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1600271886742-f049cd451bba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": true
   },
   {
     "id": "sp_001",
-    "name": "Seafood Paella",
-    "cuisine": "spanish",
+    "name": "Chicken Paella",
+    "cuisine": "mediterranean",
     "category": "indulgent",
     "mood_tags": [
       "adventurous",
@@ -5037,7 +5088,6 @@
       "non_veg"
     ],
     "allergens": [
-      "shellfish",
       "gluten"
     ],
     "spice_level": "mild",
@@ -5056,12 +5106,13 @@
       "lunch",
       "dinner"
     ],
-    "delivery_friendly": false,
+    "delivery_friendly": true,
     "adventurousness_score": 8,
     "price_inr": 800,
     "calories": 580,
     "prep_time_min": 45,
     "health_score": 7.0,
-    "image_url": "https://images.unsplash.com/photo-1534080564583-6be75777b70a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+    "image_url": "https://images.unsplash.com/photo-1534080564583-6be75777b70a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "img_processed": true
   }
 ]

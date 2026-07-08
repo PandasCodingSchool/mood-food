@@ -43,18 +43,6 @@ const moodEmojis: Record<string, string> = {
   adventurous: "🤩",
 };
 
-// Pretty labels for dietary tags shown on cards (e.g. "non_veg" -> "Non-Veg").
-const TAG_LABELS: Record<string, string> = {
-  non_veg: "Non-Veg",
-  "non-veg": "Non-Veg",
-  nonveg: "Non-Veg",
-  veg: "Veg",
-  vegetarian: "Veg",
-  vegan: "Vegan",
-};
-function formatTag(tag: string): string {
-  return TAG_LABELS[tag.toLowerCase()] || tag.replace(/_/g, " ");
-}
 
 const loaderSteps = [
   { emoji: "🧠", text: "Reading your mood..." },
@@ -670,8 +658,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               return (
                 <div
                   key={item.id}
-                  data-index={index}
-                  className="relative h-[510px] md:h-[520px] perspective-1000 flex-shrink-0 w-[85vw] md:w-auto snap-center"
+
+                  className="relative h-[590px] md:h-[600px] perspective-1000 flex-shrink-0 w-[85vw] md:w-auto snap-center"
+
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
                   {/* Flip Container */}
@@ -759,8 +748,8 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                         </div>
 
                         {/* Body */}
-                        <div className="p-4 flex flex-col gap-2 flex-1 overflow-hidden">
-                          {/* Veg/Non-Veg (real, from the matched Swiggy item) + tags */}
+                        <div className="p-4 flex flex-col gap-2 flex-1 overflow-y-auto">
+                          {/* Veg/Non-Veg + contextual mood tags (AI-generated for this user) */}
                           <div className="flex flex-wrap items-center gap-1">
                             {liveItem?.is_veg != null && (
                               <span
@@ -776,30 +765,14 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                 {liveItem.is_veg ? "Veg" : "Non-Veg"}
                               </span>
                             )}
-                            {(d.tags || [])
-                              .filter(
-                                (t) =>
-                                  !(
-                                    liveItem?.is_veg != null &&
-                                    [
-                                      "veg",
-                                      "vegetarian",
-                                      "vegan",
-                                      "non_veg",
-                                      "non-veg",
-                                      "nonveg",
-                                    ].includes(t.toLowerCase())
-                                  ),
-                              )
-                              .slice(0, 3)
-                              .map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize"
-                                >
-                                  {formatTag(tag)}
-                                </span>
-                              ))}
+                            {(item.ai_reasoning?.context_tags || []).slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-xs bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full font-medium"
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
 
                           {/* Practical details - always show grid for consistency */}
@@ -851,53 +824,52 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                             </div>
                           </div>
 
-                          {/* Restaurant - live Swiggy match when available */}
+                          {/* Restaurant name banner */}
                           <div
-                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs rounded-xl p-2 ${liveRestaurant ? "bg-orange-50 text-orange-700" : "bg-gray-50 text-gray-500"}`}
+                            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 ${liveRestaurant ? "bg-orange-50" : "bg-gray-50"}`}
                           >
-                            <div className="flex items-center gap-1 min-w-0">
-                              <MapPin className="w-3 h-3 shrink-0" />
-                              <span
-                                className={`font-medium truncate ${liveRestaurant ? "text-orange-800" : "text-gray-700"}`}
-                                title={r?.name}
-                              >
-                                {r?.name ||
-                                  (swiggyLive && enriching
-                                    ? "Finding restaurants..."
-                                    : "Local restaurants")}
-                              </span>
+                            <MapPin className={`w-3.5 h-3.5 shrink-0 ${liveRestaurant ? "text-orange-500" : "text-gray-400"}`} />
+                            <span
+                              className={`font-semibold text-sm truncate ${liveRestaurant ? "text-orange-800" : "text-gray-700"}`}
+                              title={r?.name}
+                            >
+                              {r?.name ||
+                                (swiggyLive && enriching
+                                  ? "Finding restaurants..."
+                                  : "Local restaurants")}
+                            </span>
+                          </div>
+
+                          {/* LIVE badge + rating + delivery time */}
+                          {(liveRestaurant || r?.delivery_time_min) && (
+                            <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
                               {liveRestaurant && (
-                                <span className="ml-1 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                                <span className="bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                                   LIVE
                                 </span>
                               )}
                               {r?.rating && (
-                                <span className="flex items-center gap-0.5 ml-1 shrink-0">
+                                <span className="flex items-center gap-0.5">
                                   <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                                  {r.rating}
+                                  <span className="font-medium text-gray-700">{r.rating}</span>
+                                </span>
+                              )}
+                              {r?.delivery_time_min && (
+                                <span className="flex items-center gap-1">
+                                  <Truck className="w-3 h-3" />
+                                  {r.delivery_time_min} min delivery
                                 </span>
                               )}
                             </div>
-                            {r?.delivery_time_min && (
-                              <div className="flex items-center gap-1 shrink-0 sm:ml-2">
-                                <Truck className="w-3 h-3" />
-                                <span>{r.delivery_time_min} min delivery</span>
-                              </div>
-                            )}
-                          </div>
+                          )}
 
-                          {/* The headline is now the real Swiggy dish; show the
-                              AI pick as the "class" it was matched from. */}
-                          {liveItem?.name &&
-                            liveItem.name.toLowerCase() !==
-                              d.name.toLowerCase() && (
-                              <div className="text-[11px] text-gray-500 px-0.5 truncate">
-                                Matches your pick:{" "}
-                                <span className="font-medium text-gray-700">
-                                  {d.name}
-                                </span>
-                              </div>
-                            )}
+                          {/* Why recommended */}
+                          {item.ai_reasoning?.psychological_hook && (
+                            <div className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5 leading-relaxed">
+                              <span className="font-medium text-gray-600">Why this? </span>
+                              {item.ai_reasoning.psychological_hook}
+                            </div>
+                          )}
 
                           {/* Flip hint — offers whatever isn't currently active */}
                           {hasAlternatives && (

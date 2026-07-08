@@ -9,6 +9,7 @@ class AiReasoning(BaseModel):
     context_fit: str
     psychological_hook: str
     nostalgia_factor: Optional[str] = None
+    context_tags: list[str] = Field(default_factory=list)
 
 
 class PracticalDetails(BaseModel):

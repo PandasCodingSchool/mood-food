@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Heart, X, RefreshCw, ChevronLeft } from "lucide-react";
 import { trackEvent } from "../../utils/analytics";
 import type { SwipeItem, SwipeData, GameResult } from "../../types";
+import { reorderDeck } from "../../utils/swipeDeck";
+import { buildGameSignals, deriveBudgetTier } from "../../utils/gameSignals";
+import { BUDGET_TIERS, BUDGET_TIER_BY_VALUE } from "../../constants/budget";
 
 const SWIPE_ITEMS: SwipeItem[] = [
   {
@@ -137,7 +140,10 @@ const PREFERENCE_BY_CATEGORY: Record<string, { title: string; subtitle: string }
 
 function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Adaptive deck: remaining cards re-sort by affinity after each swipe.
+  const [deck, setDeck] = useState<SwipeItem[]>(SWIPE_ITEMS);
   const [swipes, setSwipes] = useState<SwipeData[]>([]);
+  const [budgetChoice, setBudgetChoice] = useState<string | null>(null);
   const [direction, setDirection] = useState<"left" | "right" | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [dragX, setDragX] = useState(0);
@@ -145,8 +151,8 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
   const [pendingResult, setPendingResult] = useState<GameResult | null>(null);
   const touchStartX = useRef<number>(0);
 
-  const currentItem = SWIPE_ITEMS[currentIndex];
-  const progress = (currentIndex / SWIPE_ITEMS.length) * 100;
+  const currentItem = deck[currentIndex];
+  const progress = (currentIndex / deck.length) * 100;
 
   const analyzeSwipes = useCallback((allSwipes: SwipeData[]): GameResult => {
     const likedSwipes = allSwipes.filter((s) => s.liked);
@@ -156,14 +162,18 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
         craving: "comfort",
         budget: "moderate",
         preference: "both",
-        gameData: {
+        gameData: buildGameSignals({
           type: "swipe_vibe",
-          swipes: allSwipes,
-          topCategory: "comfort",
-          topCuisine: "Mixed",
-          likedCount: 0,
+          disliked: allSwipes.map((s) => s.item),
+          cravings: ["comfort"],
           sliderValues: { adventurous: 5, healthConscious: 5, spicy: 5 },
-        },
+          raw: {
+            swipes: allSwipes,
+            topCategory: "comfort",
+            topCuisine: "Mixed",
+            likedCount: 0,
+          },
+        }),
       };
     }
     const countByKey = (key: keyof SwipeData) => {
@@ -201,14 +211,21 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
       craving: topCategory,
       budget: topBudget,
       preference: "both",
-      gameData: {
+      gameData: buildGameSignals({
         type: "swipe_vibe",
-        swipes: allSwipes,
-        topCategory,
-        topCuisine,
-        likedCount: likedSwipes.length,
+        liked: likedSwipes.map((s) => s.item),
+        disliked: allSwipes.filter((s) => !s.liked).map((s) => s.item),
+        cravings: [topCategory],
+        cuisines: [topCuisine],
+        budgetTier: topBudget as "budget" | "moderate" | "splurge",
         sliderValues: { adventurous, healthConscious: health_conscious, spicy },
-      },
+        raw: {
+          swipes: allSwipes,
+          topCategory,
+          topCuisine,
+          likedCount: likedSwipes.length,
+        },
+      }),
     };
   }, []);
 
@@ -237,12 +254,19 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
       setTimeout(() => {
         setDirection(null);
         setIsAnimating(false);
-        if (currentIndex >= SWIPE_ITEMS.length - 1) {
+        if (currentIndex >= deck.length - 1) {
           const results = analyzeSwipes([...swipes, swipeData]);
           trackEvent("swipe_vibe_analyzed", results);
-          // Hold results and show preference step before completing
+          // Hold results and show budget/preference steps before completing
           setPendingResult(results);
         } else {
+          // Re-sort the remaining cards by affinity to what the user has
+          // liked/passed so far (with a periodic breadth probe).
+          const allSwipes = [...swipes, swipeData];
+          setDeck((prev) => [
+            ...prev.slice(0, currentIndex + 1),
+            ...reorderDeck(prev.slice(currentIndex + 1), allSwipes),
+          ]);
           setCurrentIndex((prev) => prev + 1);
         }
       }, 350);
@@ -322,13 +346,91 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
           cursor: "grab",
         };
 
-  // ── Preference step (after all cards are swiped) ────────
+  // ── Budget confirm step (pre-filled from swiped cards) ──
+  if (pendingResult && budgetChoice === null) {
+    const suggestedTier = deriveBudgetTier(
+      swipes.filter((s) => s.liked).map((s) => s.budget),
+    );
+    const suggested = BUDGET_TIER_BY_VALUE[suggestedTier];
+
+    const handleBudgetSelect = (tier: string) => {
+      setBudgetChoice(tier);
+      trackEvent("swipe_vibe_budget_selected", {
+        tier,
+        suggested: suggestedTier,
+      });
+    };
+
+    return (
+      <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={() => setPendingResult(null)}
+            className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" /> Back
+          </button>
+
+          <div className="bg-white rounded-3xl shadow-xl p-8 text-center animate-fade-in">
+            <span className="text-5xl mb-4 block">{suggested.emoji}</span>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Your swipes say {suggested.label.toLowerCase()} — sound right?
+            </h2>
+            <p className="text-gray-500 mb-8 text-sm">
+              Most of your liked picks land around {suggested.subtitle}.
+            </p>
+            <button
+              onClick={() => handleBudgetSelect(suggestedTier)}
+              className="w-full p-5 mb-4 rounded-2xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold text-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+            >
+              Yes, {suggested.label} ({suggested.subtitle})
+            </button>
+            <div className="grid grid-cols-2 gap-3">
+              {BUDGET_TIERS.filter((t) => t.value !== suggestedTier).map(
+                (t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => handleBudgetSelect(t.value)}
+                    className="p-4 rounded-2xl border-2 border-gray-200 hover:border-primary-300 transition-all text-center"
+                  >
+                    <span className="text-2xl mb-1 block">{t.emoji}</span>
+                    <span className="font-semibold text-gray-800 text-sm block">
+                      {t.label}
+                    </span>
+                    <span className="text-xs text-gray-500">{t.subtitle}</span>
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Preference step (after budget confirm) ──────────────
   if (pendingResult) {
-    const topCategory = (pendingResult.gameData as { topCategory?: string })?.topCategory ?? "comfort";
+    const topCategory =
+      ((pendingResult.gameData.raw as { topCategory?: string })?.topCategory ??
+        (pendingResult.gameData as { topCategory?: string })?.topCategory) ||
+      "comfort";
     const copy = PREFERENCE_BY_CATEGORY[topCategory] ?? PREFERENCE_BY_CATEGORY.comfort;
 
     const handlePreferenceSelect = (preference: string) => {
-      const final: GameResult = { ...pendingResult, preference };
+      const budget = (budgetChoice || pendingResult.budget) as
+        | "budget"
+        | "moderate"
+        | "splurge";
+      const final: GameResult = {
+        ...pendingResult,
+        budget,
+        preference,
+        gameData: {
+          ...pendingResult.gameData,
+          budgetTier: budget,
+          dietPreference: preference as "veg" | "non-veg" | "both",
+        },
+      };
       trackEvent("swipe_vibe_complete", final);
       onComplete(final);
     };
@@ -343,7 +445,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
       <div className="min-h-screen pt-20 pb-10 px-4 bg-gradient-to-br from-primary-50 via-white to-secondary-50">
         <div className="max-w-md mx-auto">
           <button
-            onClick={() => setPendingResult(null)}
+            onClick={() => setBudgetChoice(null)}
             className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-6"
           >
             <ChevronLeft className="w-5 h-5 mr-1" /> Back
@@ -398,7 +500,7 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
         <div className="mb-5">
           <div className="flex justify-between text-sm text-gray-500 mb-2">
             <span className="font-medium">
-              {currentIndex + 1} of {SWIPE_ITEMS.length}
+              {currentIndex + 1} of {deck.length}
             </span>
             <span>
               {swipes.filter((s) => s.liked).length} ❤️ &nbsp;·&nbsp;{" "}
@@ -416,13 +518,13 @@ function SwipeVibe({ onComplete, onBack }: SwipeVibeProps) {
         {/* Card stack */}
         <div className="relative mb-6 select-none" style={{ height: "440px" }}>
           {/* Ghost card for depth */}
-          {currentIndex + 1 < SWIPE_ITEMS.length && (
+          {currentIndex + 1 < deck.length && (
             <div
               className="absolute inset-0 bg-white rounded-3xl shadow-md overflow-hidden"
               style={{ transform: "scale(0.95) translateY(12px)", zIndex: 0 }}
             >
               <img
-                src={SWIPE_ITEMS[currentIndex + 1].image}
+                src={deck[currentIndex + 1].image}
                 className="w-full h-64 object-cover opacity-30"
                 alt=""
                 draggable={false}

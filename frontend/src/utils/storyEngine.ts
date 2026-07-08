@@ -64,6 +64,54 @@ export interface StoryMoodResult {
   vector: { energy: number; valence: number; social: number };
 }
 
+// Running mood vector for a partial set of choices (same math as the final
+// reveal, exposed so the next beat can adapt to the trajectory so far).
+export function runningVector(choiceIds: string[]): {
+  energy: number;
+  valence: number;
+  social: number;
+} {
+  const vector = { ...BASE_NEUTRAL };
+  choiceIds.forEach((choiceId) => {
+    const found = getChoiceById(choiceId);
+    if (!found) return;
+    const weight = found.beat.weight ?? 1;
+    DIMENSION_KEYS.forEach((key) => {
+      vector[key] += (found.choice.deltas[key] ?? 0) * weight;
+    });
+  });
+  DIMENSION_KEYS.forEach((key) => {
+    vector[key] = clamp01(vector[key]);
+  });
+  return vector;
+}
+
+// Orders a beat's choices so the one that continues the user's current mood
+// trajectory appears first (dot product of choice deltas with the running
+// vector's offset from neutral). Stable for ties.
+export function orderChoicesByVector<
+  T extends { deltas: { energy: number; valence: number; social: number } },
+>(choices: T[], priorChoiceIds: string[]): T[] {
+  if (priorChoiceIds.length === 0) return choices;
+  const vector = runningVector(priorChoiceIds);
+  const trend = {
+    energy: vector.energy - BASE_NEUTRAL.energy,
+    valence: vector.valence - BASE_NEUTRAL.valence,
+    social: vector.social - BASE_NEUTRAL.social,
+  };
+  return choices
+    .map((choice, i) => ({
+      choice,
+      i,
+      score: DIMENSION_KEYS.reduce(
+        (sum, key) => sum + choice.deltas[key] * trend[key],
+        0,
+      ),
+    }))
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .map((s) => s.choice);
+}
+
 export function computeMoodFromStory(choiceIds: string[]): StoryMoodResult {
   const vector = { ...BASE_NEUTRAL };
 

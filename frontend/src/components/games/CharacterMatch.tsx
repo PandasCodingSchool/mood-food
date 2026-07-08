@@ -20,6 +20,8 @@ import {
   type CharacterMatchResult,
 } from "../../utils/characterEngine";
 import { trackEvent } from "../../utils/analytics";
+import { fetchGameAssist } from "../../services/gameAssist";
+import { buildGameSignals } from "../../utils/gameSignals";
 import type { GameResult } from "../../types";
 
 type Phase = "intro" | "questions" | "computing" | "reveal" | "followUp";
@@ -128,6 +130,8 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
   const [revealStep, setRevealStep] = useState(0); // for staggered reveal animation
   const [followUpStep, setFollowUpStep] = useState<FollowUpStep>("budget");
   const [followUpAnswers, setFollowUpAnswers] = useState<{ budget?: string; preference?: string }>({});
+  // LLM-personalized follow-up phrasing (prefetched during reveal; null = static copy)
+  const [assistPhrase, setAssistPhrase] = useState<string | null>(null);
 
   const currentQuestion = CHARACTER_QUESTION_BANK[currentQuestionId];
   // depth = how many questions answered so far + 1
@@ -273,6 +277,23 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
     setFollowUpStep("budget");
     setFollowUpAnswers({});
     setPhase("followUp");
+    // Prefetch a character-voiced budget question; static copy renders if
+    // this doesn't resolve in time.
+    if (!assistPhrase) {
+      fetchGameAssist(
+        "followup_phrasing",
+        {
+          character: {
+            id: matchResult.character.id,
+            name: matchResult.character.name,
+            show: matchResult.character.show,
+            vibe: matchResult.character.vibe,
+          },
+          question: "What's your budget today?",
+        },
+        { gameType: "character_match" },
+      ).then((r) => setAssistPhrase(r?.flavorText || null));
+    }
   };
 
   const handleFollowUpSelect = (value: string) => {
@@ -299,8 +320,13 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
         craving: c.craving,
         budget,
         preference,
-        gameData: {
+        gameData: buildGameSignals({
           type: "character_match",
+          // Human-readable option labels, not opaque option ids.
+          liked: selections.map((s) => s.label),
+          cravings: [c.craving],
+          budgetTier: budget as "budget" | "moderate" | "splurge",
+          dietPreference: preference as "veg" | "non-veg" | "both",
           character: {
             id: c.id,
             name: c.name,
@@ -311,11 +337,14 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
             signatureFood: c.signatureFood,
             characterDishes: c.characterDishes,
             traits: c.traits,
+            matchPercentage: matchResult.matchPercent,
+            runnerUps: matchResult.runnerUps.map((r) => ({
+              id: r.character.id,
+              matchPercent: r.matchPercent,
+            })),
           },
-          matchPercentage: matchResult.matchPercent,
-          userTraits: matchResult.userVector,
-          answers,
-        },
+          raw: { answers, userTraits: matchResult.userVector },
+        }),
       });
     }
   };
@@ -444,11 +473,18 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
     const c = matchResult.character;
     const isBudget = followUpStep === "budget";
 
+    // The character's own budget appetite, pre-highlighted as the suggestion.
+    const characterTier =
+      ({ low: "budget", moderate: "moderate", premium: "splurge" } as const)[
+        c.budget as "low" | "moderate" | "premium"
+      ] ?? "moderate";
     const BUDGET_OPTIONS = [
       { value: "budget", label: "Budget", emoji: "💰", subtitle: "Under ₹300" },
       { value: "moderate", label: "Moderate", emoji: "💰💰", subtitle: "₹300–₹800" },
       { value: "splurge", label: "Splurge", emoji: "💰💰💰", subtitle: "Above ₹800" },
-    ];
+    ].sort((a, b) =>
+      a.value === characterTier ? -1 : b.value === characterTier ? 1 : 0,
+    );
     const PREF_OPTIONS = [
       { value: "veg", label: "Vegetarian", emoji: "🥬" },
       { value: "non-veg", label: "Non-Vegetarian", emoji: "🍗" },
@@ -470,31 +506,45 @@ function CharacterMatch({ onComplete, onBack }: CharacterMatchProps) {
               <span className="text-3xl">{c.emoji}</span>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-1">
-              {isBudget ? "What's your budget today?" : "Any dietary preference?"}
+              {isBudget
+                ? assistPhrase || "What's your budget today?"
+                : "Any dietary preference?"}
             </h2>
             <p className="text-gray-500 text-sm mb-6">
               {isBudget
-                ? `${c.name} vibes — but your wallet has the final say.`
+                ? `${c.name} would go ${characterTier} — but your wallet has the final say.`
                 : `So we only show you dishes you'd actually eat.`}
             </p>
 
             {isBudget ? (
               <div className="space-y-3">
-                {BUDGET_OPTIONS.map((o) => (
-                  <button
-                    key={o.value}
-                    onClick={() => handleFollowUpSelect(o.value)}
-                    className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-transparent hover:border-fuchsia-300 hover:bg-fuchsia-50 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{o.emoji}</span>
-                      <div className="text-left">
-                        <p className="font-semibold text-gray-900">{o.label}</p>
-                        <p className="text-xs text-gray-400">{o.subtitle}</p>
+                {BUDGET_OPTIONS.map((o) => {
+                  const isSuggested = o.value === characterTier;
+                  return (
+                    <button
+                      key={o.value}
+                      onClick={() => handleFollowUpSelect(o.value)}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
+                        isSuggested
+                          ? "bg-fuchsia-50 border-fuchsia-300 hover:border-fuchsia-400"
+                          : "bg-gray-50 border-transparent hover:border-fuchsia-300 hover:bg-fuchsia-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{o.emoji}</span>
+                        <div className="text-left">
+                          <p className="font-semibold text-gray-900">{o.label}</p>
+                          <p className="text-xs text-gray-400">{o.subtitle}</p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                      {isSuggested && (
+                        <span className="text-[10px] font-bold text-fuchsia-600 bg-fuchsia-100 px-2 py-0.5 rounded-full">
+                          {c.name}'s pick
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3">

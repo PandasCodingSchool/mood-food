@@ -4,6 +4,7 @@ import type {
   RecommendationResponse,
   GameData,
 } from "../types";
+import { BUDGET_TIERS } from "../constants/budget";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -76,11 +77,12 @@ function buildRequestContext(
   const budgetMap: Record<
     string,
     { min: number; max: number; currency: string }
-  > = {
-    budget: { min: 0, max: 300, currency: "INR" },
-    moderate: { min: 300, max: 800, currency: "INR" },
-    splurge: { min: 800, max: 2000, currency: "INR" },
-  };
+  > = Object.fromEntries(
+    BUDGET_TIERS.map((t) => [
+      t.value,
+      { min: t.min, max: t.max, currency: "INR" },
+    ]),
+  );
 
   const now = new Date();
   const hour = now.getHours();

@@ -183,18 +183,6 @@ function buildAiRequest(body) {
   const prefs = ctx?.preferences || {};
   const sit = ctx?.situational || {};
   const cfg = body?.recommendationConfig || {};
-  // Flatten all game signal strings into a single selections array for the AI prompt.
-  // CharacterMatch sends `answers` as [{questionId, optionId}] — convert to readable strings.
-  const characterAnswerStrings = (game.answers || [])
-    .filter((a) => a && typeof a === "object" && a.optionId)
-    .map((a) => String(a.optionId));
-
-  const gameSelections = [
-    ...(game.selections || []),
-    ...characterAnswerStrings,
-    ...(game.storyChoices || []),
-    ...(game.storySummary ? [game.storySummary] : []),
-  ].filter((s) => typeof s === "string");
 
   const user_context = {
     mood: {
@@ -238,20 +226,25 @@ function buildAiRequest(body) {
     ...(Object.keys(game).length && {
       game_data: {
         ...(game.type && { type: game.type }),
-        selections: gameSelections,
-        swipes: game.swipes || [],
+        liked: game.liked || [],
+        disliked: game.disliked || [],
+        cravings: game.cravings || [],
+        cuisines: game.cuisines || [],
+        ...(game.budgetTier && { budget_tier: game.budgetTier }),
+        ...(game.dietPreference && { diet_preference: game.dietPreference }),
+        ...(game.moodVector && {
+          mood_vector: {
+            energy: game.moodVector.energy,
+            valence: game.moodVector.valence,
+            social: game.moodVector.social,
+          },
+        }),
+        swipes: game.raw?.swipes || game.swipes || [],
         ...(game.sliderValues && {
           slider_values: {
             adventurous: game.sliderValues.adventurous,
             health_conscious: game.sliderValues.healthConscious,
             spicy: game.sliderValues.spicy,
-          },
-        }),
-        ...(game.moodVector && {
-          slider_values: {
-            adventurous: scoreToScale(game.moodVector.valence),
-            health_conscious: scoreToScale(game.moodVector.energy),
-            spicy: scoreToScale(game.moodVector.social),
           },
         }),
         // Pass character context for character_match games
@@ -261,10 +254,13 @@ function buildAiRequest(body) {
             name: game.character.name,
             show: game.character.show,
             emoji: game.character.emoji,
-            match_percentage: game.matchPercentage,
+            match_percentage:
+              game.character.matchPercentage ?? game.matchPercentage,
             traits: game.character.traits,
+            runner_ups: game.character.runnerUps || [],
           },
         }),
+        ...(game.raw && { raw: game.raw }),
       },
     }),
   };
@@ -299,14 +295,6 @@ function mapTimeOfDay(timeOfDay) {
   return map[normalized] || "dinner";
 }
 
-function scoreToScale(value) {
-  if (typeof value !== "number") {
-    return undefined;
-  }
-
-  return Math.min(10, Math.max(1, Math.round(((value + 1) / 2) * 9 + 1)));
-}
-
 /**
  * Extract basic data for fallback engine
  */
@@ -316,8 +304,18 @@ function extractQuizData(body) {
 
   return {
     mood: ctx?.mood?.primary || game?.mood || "happy",
-    craving: game?.craving || ctx?.preferences?.cuisineTypes?.[0] || "comfort",
-    budget: ctx?.situational?.budget?.max > 500 ? "splurge" : "budget",
+    craving:
+      game?.cravings?.[0] ||
+      game?.craving ||
+      ctx?.preferences?.cuisineTypes?.[0] ||
+      "comfort",
+    budget:
+      game?.budgetTier ||
+      (ctx?.situational?.budget?.max > 800
+        ? "splurge"
+        : ctx?.situational?.budget?.max > 300
+          ? "moderate"
+          : "budget"),
     preference: ctx?.preferences?.dietaryRestrictions?.[0] || "no-preference",
   };
 }

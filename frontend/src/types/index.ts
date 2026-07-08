@@ -7,8 +7,46 @@ export interface QuizResults {
   preference: string;
 }
 
-export interface GameData {
-  type: string;
+export type GameType =
+  | "quiz"
+  | "character_match"
+  | "day_story"
+  | "swipe_vibe"
+  | "spin_wheel";
+
+export interface GameCharacterSignal {
+  id: string;
+  name: string;
+  show?: string;
+  emoji?: string;
+  matchPercentage?: number;
+  traits?: Record<string, number>;
+  runnerUps?: Array<{ id: string; matchPercent: number }>;
+  [key: string]: unknown; // games may attach extra display fields (tagline, vibe…)
+}
+
+// Unified signal payload every game emits on completion.
+export interface GameSignals {
+  type: GameType;
+  liked: string[]; // accepted segments, right-swipes, chosen options
+  disliked: string[]; // rejected segments, left-swipes
+  cravings: string[]; // ordered, strongest first
+  cuisines: string[];
+  budgetTier: "budget" | "moderate" | "splurge";
+  dietPreference: "veg" | "non-veg" | "both";
+  moodVector?: { energy: number; valence: number; social: number }; // -1..1
+  sliderValues?: {
+    adventurous: number;
+    healthConscious: number;
+    spicy: number;
+  }; // 1..10
+  character?: GameCharacterSignal;
+  raw?: Record<string, unknown>; // per-game payload: swipes, storyChoices, answers, spins…
+}
+
+// Transitional alias while games migrate to GameSignals.
+export interface GameData extends Partial<GameSignals> {
+  type: GameType;
   [key: string]: unknown;
 }
 
@@ -29,6 +67,7 @@ export interface Recommendation {
     context_fit?: string;
     psychological_hook?: string;
     nostalgia_factor?: string;
+    context_tags?: string[];
   } | null;
   practical_details?: {
     estimated_price?: number;
@@ -158,7 +197,7 @@ export interface BudgetOption {
 }
 
 export interface GameResult extends QuizResults {
-  gameData: GameData;
+  gameData: GameSignals | GameData;
 }
 
 export interface AnalyticsEvent {
