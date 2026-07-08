@@ -41,6 +41,16 @@ class TestDishList:
         core = {"indian", "italian", "mexican", "japanese", "american", "mediterranean", "chinese", "thai"}
         assert core.issubset(cuisines), f"Missing cuisines: {core - cuisines}"
 
+    def test_no_swiggy_unavailable_proteins(self):
+        # Regression guard: these proteins/preparations have near-zero Swiggy
+        # India availability and were removed from the curated dish list.
+        banned = ("beef", "pork", "lamb", "oyster", "caviar", "foie gras", "wagyu")
+        offenders = [
+            d.name for d in DISHES
+            if any(word in d.name.lower() for word in banned)
+        ]
+        assert not offenders, f"Non-India-deliverable dishes found: {offenders}"
+
 
 class TestPromptBuilding:
     def test_prompt_contains_all_dish_ids(self):

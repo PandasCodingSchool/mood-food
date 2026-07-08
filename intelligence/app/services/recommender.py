@@ -61,7 +61,12 @@ adventurousness alignment > health_conscious alignment
 7. DIVERSITY: unless diversity is "low", the selected dishes must span different \
 dish types — never return multiple variants of the same dish (e.g. three fried-chicken \
 dishes). Vary category and preparation across the set.
-8. context_tags: for each dish, generate 2-3 short tags (1-2 words each) that describe \
+8. INDIA AVAILABILITY: prefer dishes realistically available for delivery in Indian \
+cities (Indian, and India-adapted Chinese/Italian/American/Mexican/Thai/Japanese/ \
+Mediterranean fusion). Avoid dishes centered on beef, pork, or rare/luxury \
+preparations (foie gras, caviar, oysters, wagyu) — they are not deliverable via \
+Swiggy in India.
+9. context_tags: for each dish, generate 2-3 short tags (1-2 words each) that describe \
 WHY this dish fits the user's current emotional state and context — NOT generic dish \
 descriptors. Examples for stressed+comfort: ["Stress Relief", "Soul Food", "Comfort Pick"]. \
 Tags must be personalized to THIS user's mood, NOT reused from the dish's own mood_tags.

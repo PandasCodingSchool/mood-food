@@ -32,16 +32,20 @@ async def get_recommendations(request: RecommendationRequest) -> RecommendationR
     client = SwiggyMCPClient(token=token)
     service = SwiggyDiscoveryService(client=client)
 
-    current_request = request
-    current_response = response
+    # recommendations currently held (mutated in-place as unmatched slots get
+    # replaced) and the accumulated Swiggy matches for whichever dishes end up
+    # in that list.
+    recommendations = list(response.recommendations)
+    matched_data: dict[str, dict] = {}
     unavailable: list[str] = []
+    # Only the dishes that still need a Swiggy lookup this round — starts as
+    # everyone, then shrinks to just the replacements on each retry.
+    pending = recommendations
 
     for attempt in range(_MAX_SWIGGY_RETRIES):
         enrich_input = [
-            EnrichDishInput(
-                id=rec.dish.id, name=rec.dish.name, cuisine=rec.dish.cuisine
-            )
-            for rec in current_response.recommendations
+            EnrichDishInput(id=rec.dish.id, name=rec.dish.name, cuisine=rec.dish.cuisine)
+            for rec in pending
         ]
 
         try:
@@ -53,30 +57,66 @@ async def get_recommendations(request: RecommendationRequest) -> RecommendationR
             break
 
         matched_ids = {m.dish_id for m in matches if m.matched}
-        unmatched_names = [
-            rec.dish.name
-            for rec in current_response.recommendations
-            if rec.dish.id not in matched_ids
-        ]
+        for m in matches:
+            if m.matched:
+                matched_data[m.dish_id] = m.model_dump()
 
-        if not unmatched_names or attempt == _MAX_SWIGGY_RETRIES - 1:
-            current_response = current_response.model_copy(update={
-                "swiggy_matches": {m.dish_id: m.model_dump() for m in matches if m.matched},
-                "swiggy_address_id": request.swiggy_address_id,
-            })
+        unmatched = [rec for rec in pending if rec.dish.id not in matched_ids]
+
+        if not unmatched or attempt == _MAX_SWIGGY_RETRIES - 1:
             break
 
+        unmatched_ids = {rec.dish.id for rec in unmatched}
+        unmatched_names = [rec.dish.name for rec in unmatched]
         logger.info(
-            "swiggy: %d dish(es) unavailable (attempt %d/%d): %s — retrying GPT",
+            "swiggy: %d dish(es) unavailable (attempt %d/%d): %s — fetching replacements",
             len(unmatched_names), attempt + 1, _MAX_SWIGGY_RETRIES, unmatched_names,
         )
         unavailable.extend(unmatched_names)
-        modified_ctx = current_request.user_context.model_copy(
-            update={"unavailable_dishes": list(unavailable)}
-        )
-        current_request = current_request.model_copy(
-            update={"user_context": modified_ctx}
-        )
-        current_response = recommender.get_recommendations(current_request)
 
-    return current_response
+        # Exclude both dishes already tried-and-failed and dishes already
+        # confirmed available, so GPT doesn't recommend a duplicate for the
+        # replacement slot(s).
+        kept_names = [
+            rec.dish.name for rec in recommendations if rec.dish.id not in unmatched_ids
+        ]
+        exclude_names = list(dict.fromkeys(unavailable + kept_names))
+
+        modified_ctx = request.user_context.model_copy(
+            update={"unavailable_dishes": exclude_names}
+        )
+        replacement_config = request.recommendation_config.model_copy(
+            update={"count": len(unmatched)}
+        )
+        replacement_request = request.model_copy(
+            update={"user_context": modified_ctx, "recommendation_config": replacement_config}
+        )
+        replacement_response = recommender.get_recommendations(replacement_request)
+
+        if not replacement_response.success or not replacement_response.recommendations:
+            break  # can't get replacements — keep the unmatched slots as-is
+
+        replacement_iter = iter(replacement_response.recommendations)
+        new_recommendations = []
+        replaced = []
+        for rec in recommendations:
+            if rec.dish.id in unmatched_ids:
+                repl = next(replacement_iter, None)
+                if repl is not None:
+                    new_recommendations.append(repl)
+                    replaced.append(repl)
+                    continue
+            new_recommendations.append(rec)
+        recommendations = new_recommendations
+        pending = replaced  # only re-enrich the newly substituted dishes
+
+    final_matches = {
+        rec.dish.id: matched_data[rec.dish.id]
+        for rec in recommendations
+        if rec.dish.id in matched_data
+    }
+    return response.model_copy(update={
+        "recommendations": recommendations,
+        "swiggy_matches": final_matches,
+        "swiggy_address_id": request.swiggy_address_id,
+    })

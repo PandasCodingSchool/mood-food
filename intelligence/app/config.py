@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     swiggy_max_concurrency: int = 3
     # 429 responses back off much harder than transient errors.
     swiggy_rate_limit_base_ms: int = 1500
+    # Once a 429 is detected, all subsequent Swiggy calls (this request and the
+    # next) wait out this cooldown up front instead of re-discovering the rate
+    # limit via their own retry loop. Dev-mode default; tune via env if needed.
+    swiggy_rate_limit_cooldown_s: float = 8.0
     # When true, logs full raw tool requests/responses (DEBUG level). Helpful for
     # diagnosing why restaurants/items aren't coming back (e.g. response-shape
     # mismatches). Leave off in production — payloads can be large.
