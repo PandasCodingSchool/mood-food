@@ -525,7 +525,7 @@ _DISH_CATEGORY_HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("Sandwich",("sandwich", "sub", "panini")),
     ("Rolls",   ("roll", "wrap", "kathi", "shawarma")),
     ("Dosa",    ("dosa", "idli", "uttapam", "vada")),
-    ("Cake",    ("cake", "pastry", "brownie")),
+    ("Cake",    ("cake", "pastry", "brownie", "crepe")),
     ("Ice Cream",("ice cream", "gelato", "sundae")),
 ]
 

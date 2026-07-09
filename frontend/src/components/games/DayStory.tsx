@@ -9,10 +9,13 @@ import {
 import { getActiveStory, getMoodCravingFollowUp } from "../../constants/storyBeats";
 import {
   computeMoodFromStory,
+  orderChoicesByVector,
   type StoryMoodResult,
 } from "../../utils/storyEngine";
 import StoryScene from "./StoryScene";
 import { trackEvent } from "../../utils/analytics";
+import { fetchGameAssist, type GameAssistResult } from "../../services/gameAssist";
+import { buildGameSignals } from "../../utils/gameSignals";
 import type { GameResult } from "../../types";
 
 const TIME_SLOT_EMOJI: Record<string, string> = {
@@ -55,13 +58,36 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
     Partial<Record<FollowUpStep, string>>
   >({});
   const [isAnimating, setIsAnimating] = useState(false);
+  // LLM assists prefetched while the reveal screen shows; null = use statics.
+  const [assistCraving, setAssistCraving] = useState<GameAssistResult | null>(
+    null,
+  );
+  const [assistFlavor, setAssistFlavor] = useState<string | null>(null);
 
   const beat = STORY_BEATS[beatIndex];
+  const lastChoiceId = choices[choices.length - 1];
+  // The beat reacts to the previous pick when an override exists, and its
+  // choices re-order to follow the mood trajectory so far.
+  const beatNarrative =
+    (lastChoiceId && beat.narrativeOverrides?.[lastChoiceId]) ||
+    beat.narrative;
+  const beatChoices = orderChoicesByVector(beat.choices, choices);
   const currentFollowUpKey = FOLLOW_UP_STEPS[followUpStep];
-  // Craving step is mood-aware; budget & preference are static
+  // Craving step is mood-aware (LLM-personalized when the prefetch landed);
+  // budget & preference are static.
+  const staticCravingConfig = reveal
+    ? getMoodCravingFollowUp(reveal.moodSlug)
+    : STORY_FOLLOW_UP.craving;
   const followUpConfig =
     currentFollowUpKey === "craving" && reveal
-      ? getMoodCravingFollowUp(reveal.moodSlug)
+      ? assistCraving && assistCraving.options.length >= 3
+        ? { ...staticCravingConfig, options: assistCraving.options.map((o) => ({
+            value: o.value,
+            label: o.label,
+            emoji: o.emoji || "🍽️",
+            ...(o.subtitle && { subtitle: o.subtitle }),
+          })) }
+        : staticCravingConfig
       : STORY_FOLLOW_UP[currentFollowUpKey];
 
   const handleIntroStart = () => {
@@ -88,6 +114,20 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
         mood: result.moodSlug,
         summary: result.storySummary,
       });
+      // Prefetch LLM personalization while the reveal screen shows — the
+      // follow-up renders statics if these haven't resolved in time.
+      const assistContext = {
+        mood: result.moodSlug,
+        mood_vector: result.vector,
+        story_choices: nextChoices,
+        time_slot: timeSlot,
+      };
+      fetchGameAssist("craving_options", assistContext, {
+        gameType: "day_story",
+      }).then(setAssistCraving);
+      fetchGameAssist("story_beat_flavor", assistContext, {
+        gameType: "day_story",
+      }).then((r) => setAssistFlavor(r?.flavorText || null));
     }
   };
 
@@ -126,17 +166,39 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
         budget: updated.budget,
       });
 
+      const storySummary = assistFlavor
+        ? `${reveal.storySummary} ${assistFlavor}`
+        : reveal.storySummary;
+      const craving = updated.craving || "comfort";
       onComplete({
         mood: reveal.moodSlug,
-        craving: updated.craving || "comfort",
+        craving,
         budget: updated.budget || "moderate",
         preference: updated.preference || "both",
-        gameData: {
+        gameData: buildGameSignals({
           type: "day_story",
-          storyChoices: choices,
-          storySummary: reveal.storySummary,
-          moodVector: reveal.vector,
-        },
+          liked: choices,
+          cravings: [craving],
+          budgetTier: (updated.budget || "moderate") as
+            | "budget"
+            | "moderate"
+            | "splurge",
+          dietPreference: (updated.preference || "both") as
+            | "veg"
+            | "non-veg"
+            | "both",
+          // storyEngine vectors are 0..1 centered on 0.5 — convert to -1..1.
+          moodVector: {
+            energy: (reveal.vector.energy - 0.5) * 2,
+            valence: (reveal.vector.valence - 0.5) * 2,
+            social: (reveal.vector.social - 0.5) * 2,
+          },
+          raw: {
+            storyChoices: choices,
+            storySummary,
+            timeSlot,
+          },
+        }),
       });
     }
   };
@@ -223,7 +285,10 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
               Feeling {reveal.moodLabel}
             </h2>
-            <p className="text-gray-600 mb-8">{reveal.storySummary}</p>
+            <p className="text-gray-600 mb-8">
+              {reveal.storySummary}
+              {assistFlavor && ` ${assistFlavor}`}
+            </p>
             <button
               type="button"
               onClick={handleContinueToFollowUp}
@@ -378,11 +443,11 @@ function DayStory({ onComplete, onBack }: DayStoryProps) {
             {beat.segmentLabel}
           </p>
           <p className="text-lg text-gray-800 mb-6 leading-relaxed">
-            {beat.narrative}
+            {beatNarrative}
           </p>
 
           <div className="flex flex-col gap-3">
-            {beat.choices.map((choice) => (
+            {beatChoices.map((choice) => (
               <button
                 key={choice.id}
                 type="button"

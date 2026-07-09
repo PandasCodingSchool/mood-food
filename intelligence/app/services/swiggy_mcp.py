@@ -33,6 +33,27 @@ logger = logging.getLogger("swiggy_mcp")
 # dishes enrich at once. Shared across all client instances / requests.
 _MCP_SEMAPHORE = asyncio.Semaphore(max(1, settings.swiggy_max_concurrency))
 
+# Cross-request rate-limit memory: once a 429 is detected, remember it for a
+# short window so subsequent calls (this request's other dishes, or the next
+# incoming request) back off up front instead of independently rediscovering
+# the rate limit via their own multi-attempt retry loop.
+_rate_limited_until: float = 0.0
+
+
+async def _await_rate_limit_cooldown(name: str) -> None:
+    now = time.monotonic()
+    remaining = _rate_limited_until - now
+    if remaining > 0:
+        logger.info(
+            "Swiggy rate-limit cooldown active, waiting %.1fs before '%s'", remaining, name,
+        )
+        await asyncio.sleep(remaining)
+
+
+def _arm_rate_limit_cooldown() -> None:
+    global _rate_limited_until
+    _rate_limited_until = time.monotonic() + settings.swiggy_rate_limit_cooldown_s
+
 
 def _preview(data: Any, limit: int = 800) -> str:
     """Compact, safe-to-log preview of a tool result (truncated)."""
@@ -139,6 +160,8 @@ class SwiggyMCPClient:
                 "or link a user account (Phase 2)."
             )
 
+        await _await_rate_limit_cooldown(name)
+
         last_error: Optional[Exception] = None
         for attempt in range(settings.swiggy_max_retries):
             try:
@@ -153,10 +176,13 @@ class SwiggyMCPClient:
                 retryable = isinstance(exc, (asyncio.TimeoutError, ConnectionError)) or getattr(
                     exc, "retryable", False
                 )
+                # 429 (rate limit) backs off much harder than transient errors,
+                # and arms the cross-request cooldown for every other caller.
+                is_429 = "429" in str(exc)
+                if is_429:
+                    _arm_rate_limit_cooldown()
                 if not retryable or attempt == settings.swiggy_max_retries - 1:
                     break
-                # 429 (rate limit) backs off much harder than transient errors.
-                is_429 = "429" in str(exc)
                 base = settings.swiggy_rate_limit_base_ms if is_429 else settings.swiggy_retry_base_ms
                 delay = (base / 1000) * (2 ** attempt) + random.uniform(0, 0.3)
                 logger.warning(
@@ -273,6 +299,8 @@ class _BoundSession:
         await self._reset()
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        await _await_rate_limit_cooldown(name)
+
         last_error: Optional[Exception] = None
         for attempt in range(settings.swiggy_max_retries):
             try:
@@ -295,6 +323,8 @@ class _BoundSession:
             except SwiggyMCPError as exc:
                 # Tool-level error — the session is still alive, so don't reconnect.
                 last_error = exc
+                if "429" in str(exc):
+                    _arm_rate_limit_cooldown()
                 if not exc.retryable or attempt == settings.swiggy_max_retries - 1:
                     break
                 await self._backoff(name, attempt, str(exc), reconnected=False)
@@ -309,6 +339,8 @@ class _BoundSession:
                     )
                     raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
                 last_error = SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True)
+                if "429" in detail:
+                    _arm_rate_limit_cooldown()
                 if attempt == settings.swiggy_max_retries - 1:
                     break
                 await self._backoff(name, attempt, detail, reconnected=True)

@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
 import characterMatchRouter from "./routes/characterMatch.js";
+import gameAssistRouter from "./routes/gameAssist.js";
 import swiggyRouter from "./routes/swiggy.js";
 import swiggyAuthRouter from "./routes/swiggyAuth.js";
 import {
@@ -66,6 +67,9 @@ app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
 app.use("/api/character-match", aiLimiter, characterMatchRouter);
 // Swiggy OAuth endpoints (handled locally, not proxied)
 app.use("/api/swiggy/oauth", swiggyAuthRouter);
+// Lightweight mid-game LLM assists (gpt-4o-mini — cheap, cached server-side,
+// so only the general limiter applies)
+app.use("/api/game-assist", gameAssistRouter);
 // Swiggy discovery/ordering route (proxied to intelligence service)
 app.use("/api/swiggy", swiggyRouter);
 
@@ -173,16 +177,14 @@ app.get("/api/waitlist/count", async (req, res) => {
 app.post("/api/waitlist", async (req, res) => {
   const { name, email, city, cuisine } = req.body;
 
-  if (!name || !email || !city) {
-    return res
-      .status(400)
-      .json({ error: "Name, email, and city are required" });
+  if (!name || !email) {
+    return res.status(400).json({ error: "Name and email are required" });
   }
 
   try {
     const result = await query(
       "INSERT INTO waitlist (name, email, city, cuisine) VALUES ($1, $2, $3, $4) RETURNING *",
-      [name, email, city, cuisine || null],
+      [name, email, city || null, cuisine || null],
     );
     res.status(201).json({
       success: true,

@@ -41,6 +41,16 @@ class TestDishList:
         core = {"indian", "italian", "mexican", "japanese", "american", "mediterranean", "chinese", "thai"}
         assert core.issubset(cuisines), f"Missing cuisines: {core - cuisines}"
 
+    def test_no_swiggy_unavailable_proteins(self):
+        # Regression guard: these proteins/preparations have near-zero Swiggy
+        # India availability and were removed from the curated dish list.
+        banned = ("beef", "pork", "lamb", "oyster", "caviar", "foie gras", "wagyu")
+        offenders = [
+            d.name for d in DISHES
+            if any(word in d.name.lower() for word in banned)
+        ]
+        assert not offenders, f"Non-India-deliverable dishes found: {offenders}"
+
 
 class TestPromptBuilding:
     def test_prompt_contains_all_dish_ids(self):
@@ -76,6 +86,66 @@ class TestPromptBuilding:
         ctx = UserContext(mood=Mood(primary="sad"))
         msg = _build_user_message(ctx, RecommendationConfig())
         assert "mood=sad" in msg  # should not raise
+
+    def test_user_message_positive_signals(self):
+        from app.schemas.request import GameData
+        ctx = UserContext(
+            mood=Mood(primary="happy"),
+            game_data=GameData(
+                type="spin_wheel",
+                liked=["spicy", "exotic"],
+                cravings=["spicy", "indulgent"],
+                cuisines=["thai"],
+            ),
+        )
+        msg = _build_user_message(ctx, RecommendationConfig())
+        assert "POSITIVE SIGNALS" in msg
+        assert "'spicy'" in msg
+        assert "'thai'" in msg
+
+    def test_user_message_negative_signals_merge_avoid_these(self):
+        from app.schemas.request import GameData, History
+        ctx = UserContext(
+            mood=Mood(primary="happy"),
+            game_data=GameData(type="spin_wheel", disliked=["sweet"]),
+            history=History(avoid_these=["dessert"]),
+        )
+        msg = _build_user_message(ctx, RecommendationConfig())
+        assert "NEGATIVE SIGNALS" in msg
+        assert "'sweet'" in msg
+        assert "'dessert'" in msg
+
+    def test_user_message_mood_vector(self):
+        from app.schemas.request import GameData, MoodVector
+        ctx = UserContext(
+            mood=Mood(primary="tired"),
+            game_data=GameData(
+                type="day_story",
+                mood_vector=MoodVector(energy=-0.5, valence=0.25, social=0),
+            ),
+        )
+        msg = _build_user_message(ctx, RecommendationConfig())
+        assert "mood_vector" in msg
+        assert "energy=-0.50" in msg
+
+    def test_budget_synthesized_from_tier(self):
+        from app.schemas.request import GameData
+        ctx = UserContext(
+            mood=Mood(primary="happy"),
+            game_data=GameData(type="quiz", budget_tier="splurge"),
+        )
+        msg = _build_user_message(ctx, RecommendationConfig())
+        assert "₹2000" in msg
+
+    def test_explicit_budget_wins_over_tier(self):
+        from app.schemas.request import GameData
+        ctx = UserContext(
+            mood=Mood(primary="happy"),
+            situational=Situational(budget=Budget(max=450)),
+            game_data=GameData(type="quiz", budget_tier="splurge"),
+        )
+        msg = _build_user_message(ctx, RecommendationConfig())
+        assert "₹450" in msg
 
 
 class TestGetRecommendations:

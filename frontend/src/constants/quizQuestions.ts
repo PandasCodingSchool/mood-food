@@ -2,7 +2,9 @@
 // Each option carries a `next` field — the craving question (Q2) is unique
 // per mood answer so the quiz never feels the same twice.
 //
-// Tree: q1_mood → q2_<mood> → q3_budget → q4_preference (terminal)
+// Tree: q1_mood → q2_<mood> → q3_budget_<craving> → q4_preference (terminal)
+
+import { BUDGET_TIERS } from "./budget";
 
 export interface QuizOption {
   value: string;
@@ -21,7 +23,49 @@ export interface QuizQuestion {
   options: QuizOption[];
 }
 
+const BUDGET_COLORS = [
+  "bg-green-100 text-green-700 border-green-200",
+  "bg-yellow-100 text-yellow-700 border-yellow-200",
+  "bg-orange-100 text-orange-700 border-orange-200",
+];
+
+// Per-craving budget questions: same canonical values everywhere, copy adapts
+// to what the user just picked.
+function makeBudgetQuestion(craving: string, question: string, subtitle: string): QuizQuestion {
+  return {
+    id: `q3_budget_${craving}`,
+    question,
+    subtitle,
+    outputKey: "budget",
+    options: BUDGET_TIERS.map((tier, i) => ({
+      value: tier.value,
+      label: tier.label,
+      subtitle: tier.subtitle,
+      emoji: tier.emoji,
+      color: BUDGET_COLORS[i],
+      next: "q4_preference",
+    })),
+  };
+}
+
+const BUDGET_QUESTIONS: Record<string, QuizQuestion> = Object.fromEntries(
+  (
+    [
+      ["indulgent", "Indulgence has a price — what's tonight's ceiling?", "Treats come in every size."],
+      ["spicy", "Heat is free, the rest isn't — what's the range?", "Fire on any budget."],
+      ["comfort", "Comfort doesn't need to cost much — or does it?", "From humble bowls to premium feasts."],
+      ["healthy", "Fresh & wholesome — what are we working with?", "Good food at every price point."],
+      ["light", "Keeping it light — how about the bill?", "Light on the stomach, your call on the wallet."],
+      ["sweet", "Sweet tooth budget check!", "From a chocolate bar to a dessert platter."],
+    ] as const
+  ).map(([craving, q, s]) => [
+    `q3_budget_${craving}`,
+    makeBudgetQuestion(craving, q, s),
+  ]),
+);
+
 export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
+  ...BUDGET_QUESTIONS,
   // ── Level 1 — same for everyone ──────────────────────────
   q1_mood: {
     id: "q1_mood",
@@ -45,10 +89,10 @@ export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
     subtitle: "Match the vibe — what are you genuinely craving?",
     outputKey: "craving",
     options: [
-      { value: "indulgent", label: "Something indulgent", emoji: "🍰", next: "q3_budget" },
-      { value: "spicy",    label: "Spicy & fun",          emoji: "🌶️", next: "q3_budget" },
-      { value: "comfort",  label: "Classic comfort",       emoji: "🍕", next: "q3_budget" },
-      { value: "healthy",  label: "Fresh & light",         emoji: "🥗", next: "q3_budget" },
+      { value: "indulgent", label: "Something indulgent", emoji: "🍰", next: "q3_budget_indulgent" },
+      { value: "spicy",    label: "Spicy & fun",          emoji: "🌶️", next: "q3_budget_spicy" },
+      { value: "comfort",  label: "Classic comfort",       emoji: "🍕", next: "q3_budget_comfort" },
+      { value: "healthy",  label: "Fresh & light",         emoji: "🥗", next: "q3_budget_healthy" },
     ],
   },
 
@@ -58,10 +102,10 @@ export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
     subtitle: "No judgment — what does your body really want right now?",
     outputKey: "craving",
     options: [
-      { value: "comfort", label: "Warm & comforting",  emoji: "🍲", next: "q3_budget" },
-      { value: "light",   label: "Light & easy",        emoji: "🥙", next: "q3_budget" },
-      { value: "sweet",   label: "A little sugar boost", emoji: "🍫", next: "q3_budget" },
-      { value: "healthy", label: "Nourishing reset",    emoji: "🥗", next: "q3_budget" },
+      { value: "comfort", label: "Warm & comforting",  emoji: "🍲", next: "q3_budget_comfort" },
+      { value: "light",   label: "Light & easy",        emoji: "🥙", next: "q3_budget_light" },
+      { value: "sweet",   label: "A little sugar boost", emoji: "🍫", next: "q3_budget_sweet" },
+      { value: "healthy", label: "Nourishing reset",    emoji: "🥗", next: "q3_budget_healthy" },
     ],
   },
 
@@ -71,10 +115,10 @@ export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
     subtitle: "Food helps. Let's find the right one.",
     outputKey: "craving",
     options: [
-      { value: "comfort", label: "Comfort first",   emoji: "🍲", next: "q3_budget" },
-      { value: "spicy",   label: "Spicy release",   emoji: "🌶️", next: "q3_budget" },
-      { value: "sweet",   label: "Sweet escape",    emoji: "🍩", next: "q3_budget" },
-      { value: "light",   label: "Light & calm",    emoji: "🌿", next: "q3_budget" },
+      { value: "comfort", label: "Comfort first",   emoji: "🍲", next: "q3_budget_comfort" },
+      { value: "spicy",   label: "Spicy release",   emoji: "🌶️", next: "q3_budget_spicy" },
+      { value: "sweet",   label: "Sweet escape",    emoji: "🍩", next: "q3_budget_sweet" },
+      { value: "light",   label: "Light & calm",    emoji: "🌿", next: "q3_budget_light" },
     ],
   },
 
@@ -84,10 +128,10 @@ export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
     subtitle: "Tonight is special — what does it call for?",
     outputKey: "craving",
     options: [
-      { value: "indulgent", label: "Full indulgence",           emoji: "🦞", next: "q3_budget" },
-      { value: "spicy",     label: "Bold & flavourful",         emoji: "🌶️", next: "q3_budget" },
-      { value: "comfort",   label: "Crowd-pleasing comfort",    emoji: "🍕", next: "q3_budget" },
-      { value: "light",     label: "Light but elegant",         emoji: "🥙", next: "q3_budget" },
+      { value: "indulgent", label: "Full indulgence",           emoji: "🦞", next: "q3_budget_indulgent" },
+      { value: "spicy",     label: "Bold & flavourful",         emoji: "🌶️", next: "q3_budget_spicy" },
+      { value: "comfort",   label: "Crowd-pleasing comfort",    emoji: "🍕", next: "q3_budget_comfort" },
+      { value: "light",     label: "Light but elegant",         emoji: "🥙", next: "q3_budget_light" },
     ],
   },
 
@@ -97,10 +141,10 @@ export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
     subtitle: "No rush, no stress. What sounds just right?",
     outputKey: "craving",
     options: [
-      { value: "healthy", label: "Something wholesome",  emoji: "🥗", next: "q3_budget" },
-      { value: "light",   label: "Light & breezy",       emoji: "🌿", next: "q3_budget" },
-      { value: "comfort", label: "Slow & comforting",    emoji: "🍲", next: "q3_budget" },
-      { value: "sweet",   label: "A sweet treat",        emoji: "🍮", next: "q3_budget" },
+      { value: "healthy", label: "Something wholesome",  emoji: "🥗", next: "q3_budget_healthy" },
+      { value: "light",   label: "Light & breezy",       emoji: "🌿", next: "q3_budget_light" },
+      { value: "comfort", label: "Slow & comforting",    emoji: "🍲", next: "q3_budget_comfort" },
+      { value: "sweet",   label: "A sweet treat",        emoji: "🍮", next: "q3_budget_sweet" },
     ],
   },
 
@@ -110,24 +154,21 @@ export const QUIZ_QUESTION_BANK: Record<string, QuizQuestion> = {
     subtitle: "You're up for anything — what calls you most?",
     outputKey: "craving",
     options: [
-      { value: "spicy",     label: "Fiery & intense",          emoji: "🔥", next: "q3_budget" },
-      { value: "indulgent", label: "Rich & decadent",          emoji: "🍰", next: "q3_budget" },
-      { value: "healthy",   label: "New & nutritious",         emoji: "🥗", next: "q3_budget" },
-      { value: "light",     label: "Curious & light",          emoji: "🌮", next: "q3_budget" },
+      { value: "spicy",     label: "Fiery & intense",          emoji: "🔥", next: "q3_budget_spicy" },
+      { value: "indulgent", label: "Rich & decadent",          emoji: "🍰", next: "q3_budget_indulgent" },
+      { value: "healthy",   label: "New & nutritious",         emoji: "🥗", next: "q3_budget_healthy" },
+      { value: "light",     label: "Curious & light",          emoji: "🌮", next: "q3_budget_light" },
     ],
   },
 
-  // ── Level 3 — budget (same for all Q2 paths) ─────────────
+  // ── Level 3 — generic budget fallback (per-craving variants above) ──
   q3_budget: {
+    ...makeBudgetQuestion(
+      "generic",
+      "What's your spending mood tonight?",
+      "We'll find the best options in your range.",
+    ),
     id: "q3_budget",
-    question: "What's your spending mood tonight?",
-    subtitle: "We'll find the best options in your range.",
-    outputKey: "budget",
-    options: [
-      { value: "low",    label: "Budget",   subtitle: "Under ₹200",   emoji: "💰",     color: "bg-green-100 text-green-700 border-green-200",   next: "q4_preference" },
-      { value: "medium", label: "Moderate", subtitle: "₹200 – ₹500", emoji: "💰💰",   color: "bg-yellow-100 text-yellow-700 border-yellow-200", next: "q4_preference" },
-      { value: "high",   label: "Splurge",  subtitle: "Above ₹500",   emoji: "💰💰💰", color: "bg-orange-100 text-orange-700 border-orange-200", next: "q4_preference" },
-    ],
   },
 
   // ── Level 4 — preference (terminal, no next) ─────────────
