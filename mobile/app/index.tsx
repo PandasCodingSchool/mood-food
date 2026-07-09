@@ -36,9 +36,9 @@ export default function SplashScreen() {
       <View style={styles.center}>
         <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
           <Image
-            source={require('../assets/icon.png')}
-            style={{ width: 140, height: 140, borderRadius: 32 }}
-            resizeMode="cover"
+            source={require('../assets/moodfood-logo.png')}
+            style={{ width: 180, height: 180 }}
+            resizeMode="contain"
           />
         </Animated.View>
         <Text style={[styles.tagline, fw(700)]}>INSTANT GOOD MOOD</Text>

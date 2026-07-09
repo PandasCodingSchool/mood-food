@@ -153,6 +153,7 @@ export default function ProfileScreen() {
 
         <View style={{ marginTop: 24, gap: 2 }}>
           {[
+            { icon: '🔐', label: 'Account', onPress: () => router.push('/login') },
             { icon: '🔔', label: 'Notifications', onPress: () => {} },
             { icon: '🔗', label: 'Connected delivery apps', onPress: () => {} },
             { icon: '🌙', label: 'Dark mode', onPress: () => {} },

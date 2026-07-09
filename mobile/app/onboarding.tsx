@@ -94,11 +94,11 @@ export default function OnboardingScreen() {
   const step = ONBOARD_STEPS[stepIndex];
   const isLast = stepIndex === TOTAL - 1;
 
-  const goHome = () => router.replace('/home');
+  const goToAuth = () => router.replace('/login');
 
   const handleNext = () => {
     if (isLast) {
-      goHome();
+      goToAuth();
     } else {
       setStepIndex((s) => s + 1);
     }
@@ -122,7 +122,7 @@ export default function OnboardingScreen() {
           ))}
         </View>
         {!isLast && (
-          <TouchableOpacity onPress={goHome} activeOpacity={0.7}>
+          <TouchableOpacity onPress={goToAuth} activeOpacity={0.7}>
             <Text style={[styles.skip, fw(700)]}>Skip</Text>
           </TouchableOpacity>
         )}
