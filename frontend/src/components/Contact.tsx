@@ -4,7 +4,6 @@ import {
   MessageSquare,
   Send,
   Instagram,
-  Twitter,
   Linkedin,
 } from "lucide-react";
 import { useState } from "react";

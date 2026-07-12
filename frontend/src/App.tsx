@@ -17,7 +17,8 @@ import {
   CharacterMatch,
 } from "./components/games";
 import { trackEvent } from "./utils/analytics";
-import type { QuizResults, GameResult } from "./types";
+import { initSession } from "./utils/session";
+import type { QuizResults, GameData, GameResult } from "./types";
 
 function App() {
   const [showQuiz, setShowQuiz] = useState(false);
@@ -29,6 +30,7 @@ function App() {
   const [showContact, setShowContact] = useState(false);
 
   useEffect(() => {
+    initSession();
     trackEvent("landing_page_viewed");
   }, []);
 

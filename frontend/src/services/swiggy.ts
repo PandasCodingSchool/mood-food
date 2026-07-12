@@ -1,6 +1,14 @@
 import type { Recommendation } from "../types";
+import { getSessionHeaders } from "../utils/session";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+
+function headers(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    ...getSessionHeaders(),
+    ...extra,
+  };
+}
 
 /**
  * Phase 1 discovery is gated behind a build flag so the app safely degrades to
@@ -29,7 +37,9 @@ export function saveAddressId(id: string): void {
 /** The connected account's saved delivery addresses (drives the picker). */
 export async function fetchAddresses(): Promise<SwiggyAddress[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/swiggy/addresses`);
+    const res = await fetch(`${API_BASE_URL}/swiggy/addresses`, {
+      headers: headers(),
+    });
     if (!res.ok) return [];
     const data = await res.json();
     return data.success ? (data.addresses as SwiggyAddress[]) : [];
@@ -102,7 +112,7 @@ export async function enrichRecommendations(
 
   const response = await fetch(`${API_BASE_URL}/swiggy/enrich`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: headers({ "Content-Type": "application/json" }),
     body: JSON.stringify({ dishes, address_id: addressId || undefined }),
   });
 
@@ -124,10 +134,87 @@ export async function enrichRecommendations(
 
 export async function swiggyStatus(): Promise<{ configured: boolean }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/swiggy/status`);
+    const res = await fetch(`${API_BASE_URL}/swiggy/status`, {
+      headers: headers(),
+    });
     if (!res.ok) return { configured: false };
     return (await res.json()) as { configured: boolean };
   } catch {
     return { configured: false };
+  }
+}
+
+export interface MoodFoodUser {
+  id: string;
+  sessionId: string;
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+  swiggyLinked: boolean;
+  swiggyUserId: string | null;
+  swiggyExpiresAt: string | null;
+}
+
+export async function fetchUser(): Promise<MoodFoodUser | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/user/me`, {
+      headers: headers(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? (data.user as MoodFoodUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function initiateSwiggyOAuth(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/oauth/initiate`, {
+      method: "POST",
+      headers: headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? data.authUrl : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function unlinkSwiggyOAuth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/oauth/unlink`, {
+      method: "POST",
+      headers: headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify({}),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export type UserProfileUpdate = {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+export async function updateUserProfile(
+  profile: UserProfileUpdate,
+): Promise<MoodFoodUser | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/user/me`, {
+      method: "PUT",
+      headers: headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify(profile),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? (data.user as MoodFoodUser) : null;
+  } catch {
+    return null;
   }
 }
