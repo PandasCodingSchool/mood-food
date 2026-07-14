@@ -107,7 +107,7 @@ export default function DayStoryScreen() {
           onPress={() => router.push('/home')}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, color: '#fff' }}>←</Text>
+          <Text style={{ fontSize: 18, lineHeight: 22, color: '#fff' }}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
           {DAY_SCENES.map((_, i) => (

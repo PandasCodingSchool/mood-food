@@ -62,7 +62,7 @@ export default function OrderConfirmScreen() {
           onPress={() => router.back()}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18 }}>←</Text>
+          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
         </TouchableOpacity>
         <Text style={[fw(900), { fontSize: 18, color: colors.navy, flex: 1, textAlign: 'center', marginRight: 40 }]}>
           Confirm Order

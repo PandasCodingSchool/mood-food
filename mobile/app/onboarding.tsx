@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ONBOARD_STEPS } from '../src/constants/onboarding';
@@ -35,7 +35,12 @@ function OnboardContent({ step, index }: { step: (typeof ONBOARD_STEPS)[number];
   }, []);
 
   return (
-    <View style={styles.illustrationArea}>
+    <ScrollView
+      style={styles.illustrationArea}
+      contentContainerStyle={styles.illustrationContent}
+      showsVerticalScrollIndicator={false}
+      scrollEnabled={false}
+    >
       <View style={styles.orbitStage}>
         <Animated.Text style={[styles.mainEmoji, { transform: [{ scale: mainScale }] }]}>
           {step.mainEmoji}
@@ -48,7 +53,7 @@ function OnboardContent({ step, index }: { step: (typeof ONBOARD_STEPS)[number];
         <Text style={[styles.sparkle, { bottom: 60, left: 50, fontSize: 14, opacity: 0.4 }]}>✨</Text>
       </View>
 
-      <Animated.View style={{ opacity: bodyOpacity, transform: [{ translateY: bodyTranslate }], alignItems: 'center' }}>
+      <Animated.View style={{ opacity: bodyOpacity, transform: [{ translateY: bodyTranslate }], alignItems: 'center', width: '100%' }}>
         <View style={[styles.tagPill, { backgroundColor: step.tagBg }]}>
           <Text style={[styles.tagText, fw(800), { color: step.tagColor }]}>{step.tag}</Text>
         </View>
@@ -63,7 +68,7 @@ function OnboardContent({ step, index }: { step: (typeof ONBOARD_STEPS)[number];
           </View>
         )}
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -83,7 +88,7 @@ function FeatureRow({ emoji, text, delay }: { emoji: string; text: string; delay
       <View style={styles.featureIcon}>
         <Text style={{ fontSize: 18 }}>{emoji}</Text>
       </View>
-      <Text style={[styles.featureText, fw(700)]}>{text} hello</Text>
+      <Text style={[styles.featureText, fw(700)]}>{text}</Text>
     </Animated.View>
   );
 }
@@ -147,9 +152,10 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 6 },
   dot: { height: 6, borderRadius: 3 },
   skip: { fontSize: 14, color: 'rgba(255,255,255,0.6)', padding: 4 },
-  illustrationArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  orbitStage: { width: 260, height: 260, marginBottom: 16 },
-  mainEmoji: { position: 'absolute', top: '50%', left: '50%', marginTop: -40, marginLeft: -40, width: 80, height: 80, fontSize: 80, textAlign: 'center' },
+  illustrationArea: { flex: 1 },
+  illustrationContent: { alignItems: 'center', justifyContent: 'center', flexGrow: 1, paddingBottom: 8 },
+  orbitStage: { width: 260, height: 260, marginBottom: 16, overflow: 'visible', alignItems: 'center', justifyContent: 'center' },
+  mainEmoji: { fontSize: 88, lineHeight: 100, textAlign: 'center' },
   orbitEmoji: { position: 'absolute' },
   sparkle: { position: 'absolute' },
   tagPill: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 16 },

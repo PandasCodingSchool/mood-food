@@ -71,7 +71,7 @@ export default function SwiggyConnectScreen() {
           onPress={() => router.back()}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18 }}>←</Text>
+          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
         </TouchableOpacity>
         <Text style={[fw(900), { fontSize: 20, color: colors.navy }]}>Connect Swiggy</Text>
       </View>

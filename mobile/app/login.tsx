@@ -74,7 +74,7 @@ export default function LoginScreen() {
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/onboarding'))}
             style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}
           >
-            <Text style={{ fontSize: 18 }}>←</Text>
+            <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
           </TouchableOpacity>
 
           <Animated.View style={{ opacity, transform: [{ translateY }], alignItems: 'center', marginBottom: 32 }}>

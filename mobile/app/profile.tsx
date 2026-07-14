@@ -207,7 +207,6 @@ export default function ProfileScreen() {
             {[
               { icon: '🔔', label: 'Notifications', onPress: () => router.push('/notifications' as never) },
               { icon: '🔗', label: 'Connected delivery apps', onPress: () => router.push('/swiggy-connect' as never) },
-              { icon: theme.dark ? '☀️' : '🌙', label: theme.dark ? 'Light mode' : 'Dark mode', onPress: toggleDark },
             ].map((item) => (
               <TouchableOpacity
                 key={item.label}

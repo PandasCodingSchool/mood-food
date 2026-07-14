@@ -52,7 +52,7 @@ export default function MealDetailScreen() {
           onPress={() => router.back()}
           style={{ position: 'absolute', top: 60, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, color: '#fff' }}>←</Text>
+          <Text style={{ fontSize: 18, lineHeight: 22, color: '#fff' }}>←</Text>
         </TouchableOpacity>
         {matchPct && (
           <View style={{ position: 'absolute', top: 60, right: 20, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.2)' }}>

@@ -71,7 +71,7 @@ export default function NotificationsScreen() {
             onPress={() => router.back()}
             style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
           >
-            <Text style={{ fontSize: 18, color: theme.text }}>←</Text>
+            <Text style={{ fontSize: 18, lineHeight: 22, color: theme.text }}>←</Text>
           </TouchableOpacity>
           <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>Notifications</Text>
           {unread > 0 && (

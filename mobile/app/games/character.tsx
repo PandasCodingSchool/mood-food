@@ -127,7 +127,7 @@ export default function CharacterMatchScreen() {
           onPress={() => router.push('/home')}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, color: '#fff' }}>←</Text>
+          <Text style={{ fontSize: 18, lineHeight: 22, color: '#fff' }}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
           <LinearGradient

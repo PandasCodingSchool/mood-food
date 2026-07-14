@@ -84,7 +84,7 @@ export default function SnackMatchScreen() {
           onPress={() => router.push('/home')}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, color: colors.navy }}>←</Text>
+          <Text style={{ fontSize: 18, lineHeight: 22, color: colors.navy }}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={[fw(900), { fontSize: 18, color: colors.navy }]}>Snack Match</Text>
