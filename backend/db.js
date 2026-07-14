@@ -79,6 +79,16 @@ export async function initDb() {
       // Add password_hash column to existing users (migration-safe)
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
 
+      // Per-user food preferences
+      await db.query(`CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        diets TEXT DEFAULT '[]',
+        allergies TEXT DEFAULT '[]',
+        cuisines TEXT DEFAULT '[]',
+        budget INTEGER DEFAULT 1,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+
       // Encrypted per-user Swiggy OAuth tokens
       await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -167,6 +177,15 @@ export async function initDb() {
         name TEXT,
         password_hash TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        diets TEXT DEFAULT '[]',
+        allergies TEXT DEFAULT '[]',
+        cuisines TEXT DEFAULT '[]',
+        budget INTEGER DEFAULT 1,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 

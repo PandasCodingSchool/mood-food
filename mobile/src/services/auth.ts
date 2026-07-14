@@ -1,5 +1,5 @@
-import { API_BASE_URL } from "./apiBase";
-import { setSessionId } from "./session";
+import { API_BASE_URL, getHeaders } from "./apiBase";
+import { setSessionId, clearSessionId } from "./session";
 
 export interface AuthUser {
   id: string;
@@ -42,4 +42,21 @@ export async function signup(
 
   await setSessionId(data.user.sessionId);
   return data.user;
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/user/me`, {
+      headers: await getHeaders(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.user as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export async function logout(): Promise<void> {
+  await clearSessionId();
 }

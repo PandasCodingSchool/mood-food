@@ -11,6 +11,7 @@ import gameAssistRouter from "./routes/gameAssist.js";
 import swiggyRouter from "./routes/swiggy.js";
 import swiggyAuthRouter from "./routes/swiggyAuth.js";
 import authRouter from "./routes/auth.js";
+import preferencesRouter from "./routes/preferences.js";
 import {
   sessionMiddleware,
   getUserMe,
@@ -76,6 +77,9 @@ app.use("/api/swiggy", swiggyRouter);
 
 // Auth routes (login / signup)
 app.use("/api/auth", authRouter);
+
+// User preferences
+app.use("/api/user/preferences", preferencesRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {
