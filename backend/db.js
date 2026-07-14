@@ -89,6 +89,24 @@ export async function initDb() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
 
+      // Per-user order history
+      await db.query(`CREATE TABLE IF NOT EXISTS order_history (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dish_name VARCHAR(255) NOT NULL,
+        cuisine VARCHAR(100),
+        emoji TEXT DEFAULT '🍽️',
+        price_inr INTEGER DEFAULT 0,
+        platform VARCHAR(50) DEFAULT 'swiggy',
+        via VARCHAR(100),
+        gradient_start VARCHAR(20) DEFAULT '#f97316',
+        gradient_end VARCHAR(20) DEFAULT '#fbbf24',
+        ordered BOOLEAN DEFAULT TRUE,
+        saved BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id)`);
+
       // Encrypted per-user Swiggy OAuth tokens
       await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -188,6 +206,24 @@ export async function initDb() {
         budget INTEGER DEFAULT 1,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS order_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dish_name TEXT NOT NULL,
+        cuisine TEXT,
+        emoji TEXT DEFAULT '🍽️',
+        price_inr INTEGER DEFAULT 0,
+        platform TEXT DEFAULT 'swiggy',
+        via TEXT,
+        gradient_start TEXT DEFAULT '#f97316',
+        gradient_end TEXT DEFAULT '#fbbf24',
+        ordered INTEGER DEFAULT 1,
+        saved INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id);
 
       CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id TEXT PRIMARY KEY,

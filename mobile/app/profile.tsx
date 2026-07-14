@@ -204,7 +204,7 @@ export default function ProfileScreen() {
           <View style={{ marginTop: 24, gap: 2 }}>
             {[
               { icon: '🔔', label: 'Notifications', onPress: () => {} },
-              { icon: '🔗', label: 'Connected delivery apps', onPress: () => {} },
+              { icon: '🔗', label: 'Connected delivery apps', onPress: () => router.push('/swiggy-connect' as never) },
               { icon: '🌙', label: 'Dark mode', onPress: () => {} },
               { icon: '📋', label: 'Join waitlist', onPress: () => router.push('/waitlist') },
             ].map((item) => (

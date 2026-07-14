@@ -126,7 +126,7 @@ export default function MealDetailScreen() {
 
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
           <TouchableOpacity
-            onPress={() => router.push({ pathname: '/order/app-select', params: { rec: rawRec } })}
+            onPress={() => router.push({ pathname: '/order/app-select', params: { rec: rawRec, rank: rawRank } })}
             activeOpacity={0.85}
             style={{ flex: 1 }}
           >

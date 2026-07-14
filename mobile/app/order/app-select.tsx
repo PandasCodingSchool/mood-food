@@ -1,10 +1,11 @@
 import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { DELIVERY_APPS, swiggyDeliveryOption } from '../../src/constants/deliveryApps';
+import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import { fw, colors } from '../../src/constants/theme';
 import DishThumbnail from '../../src/components/DishThumbnail';
 import type { Recommendation } from '../../src/types';
+import { openSwiggyApp } from '../../src/services/swiggy';
 
 export default function OrderAppSelectScreen() {
   const router = useRouter();
@@ -13,6 +14,18 @@ export default function OrderAppSelectScreen() {
   const rank = Number(rawRank || 0);
   const liveOption = swiggyDeliveryOption(rec);
   const apps = liveOption ? [liveOption, ...DELIVERY_APPS] : DELIVERY_APPS;
+
+  const handleAppSelect = async (app: DeliveryApp) => {
+    if (app.isLive) {
+      const restaurantId = rec.swiggy?.restaurant?.id ?? rec.swiggy?.item?.restaurant_id;
+      await openSwiggyApp(restaurantId, rec.dish.name);
+    } else {
+      router.push({
+        pathname: '/order/confirm',
+        params: { rec: rawRec, rank: String(rank), app: JSON.stringify(app) },
+      });
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -49,12 +62,7 @@ export default function OrderAppSelectScreen() {
           <TouchableOpacity
             key={app.name}
             activeOpacity={0.85}
-            onPress={() =>
-              router.push({
-                pathname: '/order/confirm',
-                params: { rec: rawRec, rank: String(rank), app: JSON.stringify(app) },
-              })
-            }
+            onPress={() => handleAppSelect(app)}
             style={{
               padding: 18,
               paddingHorizontal: 20,

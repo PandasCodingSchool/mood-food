@@ -6,6 +6,7 @@ import { fw, colors } from '../../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
 import type { DeliveryApp } from '../../src/constants/deliveryApps';
 import type { Recommendation } from '../../src/types';
+import { saveOrder } from '../../src/services/history';
 
 export default function OrderConfirmScreen() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function OrderConfirmScreen() {
     app: string;
   }>();
   const [imageFailed, setImageFailed] = useState(false);
+  const [placing, setPlacing] = useState(false);
   const rec: Recommendation = JSON.parse(rawRec);
   const rank = Number(rawRank || 0);
   const app: DeliveryApp = JSON.parse(rawApp);
@@ -25,6 +27,32 @@ export default function OrderConfirmScreen() {
   const delivFee = app.feeAmount;
   const discount = priceNum * 0.15;
   const total = priceNum + delivFee - discount;
+  const gradient = dishGradient(rank);
+
+  const handlePlaceOrder = async () => {
+    setPlacing(true);
+    try {
+      await saveOrder({
+        dishName: rec.dish.name,
+        cuisine: rec.dish.cuisine,
+        emoji,
+        priceInr: Math.round(total),
+        platform: app.name,
+        via: (rec as unknown as Record<string, string>).gameSource || undefined,
+        gradientStart: gradient[0],
+        gradientEnd: gradient[1],
+        ordered: true,
+        saved: false,
+      });
+    } catch {
+      // silent — order nav proceeds regardless
+    }
+    router.push({
+      pathname: '/order/success',
+      params: { rec: rawRec, app: rawApp, total: total.toFixed(0) },
+    });
+    setPlacing(false);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -126,19 +154,11 @@ export default function OrderConfirmScreen() {
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, backgroundColor: '#fff' }}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() =>
-            router.push({
-              pathname: '/order/success',
-              params: {
-                rec: rawRec,
-                app: rawApp,
-                total: total.toFixed(0),
-              },
-            })
-          }
+          disabled={placing}
+          onPress={handlePlaceOrder}
         >
-          <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>🛒 Place Order · ₹{total.toFixed(0)}</Text>
+          <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', opacity: placing ? 0.7 : 1 }}>
+            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>{placing ? 'Placing…' : `🛒 Place Order · ₹${total.toFixed(0)}`}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>

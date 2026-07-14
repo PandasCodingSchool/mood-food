@@ -6,6 +6,8 @@ export interface AuthUser {
   sessionId: string;
   name: string | null;
   phone: string | null;
+  swiggyLinked?: boolean;
+  swiggyUserId?: string | null;
 }
 
 export async function login(phone: string, password: string): Promise<AuthUser> {

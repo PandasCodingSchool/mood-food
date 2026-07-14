@@ -1,3 +1,4 @@
+import { Linking } from 'react-native';
 import { API_BASE_URL, getHeaders } from './apiBase';
 import type { Recommendation, EnrichResponse, EnrichedMatch } from '../types';
 
@@ -62,4 +63,37 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Pr
       () => { clearTimeout(timer); resolve(fallback); },
     );
   });
+}
+
+/**
+ * Open the Swiggy app (or website) at a specific restaurant page.
+ * Uses Android App Links / iOS Universal Links — if Swiggy is installed the OS
+ * hands off to the native app directly; otherwise the browser opens as fallback.
+ */
+export async function openSwiggyApp(restaurantId?: string | null, dishName?: string): Promise<void> {
+  const base = restaurantId
+    ? `https://www.swiggy.com/restaurants/${restaurantId}`
+    : `https://www.swiggy.com/search?query=${encodeURIComponent(dishName || '')}`;
+  await Linking.openURL(base);
+}
+
+/** Initiate Swiggy OAuth — returns the authUrl to open in the browser. */
+export async function initiateSwiggyOAuth(headers: Record<string, string>): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/swiggy/oauth/initiate`, {
+    method: 'POST',
+    headers,
+  });
+  if (!res.ok) throw new Error('Failed to start Swiggy connection');
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'OAuth initiation failed');
+  return data.authUrl as string;
+}
+
+/** Unlink Swiggy account from MoodFood. */
+export async function unlinkSwiggy(headers: Record<string, string>): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/swiggy/oauth/unlink`, {
+    method: 'POST',
+    headers,
+  });
+  if (!res.ok) throw new Error('Failed to unlink Swiggy');
 }
