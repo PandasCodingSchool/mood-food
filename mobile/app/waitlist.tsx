@@ -13,8 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { trackEvent } from '../src/utils/analytics';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+import { API_BASE_URL } from '../src/services/apiBase';
 
 export default function WaitlistScreen() {
   const router = useRouter();

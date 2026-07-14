@@ -83,7 +83,7 @@ function FeatureRow({ emoji, text, delay }: { emoji: string; text: string; delay
       <View style={styles.featureIcon}>
         <Text style={{ fontSize: 18 }}>{emoji}</Text>
       </View>
-      <Text style={[styles.featureText, fw(700)]}>{text}</Text>
+      <Text style={[styles.featureText, fw(700)]}>{text} hello</Text>
     </Animated.View>
   );
 }
