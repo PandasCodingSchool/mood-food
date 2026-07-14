@@ -7,7 +7,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mood-food-production-7e8d.up.railway.app/api"
+        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api"
       }
     },
     "preview": {
@@ -16,12 +16,12 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mood-food-production-7e8d.up.railway.app/api"
+        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mood-food-production-7e8d.up.railway.app/api"
+        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api"
       }
     }
   },
