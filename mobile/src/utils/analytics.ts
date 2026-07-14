@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../services/apiBase';
+import { API_BASE_URL, getHeaders } from '../services/apiBase';
 
 export async function trackEvent(
   eventName: string,
@@ -7,7 +7,7 @@ export async function trackEvent(
   try {
     await fetch(`${API_BASE_URL}/analytics`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getHeaders(),
       body: JSON.stringify({ event: eventName, properties: properties || {} }),
     });
   } catch {

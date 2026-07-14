@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, getHeaders } from './apiBase';
 import type { Recommendation, EnrichResponse, EnrichedMatch } from '../types';
 
 /**
@@ -23,7 +23,7 @@ export async function enrichRecommendations(
 
   const response = await fetch(`${API_BASE_URL}/swiggy/enrich`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await getHeaders(),
     body: JSON.stringify({ dishes, address_id: addressId || undefined }),
   });
 
@@ -45,7 +45,7 @@ export async function enrichRecommendations(
 
 export async function swiggyStatus(): Promise<{ configured: boolean }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/swiggy/status`);
+    const res = await fetch(`${API_BASE_URL}/swiggy/status`, { headers: await getHeaders() });
     if (!res.ok) return { configured: false };
     return (await res.json()) as { configured: boolean };
   } catch {

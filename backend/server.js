@@ -10,6 +10,7 @@ import characterMatchRouter from "./routes/characterMatch.js";
 import gameAssistRouter from "./routes/gameAssist.js";
 import swiggyRouter from "./routes/swiggy.js";
 import swiggyAuthRouter from "./routes/swiggyAuth.js";
+import authRouter from "./routes/auth.js";
 import {
   sessionMiddleware,
   getUserMe,
@@ -72,6 +73,9 @@ app.use("/api/swiggy/oauth", swiggyAuthRouter);
 app.use("/api/game-assist", gameAssistRouter);
 // Swiggy discovery/ordering route (proxied to intelligence service)
 app.use("/api/swiggy", swiggyRouter);
+
+// Auth routes (login / signup)
+app.use("/api/auth", authRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {

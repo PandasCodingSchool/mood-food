@@ -71,9 +71,13 @@ export async function initDb() {
         email VARCHAR(255) UNIQUE,
         phone VARCHAR(50) UNIQUE,
         name VARCHAR(255),
+        password_hash TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
+
+      // Add password_hash column to existing users (migration-safe)
+      await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
 
       // Encrypted per-user Swiggy OAuth tokens
       await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
@@ -161,6 +165,7 @@ export async function initDb() {
         email TEXT UNIQUE,
         phone TEXT UNIQUE,
         name TEXT,
+        password_hash TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -179,6 +184,13 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_order_clicks_created ON order_clicks(created_at);
       CREATE INDEX IF NOT EXISTS idx_order_clicks_dish ON order_clicks(dish_name);
     `);
+
+    // Add password_hash column to existing users (migration-safe)
+    try {
+      await db.run('ALTER TABLE users ADD COLUMN password_hash TEXT');
+    } catch {
+      // Column already exists
+    }
   }
 
   dbInitialized = true;

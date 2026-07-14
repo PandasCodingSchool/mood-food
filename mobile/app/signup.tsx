@@ -16,6 +16,7 @@ import GradientButton from '../src/components/GradientButton';
 import AuthTextField from '../src/components/AuthTextField';
 import { fadeUp } from '../src/utils/animations';
 import { trackEvent } from '../src/utils/analytics';
+import { signup } from '../src/services/auth';
 
 const PHONE_RE = /^\+?[0-9\s-]{7,15}$/;
 
@@ -29,6 +30,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
 
@@ -38,7 +40,7 @@ export default function SignupScreen() {
 
   const clearError = (key: keyof Errors) => setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     const next: Errors = {};
     if (!name.trim()) next.name = 'Tell us what to call you.';
     if (!PHONE_RE.test(phone.trim())) next.phone = 'Enter a valid phone number.';
@@ -47,13 +49,19 @@ export default function SignupScreen() {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    setApiError('');
     setSubmitting(true);
     trackEvent('signup_submitted');
-    // No backend auth yet — simulate a brief round-trip, then drop into the app.
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await signup(name, phone, password);
       router.replace('/home');
-    }, 500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Sign up failed';
+      setApiError(message);
+      trackEvent('signup_error', { error: message });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleGuest = () => {
@@ -139,6 +147,12 @@ export default function SignupScreen() {
             disabled={submitting}
             style={{ marginTop: 28 }}
           />
+
+          {apiError ? (
+            <Text style={[fw(600), { color: colors.red, textAlign: 'center', marginTop: 16, fontSize: 14 }]}>
+              {apiError}
+            </Text>
+          ) : null}
 
           <TouchableOpacity onPress={handleGuest} activeOpacity={0.7} style={{ marginTop: 16, alignItems: 'center' }}>
             <Text style={[fw(700), { fontSize: 14, color: '#94a3b8' }]}>Continue as guest</Text>

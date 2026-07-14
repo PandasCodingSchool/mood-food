@@ -4,7 +4,7 @@ import type {
   RecommendationResponse,
   GameData,
 } from "../types";
-import { API_BASE_URL } from "./apiBase";
+import { API_BASE_URL, getHeaders } from "./apiBase";
 
 export async function fetchRecommendations(
   quizResults: QuizResults,
@@ -21,7 +21,7 @@ export async function fetchRecommendations(
 
   const response = await fetch(`${API_BASE_URL}/ai-recommendations`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await getHeaders(),
     body: JSON.stringify(context),
   });
 

@@ -16,6 +16,7 @@ import GradientButton from '../src/components/GradientButton';
 import AuthTextField from '../src/components/AuthTextField';
 import { fadeUp } from '../src/utils/animations';
 import { trackEvent } from '../src/utils/analytics';
+import { login } from '../src/services/auth';
 
 const PHONE_RE = /^\+?[0-9\s-]{7,15}$/;
 
@@ -25,6 +26,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ phone?: string; password?: string }>({});
   const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
 
@@ -32,20 +34,26 @@ export default function LoginScreen() {
     fadeUp(opacity, translateY);
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const next: typeof errors = {};
     if (!PHONE_RE.test(phone.trim())) next.phone = 'Enter a valid phone number.';
     if (password.length < 6) next.password = 'Password must be at least 6 characters.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    setApiError('');
     setSubmitting(true);
     trackEvent('login_submitted');
-    // No backend auth yet — simulate a brief round-trip, then drop into the app.
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await login(phone, password);
       router.replace('/home');
-    }, 500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setApiError(message);
+      trackEvent('login_error', { error: message });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleGuest = () => {
@@ -112,6 +120,12 @@ export default function LoginScreen() {
             disabled={submitting}
             style={{ marginTop: 28 }}
           />
+
+          {apiError ? (
+            <Text style={[fw(600), { color: colors.red, textAlign: 'center', marginTop: 16, fontSize: 14 }]}>
+              {apiError}
+            </Text>
+          ) : null}
 
           <TouchableOpacity onPress={handleGuest} activeOpacity={0.7} style={{ marginTop: 16, alignItems: 'center' }}>
             <Text style={[fw(700), { fontSize: 14, color: '#94a3b8' }]}>Continue as guest</Text>
