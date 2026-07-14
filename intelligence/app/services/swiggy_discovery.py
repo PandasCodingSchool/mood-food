@@ -180,8 +180,12 @@ def _parse_price_int(v: Any) -> Optional[int]:
 
 
 class SwiggyDiscoveryService:
-    def __init__(self, client: Optional[SwiggyMCPClient] = None) -> None:
-        self.client = client or SwiggyMCPClient()
+    def __init__(
+        self,
+        client: Optional[SwiggyMCPClient] = None,
+        token: Optional[str] = None,
+    ) -> None:
+        self.client = client or SwiggyMCPClient(token=token)
         # Per-request memoisation: the 3 recommendations enrich concurrently and
         # frequently hit the same category searches / restaurant menus. Dedupe via
         # shared tasks so each (query) and (restaurantId) is fetched at most once.

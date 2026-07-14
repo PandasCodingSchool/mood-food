@@ -63,6 +63,62 @@ export async function initDb() {
         ip_address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
+
+      // Anonymous/lightweight MoodFood user sessions
+      await db.query(`CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE,
+        phone VARCHAR(50) UNIQUE,
+        name VARCHAR(255),
+        password_hash TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+
+      // Add password_hash column to existing users (migration-safe)
+      await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
+
+      // Per-user food preferences
+      await db.query(`CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        diets TEXT DEFAULT '[]',
+        allergies TEXT DEFAULT '[]',
+        cuisines TEXT DEFAULT '[]',
+        budget INTEGER DEFAULT 1,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+
+      // Per-user order history
+      await db.query(`CREATE TABLE IF NOT EXISTS order_history (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dish_name VARCHAR(255) NOT NULL,
+        cuisine VARCHAR(100),
+        emoji TEXT DEFAULT '🍽️',
+        price_inr INTEGER DEFAULT 0,
+        platform VARCHAR(50) DEFAULT 'swiggy',
+        via VARCHAR(100),
+        gradient_start VARCHAR(20) DEFAULT '#f97316',
+        gradient_end VARCHAR(20) DEFAULT '#fbbf24',
+        ordered BOOLEAN DEFAULT TRUE,
+        saved BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id)`);
+
+      // Encrypted per-user Swiggy OAuth tokens
+      await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        swiggy_user_id VARCHAR(255) NOT NULL,
+        access_token_encrypted TEXT NOT NULL,
+        expires_at TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, swiggy_user_id)
+      )`);
+
       await db.query(
         `CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(event_name)`,
       );
@@ -131,9 +187,65 @@ export async function initDb() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        session_id TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE,
+        phone TEXT UNIQUE,
+        name TEXT,
+        password_hash TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        diets TEXT DEFAULT '[]',
+        allergies TEXT DEFAULT '[]',
+        cuisines TEXT DEFAULT '[]',
+        budget INTEGER DEFAULT 1,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS order_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dish_name TEXT NOT NULL,
+        cuisine TEXT,
+        emoji TEXT DEFAULT '🍽️',
+        price_inr INTEGER DEFAULT 0,
+        platform TEXT DEFAULT 'swiggy',
+        via TEXT,
+        gradient_start TEXT DEFAULT '#f97316',
+        gradient_end TEXT DEFAULT '#fbbf24',
+        ordered INTEGER DEFAULT 1,
+        saved INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id);
+
+      CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        swiggy_user_id TEXT NOT NULL,
+        access_token_encrypted TEXT NOT NULL,
+        expires_at DATETIME,
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, swiggy_user_id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_order_clicks_created ON order_clicks(created_at);
       CREATE INDEX IF NOT EXISTS idx_order_clicks_dish ON order_clicks(dish_name);
     `);
+
+    // Add password_hash column to existing users (migration-safe)
+    try {
+      await db.run('ALTER TABLE users ADD COLUMN password_hash TEXT');
+    } catch {
+      // Column already exists
+    }
   }
 
   dbInitialized = true;
