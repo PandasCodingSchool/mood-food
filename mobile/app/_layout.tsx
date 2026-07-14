@@ -1,6 +1,7 @@
 import "../global.css";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ThemeProvider } from '../src/context/ThemeContext';
 import { Component, type ReactNode } from "react";
 import { View, Text } from "react-native";
 import {
@@ -59,6 +60,7 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
@@ -68,6 +70,7 @@ export default function RootLayout() {
           }}
         />
       </GestureHandlerRootView>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

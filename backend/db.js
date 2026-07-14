@@ -107,6 +107,19 @@ export async function initDb() {
       )`);
       await db.query(`CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id)`);
 
+      // Per-user in-app notifications
+      await db.query(`CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(50) DEFAULT 'info',
+        title VARCHAR(255) NOT NULL,
+        body TEXT,
+        data JSONB DEFAULT '{}',
+        read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`);
+
       // Encrypted per-user Swiggy OAuth tokens
       await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -224,6 +237,19 @@ export async function initDb() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id);
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT DEFAULT 'info',
+        title TEXT NOT NULL,
+        body TEXT,
+        data TEXT DEFAULT '{}',
+        read INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
 
       CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id TEXT PRIMARY KEY,

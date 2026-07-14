@@ -6,6 +6,7 @@ import { fw, colors } from '../src/constants/theme';
 import BottomNav from '../src/components/BottomNav';
 import { fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
 import { fetchPreferences, savePreferences, type UserPreferences } from '../src/services/preferences';
+import { useTheme } from '../src/context/ThemeContext';
 
 const DIETS = [
   { id: 'veg', emoji: '🥬', label: 'Vegetarian' },
@@ -75,6 +76,7 @@ const DEFAULT_PREFS: UserPreferences = { diets: [], allergies: [], cuisines: [],
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { theme, toggleDark } = useTheme();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_PREFS);
   const [loading, setLoading] = useState(true);
@@ -132,10 +134,10 @@ export default function ProfileScreen() {
   const displaySub = user?.phone ? `📱 ${user.phone}` : 'Guest user';
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5eb" />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
       <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={[fw(900), { fontSize: 24, color: colors.navy }]}>Profile</Text>
+        <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>Profile</Text>
         {saving && <ActivityIndicator size="small" color={colors.orange} />}
       </View>
 
@@ -203,20 +205,19 @@ export default function ProfileScreen() {
 
           <View style={{ marginTop: 24, gap: 2 }}>
             {[
-              { icon: '🔔', label: 'Notifications', onPress: () => {} },
+              { icon: '🔔', label: 'Notifications', onPress: () => router.push('/notifications' as never) },
               { icon: '🔗', label: 'Connected delivery apps', onPress: () => router.push('/swiggy-connect' as never) },
-              { icon: '🌙', label: 'Dark mode', onPress: () => {} },
-              { icon: '📋', label: 'Join waitlist', onPress: () => router.push('/waitlist') },
+              { icon: theme.dark ? '☀️' : '🌙', label: theme.dark ? 'Light mode' : 'Dark mode', onPress: toggleDark },
             ].map((item) => (
               <TouchableOpacity
                 key={item.label}
                 onPress={item.onPress}
                 activeOpacity={0.8}
-                style={{ padding: 14, paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
+                style={{ padding: 14, paddingHorizontal: 16, borderRadius: 14, backgroundColor: theme.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Text style={{ fontSize: 18 }}>{item.icon}</Text>
-                  <Text style={[fw(700), { fontSize: 14, color: colors.navy }]}>{item.label}</Text>
+                  <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>{item.label}</Text>
                 </View>
                 <Text style={{ fontSize: 14, color: '#94a3b8' }}>›</Text>
               </TouchableOpacity>

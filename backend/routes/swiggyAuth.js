@@ -8,8 +8,8 @@ const router = express.Router();
 
 const AUTH_BASE = "https://mcp.swiggy.com";
 const REDIRECT_URI =
-  process.env.SWIGGY_OAUTH_REDIRECT_URI || "http://localhost:3001/api/swiggy/oauth/callback";
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+  process.env.SWIGGY_OAUTH_REDIRECT_URI || "https://moodfood.fun/api/swiggy/oauth/callback";
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://moodfood.fun";
 
 // In-memory PKCE state store. For multi-instance production deploys, move this to Redis/DB.
 const stateStore = new Map();

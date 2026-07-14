@@ -13,6 +13,7 @@ import swiggyAuthRouter from "./routes/swiggyAuth.js";
 import authRouter from "./routes/auth.js";
 import preferencesRouter from "./routes/preferences.js";
 import historyRouter from "./routes/history.js";
+import notificationsRouter from "./routes/notifications.js";
 import {
   sessionMiddleware,
   getUserMe,
@@ -84,6 +85,9 @@ app.use("/api/user/preferences", preferencesRouter);
 
 // User order history
 app.use("/api/user/history", historyRouter);
+
+// User notifications
+app.use("/api/user/notifications", notificationsRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {
