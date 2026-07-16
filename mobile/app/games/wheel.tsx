@@ -6,6 +6,8 @@ import { WHEEL_SEGMENTS, type WheelSegment } from '../../src/constants/wheelSegm
 import { fw } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
 import { pulseLoop } from '../../src/utils/animations';
+import { playPopSound, playSuccessSound } from '../../src/utils/sounds';
+import { hapticSelect, hapticSuccess } from '../../src/utils/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const WHEEL_SIZE = Math.min(SCREEN_WIDTH - 92, 280);
@@ -31,6 +33,8 @@ export default function MealRouletteScreen() {
 
   const spin = () => {
     if (spinning) return;
+    hapticSelect();
+    playPopSound();
     setSpinning(true);
     setResult(null);
     trackEvent('wheel_spun');
@@ -48,6 +52,8 @@ export default function MealRouletteScreen() {
       useNativeDriver: true,
     }).start(() => {
       const segment = WHEEL_SEGMENTS[landingSegment];
+      hapticSuccess();
+      playSuccessSound();
       setResult(segment);
       setSpinning(false);
       trackEvent('wheel_landed', { segment: segment.label });

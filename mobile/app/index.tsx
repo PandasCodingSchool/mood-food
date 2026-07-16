@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fw } from '../src/constants/theme';
 import { bounceIn, spinLoop } from '../src/utils/animations';
+import { isSessionValid } from '../src/services/session';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -16,8 +17,9 @@ export default function SplashScreen() {
     Animated.timing(logoOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     spinLoop(spin, 1000);
 
-    const timer = setTimeout(() => {
-      router.replace('/onboarding');
+    const timer = setTimeout(async () => {
+      const valid = await isSessionValid();
+      router.replace(valid ? '/home' : '/onboarding');
     }, 2200);
     return () => clearTimeout(timer);
   }, []);
