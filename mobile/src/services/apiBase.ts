@@ -3,6 +3,12 @@ import { getSessionId } from "./session";
 
 const envUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001/api";
 
+if (!__DEV__ && envUrl.includes("localhost")) {
+  throw new Error(
+    "Release builds cannot use a localhost API URL. Set EXPO_PUBLIC_API_URL in eas.json to the production server.",
+  );
+}
+
 function getApiBaseUrl(): string {
   if (!envUrl.includes("localhost")) {
     return envUrl;
