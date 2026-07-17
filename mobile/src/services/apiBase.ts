@@ -1,11 +1,13 @@
 import Constants from "expo-constants";
 import { getSessionId } from "./session";
 
-const envUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001/api";
+const envUrl =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (__DEV__ ? "http://localhost:3001/api" : "https://moodfood.fun/api");
 
 if (!__DEV__ && envUrl.includes("localhost")) {
   throw new Error(
-    "Release builds cannot use a localhost API URL. Set EXPO_PUBLIC_API_URL in eas.json to the production server.",
+    "Release builds cannot use a localhost API URL. Set EXPO_PUBLIC_API_URL in eas.json or an EAS Environment variable to the production server.",
   );
 }
 

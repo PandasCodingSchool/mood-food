@@ -75,6 +75,7 @@ export default function SplashScreen() {
                 backgroundColor: '#fff',
                 alignItems: 'center',
                 justifyContent: 'center',
+                overflow: 'hidden',
               }}
             >
               <Image
