@@ -29,7 +29,7 @@ class Restaurant(BaseModel):
 
 class Alternative(BaseModel):
     dish_id: str
-    type: str  # healthier_swap | budget_swap
+    type: str  # healthier_swap | budget_swap | similar_tier_swap | popular_pick
     name: str
     reason: str
     # Full dish info so the frontend can render a swap as its own detail card.
@@ -89,6 +89,9 @@ class RecommendationResponse(BaseModel):
     error: Optional[str] = None
     swiggy_matches: Optional[dict] = None
     swiggy_address_id: Optional[str] = None
+    # "live" | "partial" | "offline" — how much of the response is Swiggy-verified.
+    live_status: Optional[str] = None
+    request_id: Optional[str] = None
 
 
 class DishDetailResponse(BaseModel):

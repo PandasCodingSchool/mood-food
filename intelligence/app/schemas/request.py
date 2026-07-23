@@ -117,3 +117,5 @@ class RecommendationRequest(BaseModel):
     user_context: UserContext
     recommendation_config: RecommendationConfig = Field(default_factory=RecommendationConfig)
     swiggy_address_id: Optional[str] = None
+    # Client-generated id used to coalesce duplicate in-flight requests.
+    request_id: Optional[str] = None

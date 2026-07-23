@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # diagnosing why restaurants/items aren't coming back (e.g. response-shape
     # mismatches). Leave off in production — payloads can be large.
     swiggy_debug: bool = False
+    # When false (default — the user's address hasn't been retrieved yet),
+    # resolve_address_id will NOT fall through to a live get_addresses call once
+    # explicit address_id / city map lookups are exhausted; it raises
+    # SwiggyAddressRequiredError instead so callers can prompt for an address.
+    # When true, it kicks off the live get_addresses lookup as a last resort.
+    swiggy_address_retrieval_enabled: bool = False
     log_level: str = "INFO"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
