@@ -7,6 +7,8 @@ import BottomNav from '../src/components/BottomNav';
 import { fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
 import { fetchPreferences, savePreferences, type UserPreferences } from '../src/services/preferences';
 import { useTheme } from '../src/context/ThemeContext';
+import { fetchLearnedProfile } from '../src/services/signals';
+import type { LearnedProfile } from '../src/types';
 
 const DIETS = [
   { id: 'veg', emoji: '🥬', label: 'Vegetarian' },
@@ -81,6 +83,7 @@ export default function ProfileScreen() {
   const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_PREFS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [learned, setLearned] = useState<LearnedProfile | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -91,6 +94,7 @@ export default function ProfileScreen() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetchLearnedProfile().then(setLearned).catch(() => {});
   }, []);
 
   const persistPrefs = useCallback((next: UserPreferences) => {
@@ -157,6 +161,33 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {learned?.persona && (
+            <LinearGradient
+              colors={['#7c3aed', '#a78bfa']}
+              style={{ borderRadius: 18, padding: 16, marginTop: 4, marginBottom: 8 }}
+            >
+              <Text style={[fw(800), { fontSize: 11, color: 'rgba(255,255,255,0.8)', letterSpacing: 1, textTransform: 'uppercase' }]}>
+                Your food character
+              </Text>
+              <Text style={[fw(900), { fontSize: 18, color: '#fff', marginTop: 4 }]}>
+                {learned.persona.archetype}
+              </Text>
+              <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 6, lineHeight: 18 }]}>
+                {learned.persona.blurb}
+              </Text>
+              {learned.persona.drift_line && (
+                <Text style={[fw(600), { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 6 }]}>
+                  {learned.persona.drift_line}
+                </Text>
+              )}
+              {learned.accuracy_meter && (
+                <Text style={[fw(700), { fontSize: 12, color: '#fff', marginTop: 10 }]}>
+                  🔮 {Math.round(learned.accuracy_meter.accuracy * 100)}% mind-read accuracy
+                </Text>
+              )}
+            </LinearGradient>
+          )}
+
           <Section title="🥗 Dietary Preferences">
             {DIETS.map((d) => (
               <Chip key={d.id} emoji={d.emoji} label={d.label} active={prefs.diets.includes(d.id)} onPress={() => toggleList('diets', d.id)} />
@@ -205,6 +236,7 @@ export default function ProfileScreen() {
 
           <View style={{ marginTop: 24, gap: 2 }}>
             {[
+              { icon: '🏆', label: 'Quests & streaks', onPress: () => router.push('/quests' as never) },
               { icon: '🔔', label: 'Notifications', onPress: () => router.push('/notifications' as never) },
               { icon: '🔗', label: 'Connected delivery apps', onPress: () => router.push('/swiggy-connect' as never) },
             ].map((item) => (

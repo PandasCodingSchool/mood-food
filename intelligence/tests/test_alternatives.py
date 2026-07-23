@@ -66,3 +66,28 @@ def test_apply_diet_filter_drops_and_backfills():
 def test_apply_diet_filter_noop_when_no_restriction():
     ranked = [{"dish_id": DISHES[0].id}]
     assert _apply_diet_filter(ranked, [], count=3) == ranked
+
+
+def test_swaps_never_surface_complimentary_items():
+    # Butter Naan / Aloo Paratha / Kachumber Salad are breads/accompaniments —
+    # never a real swap target for an actual main course.
+    complimentary_names = {"Butter Naan", "Aloo Paratha", "Kachumber Salad"}
+    for dish in DISHES:
+        if dish.category not in _MAIN_CATEGORIES or dish.tier == "complimentary":
+            continue
+        for swap in (_healthier_swap(dish, []), _budget_swap(dish, [])):
+            assert swap.name not in complimentary_names
+            assert swap.tier != "complimentary"
+
+
+def test_budget_swap_falls_back_to_similar_tier_within_band():
+    # Poha (₹60) has no strictly-cheaper same-tier candidate — the nearest is
+    # Upma at the same price, which should surface as a similar_tier_swap
+    # (within the 10-15% band) rather than being omitted or picked at random.
+    poha = _find("Poha")
+    alts = _build_alternatives(poha, [])
+    types = {a.type for a in alts}
+    assert "budget_swap" not in types
+    assert "similar_tier_swap" in types
+    similar = next(a for a in alts if a.type == "similar_tier_swap")
+    assert similar.practical_details.estimated_price <= poha.price_inr * 1.15

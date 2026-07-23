@@ -54,6 +54,59 @@ def test_normalize_menu_item():
     assert item.restaurant_id == "r1"
 
 
+def test_normalize_menu_item_search_menu_shape():
+    """Real search_menu rows use menu_item_id instead of id/itemId."""
+    raw = {
+        "menu_item_id": "m123",
+        "name": "Paneer Butter Masala",
+        "price": 280,
+        "restaurant_id": "r99",
+        "restaurant_name": "Spice Garden",
+        "is_veg": True,
+        "rating": 4.2,
+    }
+    item = normalize_menu_item(raw)
+    assert item is not None, "menu_item_id row must normalize successfully"
+    assert item.id == "m123"
+    assert item.name == "Paneer Butter Masala"
+    assert item.price == 280
+    assert item.restaurant_id == "r99"
+    assert item.restaurant_name == "Spice Garden"
+    assert item.is_veg is True
+
+
+def test_normalize_menu_item_search_menu_shape_produces_nonzero_items():
+    """_extract_menu_items must recognise menu_item_id rows as valid items."""
+    from app.services.swiggy_discovery import _extract_menu_items
+
+    raw_response = {
+        "items": [
+            {
+                "menu_item_id": "sm1",
+                "name": "Chicken Tikka",
+                "price": 350,
+                "restaurant_id": "r5",
+                "restaurant_name": "Grill House",
+                "is_veg": False,
+            },
+            {
+                "menu_item_id": "sm2",
+                "name": "Dal Tadka",
+                "price": 160,
+                "restaurant_id": "r5",
+                "restaurant_name": "Grill House",
+                "is_veg": True,
+            },
+        ]
+    }
+    items = _extract_menu_items(raw_response)
+    assert len(items) == 2, (
+        f"Expected 2 items from menu_item_id rows, got {len(items)}"
+    )
+    ids = {i.id for i in items}
+    assert "sm1" in ids and "sm2" in ids
+
+
 # --- Service tests with the MCP client mocked ---
 
 def _client_with(tool_returns):
@@ -121,13 +174,32 @@ async def test_resolve_address_falls_back_to_get_addresses(monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, "swiggy_city_address_map", "{}")
     monkeypatch.setattr(settings, "swiggy_default_city", "")
+    monkeypatch.setattr(settings, "swiggy_address_retrieval_enabled", True)
 
     client = _client_with(
         {"get_addresses": {"addresses": [{"id": "a1", "addressTag": "Work"}, {"id": "a2", "addressTag": "Home"}]}}
     )
     svc = SwiggyDiscoveryService(client=client)
-    # No city map configured -> calls get_addresses, picks the Home address.
+    # No city map configured, retrieval enabled -> calls get_addresses, picks Home.
     assert await svc.resolve_address_id() == "a2"
+
+
+@pytest.mark.asyncio
+async def test_resolve_address_requires_flag_when_no_city_match(monkeypatch):
+    from app.config import settings
+    from app.services.swiggy_mcp import SwiggyAddressRequiredError
+    monkeypatch.setattr(settings, "swiggy_city_address_map", "{}")
+    monkeypatch.setattr(settings, "swiggy_default_city", "")
+    monkeypatch.setattr(settings, "swiggy_address_retrieval_enabled", False)
+
+    client = _client_with(
+        {"get_addresses": {"addresses": [{"id": "a1", "addressTag": "Home"}]}}
+    )
+    svc = SwiggyDiscoveryService(client=client)
+    # Retrieval disabled (default) and no city map entry -> must not call
+    # get_addresses live; raises so callers can prompt for an address instead.
+    with pytest.raises(SwiggyAddressRequiredError):
+        await svc.resolve_address_id()
 
 
 @pytest.mark.asyncio
@@ -237,10 +309,16 @@ async def test_enrich_no_overlap_returns_unmatched():
 
 @pytest.mark.asyncio
 async def test_enrich_uses_distinct_restaurants_for_each_dish():
-    """Three dishes sharing one cuisine should match to 3 different restaurants."""
+    """Three dishes should each get a live Swiggy item (closest fill allowed).
+
+    With shared top-restaurant ordering, multiple dishes may land at the same
+    restaurant when it has the strongest name overlap — that is intentional.
+    """
     client = SwiggyMCPClient(token="test-token")
 
     async def fake_call(name, args):
+        if name == "search_menu":
+            return {"items": []}
         if name == "search_restaurants":
             return {"restaurants": [
                 {"id": "r1", "name": "Wings Hub", "avgRating": 4.5,
@@ -272,10 +350,8 @@ async def test_enrich_uses_distinct_restaurants_for_each_dish():
     ]
     _, matches = await svc.enrich(dishes, address_id="a1")
     matched = [m for m in matches if m.matched]
-    assert len(matched) == 3
-    restaurant_ids = {m.restaurant.id for m in matched}
-    assert len(restaurant_ids) == 3, f"Expected 3 distinct restaurants, got {restaurant_ids}"
-
+    assert len(matched) == 3, f"Expected all 3 dishes matched via closest fill, got {len(matched)}"
+    assert all(m.item is not None for m in matched)
 
 @pytest.mark.asyncio
 async def test_enrich_deduplicates_alternatives_across_cards():
@@ -323,6 +399,368 @@ async def test_enrich_deduplicates_alternatives_across_cards():
     # No duplicate alternative item across cards
     assert len(all_alt_ids) == len(set(all_alt_ids)), \
         f"Duplicate alt ids found: {all_alt_ids}"
+
+
+@pytest.mark.asyncio
+async def test_enrich_both_dishes_matched_stable_top_ordering():
+    """With stable top ordering (no per-dish rotation), two same-category dishes
+    both evaluate the same first restaurant.  When that restaurant serves both items,
+    both are matched and the menu is fetched only once (cache reuse).
+    """
+    from app.schemas.swiggy import EnrichDishInput
+
+    client = SwiggyMCPClient(token="test-token")
+    menu_fetch_calls: list[str] = []
+
+    async def fake_call(name, args):
+        if name == "search_menu":
+            return {"items": []}
+        if name == "search_restaurants":
+            return {"restaurants": [
+                {"id": "r1", "name": "Burger Barn", "avgRating": 4.5,
+                 "deliveryTimeMinutes": 20, "availabilityStatus": "OPEN", "cuisines": ["American"]},
+                {"id": "r2", "name": "Grill House", "avgRating": 4.2,
+                 "deliveryTimeMinutes": 25, "availabilityStatus": "OPEN", "cuisines": ["American"]},
+            ]}
+        if name == "get_restaurant_menu":
+            rid = args.get("restaurantId")
+            menu_fetch_calls.append(rid)
+            return {"restaurant": {"id": rid}, "categories": [{"title": "Menu", "items": [
+                {"id": f"{rid}_burger", "name": "Smash Burger", "price": 250, "isVeg": False},
+                {"id": f"{rid}_wings", "name": "Buffalo Wings", "price": 220, "isVeg": False},
+            ]}]}
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    dishes = [
+        EnrichDishInput(id="d1", name="Smash Burger", cuisine="american"),
+        EnrichDishInput(id="d2", name="Buffalo Wings", cuisine="american"),
+    ]
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches",
+               AsyncMock(return_value={})):
+        _, matches = await svc.enrich(dishes, address_id="a1")
+
+    matched = [m for m in matches if m.matched]
+    assert len(matched) == 2, f"both dishes must match; got {[(m.dish_id, m.matched) for m in matches]}"
+
+    # Both dishes start at r1 (stable top); r1 menu is fetched once and cached.
+    r1_fetches = menu_fetch_calls.count("r1")
+    assert r1_fetches == 1, (
+        f"get_restaurant_menu('r1') called {r1_fetches}x; expected exactly 1 (cached for second dish)"
+    )
+    # Both matches come from r1 (the top restaurant with both items)
+    assert all(m.restaurant.id == "r1" for m in matched), (
+        f"expected both to match at r1; got {[m.restaurant.id for m in matched]}"
+    )
+
+
+# --- Scout integration tests ---
+
+@pytest.mark.asyncio
+async def test_closest_fill_accepts_borderline_without_scout():
+    """Borderline search_menu hits populate live cards immediately (main-style closest)."""
+    from app.schemas.swiggy import EnrichDishInput
+
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_menu":
+            query = args.get("query", "")
+            if "Dal" in query:
+                return {"items": [{
+                    "id": "i1", "name": "Dal Fry", "price": 180, "isVeg": True,
+                    "restaurantId": "r1", "restaurantName": "Dal House",
+                }]}
+            if "Shahi" in query or "Paneer" in query:
+                return {"items": [{
+                    "id": "i2", "name": "Paneer Tikka", "price": 320, "isVeg": True,
+                    "restaurantId": "r2", "restaurantName": "Paneer Place",
+                }]}
+            return {"items": []}
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    scout_call_count = 0
+
+    async def mock_scout(pairs):
+        nonlocal scout_call_count
+        scout_call_count += 1
+        return {}
+
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", mock_scout):
+        dishes = [
+            EnrichDishInput(id="d1", name="Dal Tadka", cuisine="indian"),
+            EnrichDishInput(id="d2", name="Shahi Paneer", cuisine="indian"),
+        ]
+        _, matches = await svc.enrich(dishes, address_id="a1")
+
+    assert scout_call_count == 0, "Closest fill should not need scout for borderline hits"
+    matched = [m for m in matches if m.matched]
+    assert len(matched) == 2, f"Both dishes should be matched via closest fill, got {len(matched)}"
+    matched_item_ids = {m.item.id for m in matched}
+    assert "i1" in matched_item_ids
+    assert "i2" in matched_item_ids
+
+
+@pytest.mark.asyncio
+async def test_scout_hard_rejects_not_accepted():
+    """Even if scout were called, hard-reject borderline candidates must not appear.
+
+    Mutton Curry -> Rajmah Curry has match_confidence=0, so it is never queued
+    and scout is never called at all for that dish.
+    """
+    from app.schemas.swiggy import EnrichDishInput
+    from app.data.dishes import DISHES_BY_ID
+
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_menu":
+            # Always return the known hard-reject candidate
+            return {"items": [{
+                "id": "rej1", "name": "Punjabi Rajmah Curry", "price": 447,
+                "isVeg": True, "restaurantId": "r1", "restaurantName": "Veg House",
+            }]}
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    scout_calls = []
+
+    async def mock_scout(pairs):
+        scout_calls.append(pairs)
+        return {}
+
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", mock_scout):
+        dish = EnrichDishInput(
+            id="in_023", name="Mutton Curry", cuisine="indian",
+            aliases=DISHES_BY_ID["in_023"].swiggy_aliases,
+        )
+        _, matches = await svc.enrich([dish], address_id="a1")
+
+    # The hard-reject candidate has confidence 0 → not in borderline → scout not called
+    assert scout_calls == [], "Scout must not be called when only hard-conflict candidates exist"
+    assert matches[0].matched is False
+
+
+@pytest.mark.asyncio
+async def test_closest_fill_from_search_menu_when_not_exact():
+    """A word-overlap search_menu hit must populate the card without waiting on scout."""
+    from app.schemas.swiggy import EnrichDishInput
+
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_menu":
+            if "Dal" in args.get("query", ""):
+                return {"items": [{
+                    "id": "i1", "name": "Dal Fry", "price": 180, "isVeg": True,
+                    "restaurantId": "r1", "restaurantName": "Dal House",
+                }]}
+            return {"items": []}
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", AsyncMock(return_value={})):
+        dishes = [EnrichDishInput(id="d1", name="Dal Tadka", cuisine="indian")]
+        _, matches = await svc.enrich(dishes, address_id="a1")
+
+    assert matches[0].matched is True
+    assert matches[0].item.id == "i1"
+    assert matches[0].restaurant.name == "Dal House"
+
+
+# ---------------------------------------------------------------------------
+# Focused tests: dedup, no-exact-restaurant-name, pool-size behavior
+# ---------------------------------------------------------------------------
+
+def test_restaurant_queries_excludes_dish_name():
+    """_restaurant_queries must not contain the exact dish name."""
+    from app.services.swiggy_discovery import _restaurant_queries
+    from app.schemas.swiggy import EnrichDishInput
+
+    # Specific multi-word dish name
+    dish = EnrichDishInput(id="d1", name="Chicken Tikka Masala", cuisine="indian")
+    queries = _restaurant_queries(dish)
+    assert "Chicken Tikka Masala" not in queries, (
+        "exact dish name must be excluded from restaurant queries"
+    )
+    # Category/cuisine queries should still be present
+    assert any(q for q in queries), "at least one category/cuisine query must remain"
+
+
+def test_restaurant_queries_keeps_category_for_pure_category_name():
+    """Category-derived queries must survive even when they match the dish name.
+
+    For "Biryani": the category hint (step 2) adds "Biryani".  The tail dish-name
+    fallback (step 5) also adds "Biryani", but that is deduplicated away by
+    _enrich_queries itself.  _restaurant_queries must not remove the category-derived
+    entry just because it shares text with the dish name.
+    """
+    from app.services.swiggy_discovery import _restaurant_queries, _enrich_queries
+    from app.schemas.swiggy import EnrichDishInput
+
+    dish = EnrichDishInput(id="d1", name="Biryani", cuisine="indian")
+    full_queries = _enrich_queries(dish)
+    rest_queries = _restaurant_queries(dish)
+
+    assert "Biryani" in full_queries, "Biryani must appear in full query set via category hint"
+    # Must be present in restaurant queries — the category hint survives because
+    # _restaurant_queries builds from scratch without a text-equality filter.
+    assert "Biryani" in rest_queries, (
+        f"category-derived 'Biryani' must survive in restaurant queries; got {rest_queries}"
+    )
+    # Specific multi-word dish names must still be excluded.
+    tikka = EnrichDishInput(id="d2", name="Chicken Tikka Masala", cuisine="indian")
+    tikka_queries = _restaurant_queries(tikka)
+    assert "Chicken Tikka Masala" not in tikka_queries, (
+        "exact multi-word dish name must not appear in restaurant queries"
+    )
+
+
+@pytest.mark.asyncio
+async def test_shared_category_menu_fetch_deduped():
+    """Two dishes sharing a category query must reuse the same top-restaurant menu fetch.
+
+    The fake returns TWO restaurants to prove the test would not trivially pass with
+    only one in the list.  With no per-dish rotation both concurrent dishes see
+    r_top first; r_top's menu is fetched once (cached) then reused, so
+    get_restaurant_menu for r_top is called exactly once regardless of dish count.
+    """
+    from app.services.swiggy_discovery import SwiggyDiscoveryService
+    from app.schemas.swiggy import EnrichDishInput
+    from app.services.swiggy_mcp import SwiggyMCPClient
+
+    menu_fetch_calls: list[str] = []
+
+    async def fake_call(name: str, args: dict):
+        if name == "search_menu":
+            return {"items": []}
+        if name == "search_restaurants":
+            # Two real restaurants — r_top is first (top ranking).
+            return {"restaurants": [
+                {
+                    "id": "r_top",
+                    "name": "Biryani Palace",
+                    "avgRating": 4.8,
+                    "deliveryTimeMinutes": 25,
+                    "availabilityStatus": "OPEN",
+                    "cuisines": ["Indian"],
+                },
+                {
+                    "id": "r_second",
+                    "name": "Rice House",
+                    "avgRating": 4.2,
+                    "deliveryTimeMinutes": 35,
+                    "availabilityStatus": "OPEN",
+                    "cuisines": ["Indian"],
+                },
+            ]}
+        if name == "get_restaurant_menu":
+            rid = args.get("restaurantId", "")
+            menu_fetch_calls.append(rid)
+            if rid == "r_top":
+                return {"items": [
+                    {"id": "m1", "name": "Chicken Biryani", "price": 250,
+                     "restaurantId": "r_top", "restaurantName": "Biryani Palace"},
+                    {"id": "m2", "name": "Mutton Biryani", "price": 310,
+                     "restaurantId": "r_top", "restaurantName": "Biryani Palace"},
+                ]}
+            return {"items": []}
+        return {}
+
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    dishes = [
+        EnrichDishInput(id="d1", name="Chicken Biryani", cuisine="indian",
+                        search_category="Biryani"),
+        EnrichDishInput(id="d2", name="Mutton Biryani", cuisine="indian",
+                        search_category="Biryani"),
+    ]
+
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches",
+               AsyncMock(return_value={})):
+        _, matches = await svc.enrich(dishes, address_id="a1")
+
+    # With stable top ordering, both dishes try r_top first.  Because _menu_tasks
+    # caches the result, get_restaurant_menu for r_top must be called exactly once.
+    top_fetches = menu_fetch_calls.count("r_top")
+    assert top_fetches == 1, (
+        f"get_restaurant_menu('r_top') called {top_fetches}x; "
+        "expected exactly 1 — second dish must hit the cache, not issue a new call"
+    )
+    # Both dishes must have found a match at r_top (proves they both checked it)
+    assert all(m.matched for m in matches), (
+        f"both dishes should match at r_top; matches={[(m.dish_id, m.matched) for m in matches]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_exclusive_restaurant_claiming():
+    """Two concurrent dishes may check the same top restaurant without being blocked."""
+    from app.services.swiggy_discovery import SwiggyDiscoveryService
+    from app.schemas.swiggy import EnrichDishInput
+    from app.services.swiggy_mcp import SwiggyMCPClient
+
+    checked_restaurants: list[tuple[str, str]] = []  # (dish_id, restaurant_id) pairs
+
+    original_best_menu = SwiggyDiscoveryService._best_menu_item
+
+    async def tracking_best_menu(self, restaurant_id, addr, dish):
+        checked_restaurants.append((dish.id, restaurant_id))
+        return await original_best_menu(self, restaurant_id, addr, dish)
+
+    async def fake_call(name: str, args: dict):
+        if name == "search_menu":
+            return {"items": []}
+        if name == "search_restaurants":
+            return {"restaurants": [{
+                "id": "r_top",
+                "name": "Top Restaurant",
+                "avgRating": 4.5,
+                "deliveryTimeMinutes": 25,
+                "availabilityStatus": "OPEN",
+                "cuisines": ["Indian"],
+            }]}
+        if name == "get_restaurant_menu":
+            return {"items": [
+                {"id": "m1", "name": "Chicken Tikka", "price": 280,
+                 "restaurantId": "r_top", "restaurantName": "Top Restaurant"},
+                {"id": "m2", "name": "Paneer Tikka", "price": 250,
+                 "restaurantId": "r_top", "restaurantName": "Top Restaurant"},
+            ]}
+        return {}
+
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    dishes = [
+        EnrichDishInput(id="d1", name="Chicken Tikka", cuisine="indian"),
+        EnrichDishInput(id="d2", name="Paneer Tikka", cuisine="indian"),
+    ]
+
+    with patch.object(SwiggyDiscoveryService, "_best_menu_item", tracking_best_menu), \
+         patch("app.services.swiggy_discovery.scout_ambiguous_matches",
+               AsyncMock(return_value={})):
+        _, matches = await svc.enrich(dishes, address_id="a1")
+
+    # Both dishes should have been able to check r_top (no exclusive claiming)
+    d1_checked = any(did == "d1" and rid == "r_top" for did, rid in checked_restaurants)
+    d2_checked = any(did == "d2" and rid == "r_top" for did, rid in checked_restaurants)
+    assert d1_checked and d2_checked, (
+        "Both dishes must be able to check the same top restaurant; "
+        f"got checks: {checked_restaurants}"
+    )
 
 
 # --- Route smoke tests ---

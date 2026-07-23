@@ -14,6 +14,11 @@ import authRouter from "./routes/auth.js";
 import preferencesRouter from "./routes/preferences.js";
 import historyRouter from "./routes/history.js";
 import notificationsRouter from "./routes/notifications.js";
+import signalsRouter from "./routes/signals.js";
+import predictionsRouter from "./routes/predictions.js";
+import weatherRouter from "./routes/weather.js";
+import questsRouter, { seedQuests } from "./routes/quests.js";
+import groupsRouter from "./routes/groups.js";
 import {
   sessionMiddleware,
   getUserMe,
@@ -88,6 +93,26 @@ app.use("/api/user/history", historyRouter);
 
 // User notifications
 app.use("/api/user/notifications", notificationsRouter);
+
+// Personalization signals spine (append-only event log + learned profile)
+const signalsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_SIGNALS || "120"),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+app.use("/api/signals", signalsLimiter, signalsRouter);
+
+// Prediction calibration loop (created at rec time, resolved post-meal)
+app.use("/api/predictions", signalsLimiter, predictionsRouter);
+
+// Passive context: keyless weather lookup
+app.use("/api/weather", weatherRouter);
+
+// Quests/streaks (5.2) and group decision mode (3.6)
+app.use("/api/quests", questsRouter);
+app.use("/api/groups", groupsRouter);
 
 // Database helper functions
 const query = async (sql, params = []) => {
@@ -444,7 +469,12 @@ app.use((err, req, res, next) => {
 
 // Initialize database and start server
 initDb()
-  .then(() => {
+  .then(async () => {
+    try {
+      await seedQuests();
+    } catch (error) {
+      console.warn("Quest seeding failed (non-fatal):", error.message);
+    }
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`Admin panel: http://localhost:${PORT}/admin`);

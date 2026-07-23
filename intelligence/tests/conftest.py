@@ -9,8 +9,11 @@ import app.services.recommender as _recommender_svc
 @pytest.fixture(autouse=True)
 def clear_recommendation_cache():
     _recommender_svc._CACHE.clear()
+    from app.services import swiggy_discovery
+    swiggy_discovery._ENRICH_CACHE.clear()
     yield
     _recommender_svc._CACHE.clear()
+    swiggy_discovery._ENRICH_CACHE.clear()
 
 
 @pytest.fixture

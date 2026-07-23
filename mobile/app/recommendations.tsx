@@ -2,26 +2,51 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { fetchRecommendations } from '../src/services/aiRecommendations';
-import { enrichRecommendations, withTimeout } from '../src/services/swiggy';
+import {
+  fetchRecommendations,
+  getSavedAddressId,
+  isSwiggyLive,
+} from '../src/services/aiRecommendations';
 import { trackEvent } from '../src/utils/analytics';
 import { fw, colors } from '../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
 import BottomNav from '../src/components/BottomNav';
 import LoadingScreen from '../src/components/LoadingScreen';
-import type { Recommendation, RecommendationResponse, EnrichedMatch } from '../src/types';
+import ChipSelector from '../src/components/inputs/ChipSelector';
+import BlindBetStars from '../src/components/BlindBetStars';
+import { logSignal } from '../src/services/signals';
+import type { Recommendation, RecommendationResponse } from '../src/types';
+
+// 4.2 — Veto + why: turns a useless "no" into a precise model update.
+const VETO_REASONS = [
+  { id: 'too_heavy', label: 'Too heavy', emoji: '🍔' },
+  { id: 'had_recently', label: 'Had it recently', emoji: '🔁' },
+  { id: 'too_pricey', label: 'Too pricey', emoji: '💸' },
+  { id: 'not_feeling_it', label: 'Not feeling it', emoji: '🤷' },
+];
 
 const MOOD_EMOJIS: Record<string, string> = {
   happy: '😊', tired: '😴', stressed: '😰', celebrating: '🥳',
   relaxed: '😌', adventurous: '🤩',
 };
 
-const ENRICH_TIMEOUT_MS = 10000;
-
-function MealCard({ rec, index, onTap }: { rec: Recommendation; index: number; onTap: () => void }) {
+function MealCard({
+  rec,
+  index,
+  onTap,
+  vetoed,
+  onVeto,
+}: {
+  rec: Recommendation;
+  index: number;
+  onTap: () => void;
+  vetoed: string | null;
+  onVeto: (reason: string) => void;
+}) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const [imageFailed, setImageFailed] = useState(false);
+  const [showReasons, setShowReasons] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -33,6 +58,9 @@ function MealCard({ rec, index, onTap }: { rec: Recommendation; index: number; o
   const matchPct = rec.confidence != null ? `${Math.round(rec.confidence * 100)}% match` : null;
   const imageUrl = !imageFailed ? resolveDishImage(rec) : null;
   const liveRestaurant = rec.swiggy?.matched ? rec.swiggy.item?.restaurant_name || rec.swiggy.restaurant?.name : null;
+  const livePrice = rec.swiggy?.matched && rec.swiggy.item?.price != null
+    ? rec.swiggy.item.price
+    : rec.practical_details?.estimated_price;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -64,6 +92,11 @@ function MealCard({ rec, index, onTap }: { rec: Recommendation; index: number; o
               <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>🏆 Top Pick</Text>
             </View>
           )}
+          {rec.is_wildcard && (
+            <View style={{ position: 'absolute', top: index === 0 ? 40 : 12, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#a855f7' }}>
+              <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>🎲 Shake it up</Text>
+            </View>
+          )}
           {liveRestaurant && (
             <View style={{ position: 'absolute', bottom: 10, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.45)', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#4ade80' }} />
@@ -74,12 +107,13 @@ function MealCard({ rec, index, onTap }: { rec: Recommendation; index: number; o
         <View style={{ padding: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={[fw(800), { fontSize: 17, color: colors.navy, flex: 1 }]} numberOfLines={1}>{rec.dish.name}</Text>
-            {rec.practical_details?.estimated_price != null && (
-              <Text style={[fw(800), { fontSize: 15, color: colors.orange }]}>₹{rec.practical_details.estimated_price}</Text>
+            {livePrice != null && (
+              <Text style={[fw(800), { fontSize: 15, color: colors.orange }]}>₹{livePrice}</Text>
             )}
           </View>
           <Text style={[fw(600), { fontSize: 13, color: '#64748b', marginTop: 4 }]}>
             {rec.dish.cuisine}{rec.dish.category ? ` · ${rec.dish.category}` : ''}
+            {rec.swiggy?.restaurant?.eta_min != null ? ` · ${rec.swiggy.restaurant.eta_min} min` : ''}
           </Text>
           {rec.dish.tags && rec.dish.tags.length > 0 && (
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -89,6 +123,35 @@ function MealCard({ rec, index, onTap }: { rec: Recommendation; index: number; o
                 </View>
               ))}
             </View>
+          )}
+
+          <BlindBetStars dishId={rec.dish.id} dishName={rec.dish.name} />
+
+          {vetoed ? (
+            <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
+              <Text style={[fw(700), { fontSize: 12, color: '#94a3b8' }]}>
+                Noted — {VETO_REASONS.find((r) => r.id === vetoed)?.label.toLowerCase()}. We'll adjust.
+              </Text>
+            </View>
+          ) : showReasons ? (
+            <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
+              <ChipSelector
+                options={VETO_REASONS}
+                selected={[]}
+                onToggle={(id) => {
+                  onVeto(id);
+                  setShowReasons(false);
+                }}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setShowReasons(true)}
+              activeOpacity={0.7}
+              style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}
+            >
+              <Text style={[fw(700), { fontSize: 12, color: '#94a3b8' }]}>Not for me →</Text>
+            </TouchableOpacity>
           )}
         </View>
       </TouchableOpacity>
@@ -103,6 +166,7 @@ export default function RecommendationsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
 
   const quizResults = rawResults ? JSON.parse(rawResults) : null;
 
@@ -111,22 +175,18 @@ export default function RecommendationsScreen() {
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
-      const res = await fetchRecommendations(quizResults, null, isRefresh);
-      trackEvent('recommendation_viewed', { source: res.source });
-
-      // Phase 1 Swiggy enrichment: swap the AI's static Unsplash photos for real menu
-      // photos/restaurants where a live match exists. Bounded so a slow/misconfigured
-      // Swiggy integration never blocks results from showing.
-      const matches: Record<string, EnrichedMatch> = await withTimeout(
-        enrichRecommendations(res.recommendations).catch(() => ({})),
-        ENRICH_TIMEOUT_MS,
-        {},
+      const addressId = isSwiggyLive() ? await getSavedAddressId() : '';
+      const res = await fetchRecommendations(
+        quizResults,
+        null,
+        isRefresh,
+        addressId || undefined,
       );
-      res.recommendations = res.recommendations.map((rec) => ({
-        ...rec,
-        swiggy: matches[rec.dish?.id || rec.id] || null,
-      }));
-
+      trackEvent('recommendation_viewed', {
+        source: res.source,
+        live_status: res.live_status,
+      });
+      // Backend embeds swiggy_matches and fetchRecommendations maps them onto rec.swiggy.
       setData(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load recommendations');
@@ -139,6 +199,13 @@ export default function RecommendationsScreen() {
   useEffect(() => {
     load(false);
   }, []);
+
+  const handleVeto = (rec: Recommendation, reason: string) => {
+    setVetoedIds((prev) => ({ ...prev, [rec.id]: reason }));
+    void logSignal('veto', { dish_id: rec.dish.id, dish_name: rec.dish.name, reason });
+    if (rec.is_wildcard) void logSignal('wildcard_verdict', { accepted: false });
+    trackEvent('recommendation_vetoed', { dish: rec.dish.name, reason });
+  };
 
   if (loading) return <LoadingScreen />;
 
@@ -159,6 +226,16 @@ export default function RecommendationsScreen() {
         {quizResults?.mood && (
           <Text style={[fw(600), { fontSize: 13, color: '#94a3b8', textAlign: 'center', marginTop: 16 }]}>
             Based on your mood: {MOOD_EMOJIS[quizResults.mood] ?? '🍽️'} {quizResults.mood}
+          </Text>
+        )}
+        {data?.live_status === 'partial' && (
+          <Text style={[fw(600), { fontSize: 12, color: '#b45309', textAlign: 'center', marginTop: 8 }]}>
+            Some picks are live on Swiggy; others are curated estimates.
+          </Text>
+        )}
+        {data?.live_status === 'offline' && isSwiggyLive() && (
+          <Text style={[fw(600), { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 8 }]}>
+            Showing curated picks — live data temporarily unavailable.
           </Text>
         )}
       </View>
@@ -183,6 +260,8 @@ export default function RecommendationsScreen() {
               key={rec.id}
               rec={rec}
               index={i}
+              vetoed={vetoedIds[rec.id] || null}
+              onVeto={(reason) => handleVeto(rec, reason)}
               onTap={() => router.push({ pathname: '/meal-detail', params: { rec: JSON.stringify(rec), rank: String(i) } })}
             />
           ))}

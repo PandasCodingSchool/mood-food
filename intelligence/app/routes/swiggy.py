@@ -21,7 +21,12 @@ from app.schemas.swiggy import (
     RestaurantSearchResponse,
 )
 from app.services.swiggy_discovery import SwiggyDiscoveryService
-from app.services.swiggy_mcp import SwiggyAuthError, SwiggyMCPClient, SwiggyMCPError
+from app.services.swiggy_mcp import (
+    SwiggyAddressRequiredError,
+    SwiggyAuthError,
+    SwiggyMCPClient,
+    SwiggyMCPError,
+)
 
 logger = logging.getLogger("swiggy_routes")
 router = APIRouter(prefix="/api/swiggy", tags=["swiggy"])
@@ -58,6 +63,9 @@ async def restaurants(req: RestaurantSearchRequest, request: Request) -> Restaur
             req.query, city=req.city, address_id=req.address_id
         )
         return RestaurantSearchResponse(success=True, address_id=addr, restaurants=results)
+    except SwiggyAddressRequiredError as exc:
+        logger.info("restaurants search: address required: %s", exc)
+        return RestaurantSearchResponse(success=False, error=str(exc), address_required=True)
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("restaurants search failed: %s", exc)
         return RestaurantSearchResponse(success=False, error=str(exc))
@@ -70,6 +78,9 @@ async def menu_search(req: MenuSearchRequest, request: Request) -> MenuSearchRes
             req.query, city=req.city, address_id=req.address_id
         )
         return MenuSearchResponse(success=True, address_id=addr, items=items)
+    except SwiggyAddressRequiredError as exc:
+        logger.info("menu search: address required: %s", exc)
+        return MenuSearchResponse(success=False, error=str(exc), address_required=True)
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("menu search failed: %s", exc)
         return MenuSearchResponse(success=False, error=str(exc))
@@ -88,6 +99,9 @@ async def restaurant_menu(
             restaurant_id, city=city, address_id=address_id, page=page
         )
         return {"success": True, "menu": data}
+    except SwiggyAddressRequiredError as exc:
+        logger.info("restaurant menu: address required: %s", exc)
+        return {"success": False, "error": str(exc), "address_required": True}
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("restaurant menu failed: %s", exc)
         return {"success": False, "error": str(exc)}
@@ -101,6 +115,9 @@ async def enrich(req: EnrichRequest, request: Request) -> EnrichResponse:
             req.dishes, city=req.city, address_id=req.address_id
         )
         return EnrichResponse(success=True, address_id=addr, matches=matches)
+    except SwiggyAddressRequiredError as exc:
+        logger.info("enrich: address required: %s", exc)
+        return EnrichResponse(success=False, error=str(exc), address_required=True)
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("enrich failed: %s", exc)
         return EnrichResponse(success=False, error=str(exc))

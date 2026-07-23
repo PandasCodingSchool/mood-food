@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getDb, isPostgres } from "../db.js";
+import { resolveUserId } from "../middleware/session.js";
 
 const router = Router();
 
@@ -11,19 +12,6 @@ function parseJsonArray(val) {
   } catch {
     return [];
   }
-}
-
-async function getUserIdFromSession(sessionId) {
-  const db = getDb();
-  const pg = isPostgres();
-  const sql = pg
-    ? "SELECT id FROM users WHERE session_id = $1 LIMIT 1"
-    : "SELECT id FROM users WHERE session_id = ? LIMIT 1";
-  const result = pg
-    ? await db.query(sql, [sessionId])
-    : await db.get(sql, [sessionId]);
-  const row = pg ? result.rows[0] : result;
-  return row?.id || null;
 }
 
 async function getPrefs(userId) {
@@ -50,11 +38,8 @@ async function getPrefs(userId) {
 // GET /api/user/preferences
 router.get("/", async (req, res) => {
   try {
-    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
-    if (!sessionId) return res.status(401).json({ error: "No session" });
-
-    const userId = await getUserIdFromSession(sessionId);
-    if (!userId) return res.status(401).json({ error: "User not found" });
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: "No session" });
 
     const prefs = await getPrefs(userId);
     return res.json({ success: true, preferences: prefs });
@@ -67,11 +52,8 @@ router.get("/", async (req, res) => {
 // PUT /api/user/preferences
 router.put("/", async (req, res) => {
   try {
-    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
-    if (!sessionId) return res.status(401).json({ error: "No session" });
-
-    const userId = await getUserIdFromSession(sessionId);
-    if (!userId) return res.status(401).json({ error: "User not found" });
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: "No session" });
 
     const { diets, allergies, cuisines, budget } = req.body || {};
 
