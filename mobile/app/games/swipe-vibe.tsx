@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, Dimensions, PanResponder, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SNACK_CARDS } from '../../src/constants/snackCards';
 import { fw, colors } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
+import { logSignals } from '../../src/services/signals';
+import type { GameSwipe } from '../../src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
@@ -13,17 +15,27 @@ export default function SnackMatchScreen() {
   const router = useRouter();
   const [idx, setIdx] = useState(0);
   const [liked, setLiked] = useState<string[]>([]);
+  const [swipes, setSwipes] = useState<GameSwipe[]>([]);
   const position = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
+  const cardShownAt = useRef(Date.now());
 
   const card = SNACK_CARDS[idx];
   const done = idx >= SNACK_CARDS.length;
+
+  useEffect(() => {
+    cardShownAt.current = Date.now();
+  }, [idx]);
 
   const finishSwipe = useCallback(
     (direction: 'left' | 'right' | 'super') => {
       const isLike = direction !== 'left';
       const newLiked = isLike ? [...liked, card.emoji] : liked;
       if (isLike) setLiked(newLiked);
+
+      const reactionTime = Date.now() - cardShownAt.current;
+      const newSwipes = [...swipes, { item: card.name, liked: isLike, reactionTime }];
+      setSwipes(newSwipes);
 
       const toX = direction === 'left' ? -SCREEN_WIDTH * 1.5 : direction === 'right' ? SCREEN_WIDTH * 1.5 : 0;
       const toY = direction === 'super' ? -SCREEN_WIDTH * 1.5 : 0;
@@ -38,10 +50,23 @@ export default function SnackMatchScreen() {
         setIdx(nextIdx);
         if (nextIdx >= SNACK_CARDS.length) {
           trackEvent('game_completed', { game: 'snack_match', liked: newLiked });
+          // 2.1 — swipe-to-train: batch-post reactionTime-weighted swipes.
+          void logSignals([
+            {
+              type: 'swipe',
+              payload: {
+                swipes: newSwipes.map((s) => ({
+                  item: s.item,
+                  liked: s.liked,
+                  reaction_time: s.reactionTime,
+                })),
+              },
+            },
+          ]);
         }
       });
     },
-    [idx, liked, card],
+    [idx, liked, swipes, card],
   );
 
   const panResponder = useRef(

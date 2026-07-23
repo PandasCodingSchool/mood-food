@@ -5,9 +5,11 @@ interface NavbarProps {
   onStartQuiz: () => void;
   onJoinWaitlist?: () => void;
   onHome?: () => void;
+  onSos?: () => void;
+  onQuests?: () => void;
 }
 
-function Navbar({ onStartQuiz, onJoinWaitlist, onHome }: NavbarProps) {
+function Navbar({ onStartQuiz, onJoinWaitlist, onHome, onSos, onQuests }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -92,6 +94,30 @@ function Navbar({ onStartQuiz, onJoinWaitlist, onHome }: NavbarProps) {
             >
               Find My Meal
             </button>
+            {onQuests && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onQuests();
+                }}
+                title="Quests"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                🏆
+              </button>
+            )}
+            {onSos && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onSos();
+                }}
+                title="Just decide for me"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+              >
+                🆘
+              </button>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -139,6 +165,28 @@ function Navbar({ onStartQuiz, onJoinWaitlist, onHome }: NavbarProps) {
           <button onClick={handleStart} className="btn-primary w-full">
             Find My Meal
           </button>
+          {onQuests && (
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                onQuests();
+              }}
+              className="w-full py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              🏆 Quests
+            </button>
+          )}
+          {onSos && (
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                onSos();
+              }}
+              className="w-full py-3 text-sm font-bold text-white bg-purple-600 rounded-full hover:bg-purple-700 transition-colors"
+            >
+              🆘 Just decide for me
+            </button>
+          )}
         </div>
       </div>
     </nav>

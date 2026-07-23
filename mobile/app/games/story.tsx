@@ -7,6 +7,7 @@ import { getDayMood } from '../../src/utils/storyEngine';
 import { fw } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
 import { bounceIn, floatLoop } from '../../src/utils/animations';
+import { logSignal } from '../../src/services/signals';
 
 function Reveal({ mood, onContinue }: { mood: DayMood; onContinue: () => void }) {
   const emojiScale = useRef(new Animated.Value(0.3)).current;
@@ -93,6 +94,7 @@ export default function DayStoryScreen() {
             gameData: { type: 'day_story', dayMood: mood.label },
           };
           trackEvent('game_completed', { game: 'story', results });
+          void logSignal('day_story', { path: answers, mood_vector: { label: mood.label } });
           router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
         }}
       />

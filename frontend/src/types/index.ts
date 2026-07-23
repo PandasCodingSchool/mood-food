@@ -12,7 +12,11 @@ export type GameType =
   | "character_match"
   | "day_story"
   | "swipe_vibe"
-  | "spin_wheel";
+  | "spin_wheel"
+  | "this_or_that"
+  | "craving_radar"
+  | "mood_checkin"
+  | "mind_reader";
 
 export interface GameCharacterSignal {
   id: string;
@@ -41,7 +45,39 @@ export interface GameSignals {
     spicy: number;
   }; // 1..10
   character?: GameCharacterSignal;
+  cravingTags?: string[]; // sensation-level tags (craving radar)
+  duelResults?: Array<{ dimensionA: string; dimensionB: string; winner: string }>;
+  pantryItems?: string[];
   raw?: Record<string, unknown>; // per-game payload: swipes, storyChoices, answers, spins…
+}
+
+// One event for the personalization signals spine (POST /api/signals).
+export interface SignalEvent {
+  type: string;
+  payload: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  clientTs?: string;
+}
+
+export interface LearnedProfile {
+  confidence?: number;
+  question_budget?: number;
+  mode?: string;
+  game_plan?: Array<{ game: string; eig: number }>;
+  accuracy_meter?: { accuracy: number; n: number } | null;
+  persona?: { archetype: string; blurb: string; drift_line?: string } | null;
+  mood_map_top?: Array<{ archetype: string; weight: number }>;
+  next_meal_prediction?: string | null;
+  n_signals?: number;
+}
+
+export interface PendingPrediction {
+  id: string;
+  recId: string;
+  dishId?: string | null;
+  dishName?: string | null;
+  userPredictedScore?: number | null;
+  createdAt: string;
 }
 
 // Transitional alias while games migrate to GameSignals.
@@ -54,6 +90,8 @@ export interface Recommendation {
   id: string;
   rank?: number;
   confidence?: number;
+  predicted_score?: number | null;
+  is_wildcard?: boolean;
   dish: {
     id?: string;
     name: string;
@@ -114,6 +152,15 @@ export interface RecommendationResponse {
   insights?: {
     detected_mood_profile?: string;
     preference_evolution?: string;
+    next_meal_prediction?: string | null;
+    persona_drift?: string | null;
+  } | null;
+  meta?: {
+    confidence?: number;
+    question_budget?: number;
+    persona?: string | null;
+    mode?: string;
+    accuracy_meter?: { accuracy: number; n: number } | null;
   } | null;
   ai_metadata?: {
     model_used?: string;
@@ -124,6 +171,8 @@ export interface RecommendationResponse {
   error?: string;
   swiggy_matches?: Record<string, unknown>;
   swiggy_address_id?: string;
+  live_status?: "live" | "partial" | "offline" | null;
+  request_id?: string;
 }
 
 export interface UserContext {
@@ -131,6 +180,8 @@ export interface UserContext {
     primary: string;
     energyLevel: number;
     socialContext: string;
+    hungerLevel?: number;
+    stressLevel?: number;
   };
   preferences: {
     cuisineTypes: string[];
@@ -147,8 +198,12 @@ export interface UserContext {
     };
     timeAvailable: number;
     deliveryPreferred: boolean;
+    occasion?: "treat" | "fuel" | "reward";
+    weather?: string;
   };
   gameData?: GameData;
+  comfortAnchors?: Array<{ food: string; trigger?: string }>;
+  automationPref?: "hands_on" | "balanced" | "hands_off";
 }
 
 export interface AIRequestContext {
@@ -158,6 +213,7 @@ export interface AIRequestContext {
     diversity: string;
     includeExplanations: boolean;
     includeAlternatives: boolean;
+    mode?: "standard" | "mind_reader" | "sos" | "wildcard" | "group";
   };
 }
 

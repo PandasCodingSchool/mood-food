@@ -209,14 +209,28 @@ def build_shortlist(
     ctx: UserContext,
     config: Optional[RecommendationConfig] = None,
     size: int = DEFAULT_SHORTLIST_SIZE,
+    user_id: Optional[str] = None,
 ) -> list[DishRecord]:
-    """Hard-filter → score → diversify → return top N candidates."""
+    """Embedding retrieval → hard-filter → score → diversify → top N.
+
+    The retrieval stage blends the learned taste/craving/mood session vector
+    into scoring (weight 12, matching the strongest heuristic signals). With
+    no learned state it contributes nothing and behavior is unchanged.
+    """
     config = config or RecommendationConfig()
+    from app.learning.retrieval import retrieval_scores
+
+    retrieval = retrieval_scores(user_id, ctx)
+
     pool = hard_filter(ctx)
     if not pool:
         # Absolute last resort: diet-only filter on full catalog.
         pool = [d for d in DISHES if _diet_allows(d, _restrictions(ctx))]
-    scored = sorted(((score_dish(d, ctx), d) for d in pool), key=lambda x: x[0], reverse=True)
+    scored = sorted(
+        ((score_dish(d, ctx) + 12.0 * retrieval.get(d.id, 0.0), d) for d in pool),
+        key=lambda x: x[0],
+        reverse=True,
+    )
     # Prefer enough candidates for live matching + ranking.
     target = max(size, config.count * 4)
     return diversify(scored, min(target, len(scored)), diversity=config.diversity or "medium")

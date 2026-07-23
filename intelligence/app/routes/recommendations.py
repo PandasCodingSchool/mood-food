@@ -24,6 +24,7 @@ from fastapi import APIRouter, Request
 from app.data.dishes import DISHES_BY_ID
 from app.schemas.request import RecommendationRequest
 from app.schemas.response import (
+    LearnedMeta,
     PracticalDetails,
     Recommendation,
     RecommendationResponse,
@@ -123,13 +124,100 @@ async def get_recommendations(
         asyncio.create_task(_clear())
 
 
+def _learned_wildcard_ids(body: RecommendationRequest) -> list[str]:
+    """Anti-rut wildcards: explicit wildcard mode, or a detected boredom loop."""
+    if not body.user_id:
+        return []
+    from app.learning import entropy
+
+    if body.recommendation_config.mode == "wildcard" or entropy.in_rut(body.user_id):
+        return entropy.wildcard_candidates(body.user_id, limit=3)
+    return []
+
+
+def _attach_learning(
+    body: RecommendationRequest,
+    response: RecommendationResponse,
+    wildcard_ids: list[str],
+) -> RecommendationResponse:
+    """Attach predicted scores, wildcard flags, learned meta, and insights."""
+    mode = body.recommendation_config.mode
+    if not body.user_id:
+        return response.model_copy(update={"meta": LearnedMeta(mode=mode)})
+
+    from app.learning import calibration, confidence as confidence_mod, embeddings
+    from app.learning import patterns, persona, user_model
+    from app.learning.orchestrator import question_budget
+
+    user_id = body.user_id
+    wildcard_set = set(wildcard_ids)
+    updated_recs: list[Recommendation] = []
+    for rec in response.recommendations:
+        predicted = None
+        vec = embeddings.get_dish_vector(rec.dish.id)
+        if vec is not None:
+            raw = user_model.score_dish(user_id, vec)
+            if raw is not None:
+                predicted = round(max(0.0, min(1.0, (raw + 1.0) / 2.0)), 3)
+        updated_recs.append(
+            rec.model_copy(update={
+                "predicted_score": predicted,
+                "is_wildcard": rec.dish.id in wildcard_set,
+            })
+        )
+
+    budget, conf = question_budget(user_id)
+    if body.request_id:
+        for rec in updated_recs:
+            calibration.record_prediction(
+                user_id, body.request_id, rec.dish.id,
+                rec.predicted_score if rec.predicted_score is not None else 0.5,
+                conf,
+            )
+
+    persona_info = persona.get(user_id)
+    situational = body.user_context.situational
+    prediction_context = {
+        "day_of_week": situational.day_of_week if situational else "",
+        "time_of_day": situational.time_of_day if situational else "",
+    }
+    insights = response.insights
+    if insights:
+        insights = insights.model_copy(update={
+            "next_meal_prediction": patterns.next_meal_prediction(user_id, prediction_context),
+            "persona_drift": persona_info.get("drift_line") if persona_info else None,
+        })
+
+    return response.model_copy(update={
+        "recommendations": updated_recs,
+        "insights": insights,
+        "meta": LearnedMeta(
+            confidence=conf,
+            question_budget=budget,
+            persona=persona_info.get("archetype") if persona_info else None,
+            mode=mode,
+            accuracy_meter=calibration.rolling_accuracy(user_id),
+        ),
+    })
+
+
 async def _run_pipeline(
     body: RecommendationRequest,
     request: Request,
 ) -> RecommendationResponse:
     t0 = time.time()
     final_count = body.recommendation_config.count
-    shortlist = build_shortlist(body.user_context, body.recommendation_config)
+    shortlist = build_shortlist(
+        body.user_context, body.recommendation_config, user_id=body.user_id
+    )
+
+    # Anti-rut: make sure wildcard candidates are in front of the ranker.
+    wildcard_ids = _learned_wildcard_ids(body)
+    if wildcard_ids:
+        shortlist_ids = {d.id for d in shortlist}
+        for wid in wildcard_ids:
+            if wid not in shortlist_ids and wid in DISHES_BY_ID:
+                shortlist.append(DISHES_BY_ID[wid])
     logger.info(
         "ai-recommendations: shortlist=%d mood=%s address=%s",
         len(shortlist), body.user_context.mood.primary, body.swiggy_address_id,
@@ -151,11 +239,15 @@ async def _run_pipeline(
             r.model_copy(update={"rank": i + 1})
             for i, r in enumerate(gpt_pool[:final_count])
         ]
-        return gpt_response.model_copy(update={
-            "recommendations": final_recs,
-            "live_status": "offline",
-            "request_id": body.request_id,
-        })
+        return _attach_learning(
+            body,
+            gpt_response.model_copy(update={
+                "recommendations": final_recs,
+                "live_status": "offline",
+                "request_id": body.request_id,
+            }),
+            wildcard_ids,
+        )
 
     # Step 2 — Progressive live enrichment of the GPT-ranked pool.
     live_facts: dict[str, dict] = {}
@@ -237,10 +329,14 @@ async def _run_pipeline(
         elapsed, pool_size, len(matched_for_response), live_status, is_cache_hit,
     )
 
-    return gpt_response.model_copy(update={
-        "recommendations": selected,
-        "swiggy_matches": matched_for_response or None,
-        "swiggy_address_id": addr,
-        "live_status": live_status,
-        "request_id": body.request_id,
-    })
+    return _attach_learning(
+        body,
+        gpt_response.model_copy(update={
+            "recommendations": selected,
+            "swiggy_matches": matched_for_response or None,
+            "swiggy_address_id": addr,
+            "live_status": live_status,
+            "request_id": body.request_id,
+        }),
+        wildcard_ids,
+    )

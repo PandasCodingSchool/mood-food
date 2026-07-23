@@ -7,6 +7,8 @@ import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishV
 import type { DeliveryApp } from '../../src/constants/deliveryApps';
 import type { Recommendation } from '../../src/types';
 import { saveOrder } from '../../src/services/history';
+import { logSignal } from '../../src/services/signals';
+import { bumpQuestProgress } from '../../src/services/quests';
 
 export default function OrderConfirmScreen() {
   const router = useRouter();
@@ -47,6 +49,16 @@ export default function OrderConfirmScreen() {
     } catch {
       // silent — order nav proceeds regardless
     }
+    void logSignal('order', {
+      dish_id: rec.dish.id,
+      dish_name: rec.dish.name,
+      price: Math.round(total),
+    });
+    if (rec.is_wildcard) {
+      void logSignal('wildcard_verdict', { accepted: true });
+      void bumpQuestProgress('adventure_score');
+    }
+    void bumpQuestProgress('try_3_cuisines');
     router.push({
       pathname: '/order/success',
       params: { rec: rawRec, app: rawApp, total: total.toFixed(0) },

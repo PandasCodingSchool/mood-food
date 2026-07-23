@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, fw } from '../constants/theme';
+import { logSignal } from '../services/signals';
 
 type Tab = 'games' | 'history' | 'results' | 'profile';
 
@@ -12,6 +13,13 @@ const TABS: { key: Tab; icon: string; label: string; route: '/home' | '/history'
 
 export default function BottomNav({ active }: { active: Tab }) {
   const router = useRouter();
+
+  // 5.4 — Decision-fatigue SOS button: one tap, no questions, AI commits
+  // immediately. Usage frequency itself is the signal (see orchestrator).
+  const handleSos = () => {
+    void logSignal('sos', {});
+    router.push('/mind-reader');
+  };
 
   return (
     <View
@@ -53,6 +61,29 @@ export default function BottomNav({ active }: { active: Tab }) {
           </TouchableOpacity>
         );
       })}
+
+      <TouchableOpacity
+        onPress={handleSos}
+        activeOpacity={0.85}
+        style={{
+          position: 'absolute',
+          top: -22,
+          alignSelf: 'center',
+          width: 52,
+          height: 52,
+          borderRadius: 26,
+          backgroundColor: colors.purple,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: '#000',
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 6,
+        }}
+      >
+        <Text style={{ fontSize: 22 }}>🆘</Text>
+      </TouchableOpacity>
     </View>
   );
 }

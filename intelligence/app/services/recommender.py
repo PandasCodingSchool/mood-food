@@ -154,6 +154,47 @@ def _build_user_message(
             disliked = [s.item for s in game.swipes if not s.liked]
             if liked or disliked:
                 game_context += f"  swipe_liked={liked} | swipe_disliked={disliked}\n"
+        if game.craving_tags:
+            game_context += (
+                f"  CRAVING CONSTRAINTS (acute, sensation-level — these override "
+                f"long-term preferences for THIS session): {game.craving_tags}\n"
+            )
+        if game.pantry_items:
+            game_context += f"  pantry_at_home={game.pantry_items}\n"
+
+    # State / occasion / anchors context
+    state_context = ""
+    if mood.hunger_level is not None:
+        portion = (
+            "snack-sized" if mood.hunger_level <= 3
+            else "a full meal" if mood.hunger_level <= 7
+            else "a hearty feast (combo/shareable portions)"
+        )
+        state_context += (
+            f"  hunger={mood.hunger_level}/10 — portion guidance: recommend {portion}\n"
+        )
+    if mood.stress_level is not None:
+        state_context += f"  stress={mood.stress_level}/10\n"
+    if sit and sit.hours_since_last_meal is not None:
+        state_context += f"  hours_since_last_meal={sit.hours_since_last_meal}\n"
+    if sit and sit.occasion:
+        occasion_hint = {
+            "treat": "an indulgent treat night — lean into cravings, budget is flexible",
+            "fuel": "a practical fuel meal — efficient, satisfying, budget-conscious",
+            "reward": "a well-earned reward — special but not extravagant",
+        }[sit.occasion]
+        state_context += f"  occasion={sit.occasion} ({occasion_hint})\n"
+    if ctx.comfort_anchors:
+        anchors = [f"{a.food} ({a.trigger})" for a in ctx.comfort_anchors]
+        state_context += (
+            f"  COMFORT ANCHORS (emotional anchor foods — elevate a matching dish "
+            f"when mood is low, and say why in nostalgia_factor): {anchors}\n"
+        )
+    if config.mode == "mind_reader":
+        state_context += (
+            "  MODE: mind-reader — you are committing to ONE confident pick. Make the "
+            "psychological_hook bold and specific; the user sees your reasoning.\n"
+        )
 
     unavailable_block = ""
     if ctx.unavailable_dishes:
@@ -195,7 +236,7 @@ def _build_user_message(
   cuisines={prefs.cuisine_types if prefs else []} | restrictions={prefs.dietary_restrictions if prefs else []} | allergies={prefs.allergies if prefs else []} | spice_tolerance={prefs.spice_tolerance if prefs else None}
   adventurous_slider={sliders.adventurous if sliders else None}/10 | health_slider={sliders.health_conscious if sliders else None}/10 | spicy_slider={sliders.spicy if sliders else None}/10
   avoid={hist.avoid_these if hist else []}
-{game_context}{character_context}{unavailable_block}{live_block}
+{state_context}{game_context}{character_context}{unavailable_block}{live_block}
 DISH LIST (id: name | mood_tags | spice | diet | allergens | energy_req | price | weather | meal_time | delivery | adventurousness):
 {dish_block}
 
