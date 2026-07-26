@@ -25,7 +25,7 @@ export default function OrderAppSelectScreen() {
     } else {
       router.push({
         pathname: '/order/confirm',
-        params: { rec: rawRec, rank: String(rank), app: JSON.stringify(app) },
+        params: { rec: rawRec, rank: String(rank), appName: app.name },
       });
     }
   };

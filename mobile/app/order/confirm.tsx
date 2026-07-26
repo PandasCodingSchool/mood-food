@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,7 +6,7 @@ import { ChevronLeft, MapPin, Clock, Car, ShoppingCart } from 'lucide-react-nati
 import { useTheme } from '../../src/context/ThemeContext';
 import { fw, colors } from '../../src/constants/theme';
 import { dishEmoji, dishIcon, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
-import type { DeliveryApp } from '../../src/constants/deliveryApps';
+import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import type { Recommendation } from '../../src/types';
 import { saveOrder } from '../../src/services/history';
 import { logSignal } from '../../src/services/signals';
@@ -15,16 +15,20 @@ import { bumpQuestProgress } from '../../src/services/quests';
 export default function OrderConfirmScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { rec: rawRec, rank: rawRank, app: rawApp } = useLocalSearchParams<{
+  const { rec: rawRec, rank: rawRank, appName } = useLocalSearchParams<{
     rec: string;
     rank?: string;
-    app: string;
+    appName: string;
   }>();
   const [imageFailed, setImageFailed] = useState(false);
   const [placing, setPlacing] = useState(false);
   const rec: Recommendation = JSON.parse(rawRec);
   const rank = Number(rawRank || 0);
-  const app: DeliveryApp = JSON.parse(rawApp);
+  const app: DeliveryApp = useMemo(() => {
+    const liveOption = swiggyDeliveryOption(rec);
+    if (liveOption && liveOption.name === appName) return liveOption;
+    return DELIVERY_APPS.find((a) => a.name === appName) ?? DELIVERY_APPS[0];
+  }, [appName, rec]);
   const emoji = dishEmoji(rec);
   const DishIcon = dishIcon(rec);
   const imageUrl = !imageFailed ? resolveDishImage(rec) : null;
@@ -66,7 +70,7 @@ export default function OrderConfirmScreen() {
     void bumpQuestProgress('try_3_cuisines');
     router.push({
       pathname: '/order/success',
-      params: { rec: rawRec, app: rawApp, total: total.toFixed(0) },
+      params: { rec: rawRec, appName: app.name, total: total.toFixed(0) },
     });
     setPlacing(false);
   };

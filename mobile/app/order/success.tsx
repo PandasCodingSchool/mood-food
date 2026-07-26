@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, PartyPopper, Sparkles, Gift, Truck, Package, Clock, Home, History } from 'lucide-react-native';
-import type { AppIcon, DeliveryApp } from '../../src/constants/deliveryApps';
+import { DELIVERY_APPS, swiggyDeliveryOption, type AppIcon, type DeliveryApp } from '../../src/constants/deliveryApps';
 import { useTheme } from '../../src/context/ThemeContext';
 import { fw, colors } from '../../src/constants/theme';
 import { bounceIn, floatLoop, pulseLoop } from '../../src/utils/animations';
@@ -25,9 +25,13 @@ function CelebrationIcon({ Icon, size, color, style, duration }: { Icon: AppIcon
 export default function OrderSuccessScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { rec: rawRec, app: rawApp, total } = useLocalSearchParams<{ rec: string; app: string; total: string }>();
+  const { rec: rawRec, appName, total } = useLocalSearchParams<{ rec: string; appName: string; total: string }>();
   const rec: Recommendation = JSON.parse(rawRec);
-  const app: DeliveryApp = JSON.parse(rawApp);
+  const app: DeliveryApp = useMemo(() => {
+    const liveOption = swiggyDeliveryOption(rec);
+    if (liveOption && liveOption.name === appName) return liveOption;
+    return DELIVERY_APPS.find((a) => a.name === appName) ?? DELIVERY_APPS[0];
+  }, [appName, rec]);
   const AppIcon = app.icon;
   const orderNum = useMemo(() => Math.floor(1000 + Math.random() * 9000).toString(), []);
 
