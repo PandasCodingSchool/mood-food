@@ -228,18 +228,18 @@ export default function HomeScreen() {
   return (
     <Screen>
       <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <View style={{ paddingTop: 60, paddingBottom: 5, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center'}}>
-          <View style={{ width: 72, height: 72, borderRadius: 36, overflow: 'hidden', marginRight: 12 }}>
+          <View style={{ width: 62, height: 62, borderRadius: 36, overflow: 'hidden', marginRight: 12 }}>
             <Image
               source={require('../assets/moodfood-logo.png')}
-              style={{ width: 72, height: 72 }}
+              style={{ width: 62, height: 62 }}
               resizeMode="contain"
             />
           </View>
           <View>
-            <Text style={[fw(700), { fontSize: 14, color: theme.subtext }]}>Hey there</Text>
-            <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>What's your vibe?</Text>
+            <Text style={[fw(700), { fontSize: 12, color: theme.subtext }]}>Hey there</Text>
+            <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>What's your vibe?</Text>
           </View>
         </View>
         <TouchableOpacity onPress={() => router.push('/notifications')} activeOpacity={0.7}>
