@@ -92,10 +92,10 @@ export default function LoginScreen() {
             <ChevronLeft size={22} color={theme.text} />
           </TouchableOpacity>
 
-          <View style={{ width: 160, height: 72, borderRadius: 36, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
+          <View style={{ width: 100, height: 100, borderRadius: 50, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
             <Image
               source={require('../assets/moodfood-logo.png')}
-              style={{ width: 160, height: 72 }}
+              style={{ width: 100, height: 100 }}
               resizeMode="contain"
             />
           </View>

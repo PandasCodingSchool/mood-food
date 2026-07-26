@@ -1,15 +1,16 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Home, List, Zap } from 'lucide-react-native';
+import { Home, List, User, Zap } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { colors, fw } from '../constants/theme';
 import { logSignal } from '../services/signals';
 
 type Tab = 'games' | 'history' | 'results' | 'profile';
 
-const TABS: { key: Tab; icon: typeof Home; label: string; route: '/home' | '/history' }[] = [
+const TABS: { key: Tab; icon: typeof Home; label: string; route: '/home' | '/history' | '/profile' }[] = [
   { key: 'games', icon: Home, label: 'Games', route: '/home' },
   { key: 'history', icon: List, label: 'History', route: '/history' },
+  { key: 'profile', icon: User, label: 'Profile', route: '/profile' },
 ];
 
 export default function BottomNav({ active }: { active: Tab }) {
@@ -32,8 +33,8 @@ export default function BottomNav({ active }: { active: Tab }) {
         backgroundColor: theme.navBg,
         flexDirection: 'row',
         alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        paddingHorizontal: 48,
+        justifyContent: 'space-around',
+        paddingHorizontal: 0,
         paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: theme.border,
@@ -68,8 +69,8 @@ export default function BottomNav({ active }: { active: Tab }) {
         activeOpacity={0.85}
         style={{
           position: 'absolute',
-          top: -22,
-          left: '60%',
+          top: -72,
+          right: 20,
           marginLeft: 0,
           width: 56,
           height: 56,

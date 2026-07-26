@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Sparkles, ChevronRight, Clock, Smile, Film, Building2, BookOpen, HelpCircle, IceCream, Hand, Layers, Disc, Gamepad2, Swords, Scale, ScanLine, Trophy, Sun, Users, Target, Package, ChefHat } from 'lucide-react-native';
+import { Bell, Sparkles, ChevronRight, Clock, Smile, Film, Building2, BookOpen, HelpCircle, IceCream, Hand, Layers, Disc, Gamepad2, Swords, Scale, ScanLine, Trophy, Sun, Users, Target, Package, ChefHat } from 'lucide-react-native';
 import { useTheme } from '../src/context/ThemeContext';
 import Screen from '../src/components/Screen';
 import BottomNav from '../src/components/BottomNav';
@@ -228,12 +228,12 @@ export default function HomeScreen() {
   return (
     <Screen>
       <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
-      <View style={{ paddingTop: 60, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center' }}>
-          <View style={{ width: 100, height: 48, borderRadius: 100, overflow: 'hidden' }}>
+      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center'}}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, overflow: 'hidden', marginRight: 12 }}>
             <Image
               source={require('../assets/moodfood-logo.png')}
-              style={{ width: 100, height: 48 }}
+              style={{ width: 72, height: 72 }}
               resizeMode="contain"
             />
           </View>
@@ -242,13 +242,8 @@ export default function HomeScreen() {
             <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>What's your vibe?</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => router.push('/profile')} activeOpacity={0.8}>
-          <LinearGradient
-            colors={['#f97316', '#fbbf24']}
-            style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <User size={22} color="#fff" />
-          </LinearGradient>
+        <TouchableOpacity onPress={() => router.push('/notifications')} activeOpacity={0.7}>
+          <Bell size={28} color={colors.orange} />
         </TouchableOpacity>
       </View>
 
