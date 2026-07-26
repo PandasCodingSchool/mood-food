@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StatusBar, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import BottomNav from '../src/components/BottomNav';
+import { ChevronLeft, Check } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
+import Screen from '../src/components/Screen';
+import BottomNav from '../src/components/BottomNav';
 import { fetchQuests, type Quest } from '../src/services/quests';
 
 // 5.2 — Streaks & taste-discovery quests. Deliberately inject exploration
 // data, fighting the recommender's collapse into the same 5 dishes.
 export default function QuestsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,16 +25,16 @@ export default function QuestsScreen() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5eb" />
+    <Screen>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
       <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.push('/home')}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
+          <ChevronLeft size={22} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 20, color: colors.navy }]}>Quests</Text>
+        <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>Quests</Text>
       </View>
 
       {loading ? (
@@ -45,14 +49,14 @@ export default function QuestsScreen() {
             return (
               <View
                 key={q.key}
-                style={{ padding: 16, borderRadius: 18, backgroundColor: '#fff', borderWidth: 2, borderColor: done ? 'rgba(34,197,94,0.3)' : 'rgba(0,0,0,0.06)' }}
+                style={{ padding: 16, borderRadius: 18, backgroundColor: theme.card, borderWidth: 1.5, borderColor: done ? 'rgba(34,197,94,0.3)' : theme.border }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={[fw(800), { fontSize: 15, color: colors.navy, flex: 1 }]}>{q.title}</Text>
-                  {done && <Text style={{ fontSize: 18 }}>✅</Text>}
+                  <Text style={[fw(800), { fontSize: 15, color: theme.text, flex: 1 }]}>{q.title}</Text>
+                  {done && <Check size={20} color={colors.green} />}
                 </View>
-                <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 4 }]}>{q.description}</Text>
-                <View style={{ height: 8, borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.06)', overflow: 'hidden', marginTop: 12 }}>
+                <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 4 }]}>{q.description}</Text>
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.surface, overflow: 'hidden', marginTop: 12 }}>
                   <LinearGradient
                     colors={done ? ['#22c55e', '#4ade80'] : ['#f97316', '#fbbf24']}
                     start={{ x: 0, y: 0 }}
@@ -60,14 +64,14 @@ export default function QuestsScreen() {
                     style={{ height: '100%', width: `${pct}%` }}
                   />
                 </View>
-                <Text style={[fw(700), { fontSize: 11, color: '#94a3b8', marginTop: 6 }]}>
+                <Text style={[fw(700), { fontSize: 11, color: theme.subtext, marginTop: 6 }]}>
                   {q.progress}/{q.target} {done ? '· Complete!' : ''}
                 </Text>
               </View>
             );
           })}
           {quests.length === 0 && (
-            <Text style={[fw(600), { fontSize: 13, color: '#94a3b8', textAlign: 'center', marginTop: 40 }]}>
+            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center', marginTop: 40 }]}>
               No active quests right now.
             </Text>
           )}
@@ -75,6 +79,6 @@ export default function QuestsScreen() {
       )}
 
       <BottomNav active="profile" />
-    </View>
+    </Screen>
   );
 }

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, TextInput, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Users, Check, Clock, X, Heart, Trophy, ArrowRight } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
 import { SNACK_CARDS } from '../src/constants/snackCards';
 import { fw, colors } from '../src/constants/theme';
 import { trackEvent } from '../src/utils/analytics';
@@ -22,6 +24,7 @@ type Stage = 'landing' | 'lobby' | 'swipe' | 'results';
 // websockets needed at this scale.
 export default function GroupScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [stage, setStage] = useState<Stage>('landing');
   const [code, setCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -88,12 +91,12 @@ export default function GroupScreen() {
 
   if (stage === 'landing') {
     return (
-      <LinearGradient colors={['#fff5eb', '#ffffff']} style={{ flex: 1 }}>
-        <StatusBar barStyle="dark-content" />
+      <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1 }}>
+        <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
         <View style={{ paddingTop: 70, paddingHorizontal: 24 }}>
-          <Text style={{ fontSize: 36 }}>👯</Text>
-          <Text style={[fw(900), { fontSize: 24, color: colors.navy, marginTop: 12 }]}>Group decide</Text>
-          <Text style={[fw(600), { fontSize: 14, color: '#94a3b8', marginTop: 4 }]}>
+          <Users size={40} color={colors.orange} />
+          <Text style={[fw(900), { fontSize: 24, color: theme.text, marginTop: 12 }]}>Group decide</Text>
+          <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>
             Everyone swipes, we find what nobody's miserable about.
           </Text>
         </View>
@@ -102,12 +105,13 @@ export default function GroupScreen() {
             value={displayName}
             onChangeText={setDisplayName}
             placeholder="Your name"
-            placeholderTextColor="#94a3b8"
-            style={{ padding: 14, borderRadius: 14, backgroundColor: '#fff', borderWidth: 2, borderColor: 'rgba(0,0,0,0.08)', fontSize: 14 }}
+            placeholderTextColor={theme.muted}
+            style={{ padding: 14, borderRadius: 14, backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, fontSize: 14, color: theme.text }}
           />
           <TouchableOpacity onPress={handleCreate} activeOpacity={0.85}>
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' }}>
+            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
               <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>Start a group</Text>
+              <ArrowRight size={18} color="#fff" />
             </LinearGradient>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
@@ -115,9 +119,9 @@ export default function GroupScreen() {
               value={joinCode}
               onChangeText={setJoinCode}
               placeholder="Enter code"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.muted}
               autoCapitalize="characters"
-              style={{ flex: 1, padding: 14, borderRadius: 14, backgroundColor: '#fff', borderWidth: 2, borderColor: 'rgba(0,0,0,0.08)', fontSize: 14 }}
+              style={{ flex: 1, padding: 14, borderRadius: 14, backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, fontSize: 14, color: theme.text }}
             />
             <TouchableOpacity onPress={handleJoin} activeOpacity={0.85} style={{ paddingHorizontal: 20, borderRadius: 14, backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={[fw(800), { fontSize: 14, color: '#fff' }]}>Join</Text>
@@ -130,29 +134,36 @@ export default function GroupScreen() {
 
   if (stage === 'lobby') {
     return (
-      <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-        <StatusBar barStyle="dark-content" />
+      <View style={{ flex: 1, backgroundColor: theme.bg }}>
+        <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
         <View style={{ paddingTop: 70, paddingHorizontal: 24, alignItems: 'center' }}>
-          <Text style={[fw(700), { fontSize: 13, color: '#94a3b8' }]}>Room code</Text>
-          <Text style={[fw(900), { fontSize: 36, color: colors.navy, letterSpacing: 4 }]}>{code}</Text>
-          <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 4 }]}>Share this code with your group</Text>
+          <Text style={[fw(700), { fontSize: 13, color: theme.subtext }]}>Room code</Text>
+          <Text style={[fw(900), { fontSize: 36, color: theme.text, letterSpacing: 4 }]}>{code}</Text>
+          <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 4 }]}>Share this code with your group</Text>
         </View>
         <ScrollView contentContainerStyle={{ padding: 24, gap: 8 }}>
           {members.map((m) => (
-            <View key={m.memberKey} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: '#fff' }}>
-              <Text style={[fw(700), { fontSize: 14, color: colors.navy }]}>{m.displayName}</Text>
-              <Text style={[fw(600), { fontSize: 12, color: '#94a3b8' }]}>{m.swipeCount > 0 ? '✅ swiped' : '⏳ waiting'}</Text>
+            <View key={m.memberKey} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
+              <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>{m.displayName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {m.swipeCount > 0 ? <Check size={14} color={colors.green} /> : <Clock size={14} color={theme.subtext} />}
+                <Text style={[fw(600), { fontSize: 12, color: m.swipeCount > 0 ? colors.green : theme.subtext }]}>{m.swipeCount > 0 ? 'swiped' : 'waiting'}</Text>
+              </View>
             </View>
           ))}
         </ScrollView>
         <View style={{ padding: 24, gap: 10 }}>
           <TouchableOpacity onPress={handleStartSwipe} activeOpacity={0.85}>
-            <LinearGradient colors={['#e11d48', '#fb7185']} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[fw(900), { fontSize: 15, color: '#fff' }]}>👆 Swipe your picks</Text>
+            <LinearGradient colors={['#e11d48', '#fb7185']} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+              <Text style={[fw(900), { fontSize: 15, color: '#fff' }]}>Swipe your picks</Text>
+              <ArrowRight size={18} color="#fff" />
             </LinearGradient>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleGetConsensus} activeOpacity={0.85} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.navy }}>
-            <Text style={[fw(800), { fontSize: 15, color: colors.navy }]}>🎯 Get group consensus</Text>
+          <TouchableOpacity onPress={handleGetConsensus} activeOpacity={0.85} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Trophy size={18} color={theme.text} />
+              <Text style={[fw(800), { fontSize: 15, color: theme.text }]}>Get group consensus</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -161,20 +172,21 @@ export default function GroupScreen() {
 
   if (stage === 'swipe') {
     const card = SNACK_CARDS[swipeIdx];
+    const CardIcon = card.Icon;
     return (
       <LinearGradient colors={card.colors} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <StatusBar barStyle="light-content" />
-        <Text style={{ fontSize: 96 }}>{card.emoji}</Text>
+        <CardIcon size={96} color="#fff" />
         <Text style={[fw(900), { fontSize: 24, color: '#fff', marginTop: 12 }]}>{card.name}</Text>
         <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 }]}>
           {swipeIdx + 1}/{SNACK_CARDS.length}
         </Text>
         <View style={{ flexDirection: 'row', gap: 24, marginTop: 40 }}>
           <TouchableOpacity onPress={() => handleSwipe(false)} style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 28 }}>✕</Text>
+            <X size={28} color={colors.navy} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => handleSwipe(true)} style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 28 }}>♥</Text>
+            <Heart size={28} color={colors.navy} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -182,24 +194,28 @@ export default function GroupScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-      <StatusBar barStyle="dark-content" />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ paddingTop: 70, paddingHorizontal: 24 }}>
-        <TouchableOpacity onPress={() => router.push('/home')} style={{ marginBottom: 16 }}>
-          <Text style={{ fontSize: 18 }}>← Home</Text>
+        <TouchableOpacity onPress={() => router.push('/home')} style={{ marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <ChevronLeft size={22} color={theme.text} />
+          <Text style={[fw(700), { fontSize: 16, color: theme.text }]}>Home</Text>
         </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 22, color: colors.navy }]}>Group picks 🎯</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Trophy size={24} color={colors.orange} />
+          <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>Group picks</Text>
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 24, gap: 12 }}>
         {options.length === 0 && (
-          <Text style={[fw(600), { fontSize: 13, color: '#94a3b8' }]}>Not enough swipes yet to find consensus.</Text>
+          <Text style={[fw(600), { fontSize: 13, color: theme.subtext }]}>Not enough swipes yet to find consensus.</Text>
         )}
         {options.map((opt) => (
-          <View key={opt.dish_id} style={{ padding: 16, borderRadius: 16, backgroundColor: '#fff' }}>
-            <Text style={[fw(800), { fontSize: 16, color: colors.navy }]}>{opt.dish_name}</Text>
+          <View key={opt.dish_id} style={{ padding: 16, borderRadius: 16, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
+            <Text style={[fw(800), { fontSize: 16, color: theme.text }]}>{opt.dish_name}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {Object.entries(opt.member_match).map(([name, pct]) => (
-                <View key={name} style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(249,115,22,0.1)' }}>
+                <View key={name} style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.orange + '18' }}>
                   <Text style={[fw(700), { fontSize: 11, color: colors.orange }]}>{name}: {pct}%</Text>
                 </View>
               ))}

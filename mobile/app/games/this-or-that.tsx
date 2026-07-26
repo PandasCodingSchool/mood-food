@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Swords, ArrowRight } from 'lucide-react-native';
+import { useTheme } from '../../src/context/ThemeContext';
 import TwoCardDuel from '../../src/components/games/TwoCardDuel';
 import { DUEL_ROUNDS } from '../../src/constants/duels';
 import { fw, colors } from '../../src/constants/theme';
@@ -13,6 +15,7 @@ import { logSignal } from '../../src/services/signals';
 // articulate when asked directly. Feeds Bradley-Terry learning.
 export default function ThisOrThatScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [round, setRound] = useState(0);
   const [duels, setDuels] = useState<Array<{ dimensionA: string; dimensionB: string; winner: string }>>([]);
 
@@ -52,16 +55,16 @@ export default function ThisOrThatScreen() {
   };
 
   return (
-    <LinearGradient colors={['#eef2ff', '#ffffff']} style={{ flex: 1 }}>
-      <StatusBar barStyle="dark-content" />
+    <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1 }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.push('/home')}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
+          <ChevronLeft size={22} color={theme.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1, height: 6, backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+        <View style={{ flex: 1, height: 6, backgroundColor: theme.surface, borderRadius: 3, overflow: 'hidden' }}>
           <LinearGradient
             colors={['#4338ca', '#818cf8']}
             start={{ x: 0, y: 0 }}
@@ -69,7 +72,7 @@ export default function ThisOrThatScreen() {
             style={{ height: '100%', width: `${(Math.min(round, DUEL_ROUNDS.length) / DUEL_ROUNDS.length) * 100}%`, borderRadius: 3 }}
           />
         </View>
-        <Text style={[fw(800), { fontSize: 13, color: '#94a3b8' }]}>
+        <Text style={[fw(800), { fontSize: 13, color: theme.subtext }]}>
           {Math.min(round + 1, DUEL_ROUNDS.length)}/{DUEL_ROUNDS.length}
         </Text>
       </View>
@@ -79,16 +82,17 @@ export default function ThisOrThatScreen() {
           <TwoCardDuel prompt={current.prompt} a={current.a} b={current.b} onPick={handlePick} />
         ) : (
           <View style={{ alignItems: 'center', gap: 16 }}>
-            <Text style={{ fontSize: 64 }}>⚔️</Text>
-            <Text style={[fw(900), { fontSize: 22, color: colors.navy, textAlign: 'center' }]}>
+            <Swords size={56} color={colors.purple} />
+            <Text style={[fw(900), { fontSize: 22, color: theme.text, textAlign: 'center' }]}>
               Trade-offs learned!
             </Text>
-            <Text style={[fw(600), { fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 260, lineHeight: 20 }]}>
+            <Text style={[fw(600), { fontSize: 14, color: theme.subtext, textAlign: 'center', maxWidth: 260, lineHeight: 20 }]}>
               Now we know what you actually care about when it counts.
             </Text>
             <TouchableOpacity onPress={handleGetResults} activeOpacity={0.85} style={{ marginTop: 16, width: '100%' }}>
-              <LinearGradient colors={['#4338ca', '#818cf8']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>🍽️ Show me my matches</Text>
+              <LinearGradient colors={['#4338ca', '#818cf8']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+                <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>Show me my matches</Text>
+                <ArrowRight size={18} color="#fff" />
               </LinearGradient>
             </TouchableOpacity>
           </View>

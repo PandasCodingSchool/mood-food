@@ -1,44 +1,55 @@
 import { useState, useRef, useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Utensils, Sparkles, Star } from 'lucide-react-native';
 import { CHAR_QUESTIONS, TOTAL_CHAR_QUESTIONS, type CharacterProfile } from '../../src/constants/characters';
 import { getCharacterMatch } from '../../src/utils/characterEngine';
-import { fw } from '../../src/constants/theme';
+import { fw, colors } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
 import { bounceIn, floatLoop } from '../../src/utils/animations';
 import { playPopSound, playWinSound } from '../../src/utils/sounds';
 import { hapticSelect, hapticSuccess } from '../../src/utils/haptics';
 
-function Sparkle({ style, emoji, duration }: { style: object; emoji: string; duration: number }) {
+type LucideIcon = ComponentType<{ size?: number; color?: string }>;
+
+function Sparkle({ style, Icon, size, color, duration }: { style: object; Icon: LucideIcon; size: number; color: string; duration: number }) {
   const translateY = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = floatLoop(translateY, 10, duration);
     return () => loop.stop();
   }, []);
-  return <Animated.Text style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>{emoji}</Animated.Text>;
+  return (
+    <Animated.View style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>
+      <Icon size={size} color={color} />
+    </Animated.View>
+  );
 }
 
 function Reveal({ character, onContinue }: { character: CharacterProfile; onContinue: () => void }) {
-  const emojiScale = useRef(new Animated.Value(0.3)).current;
+  const iconScale = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    bounceIn(emojiScale);
+    bounceIn(iconScale);
   }, []);
+
+  const CharacterIcon = character.Icon;
+  const MealIcon = character.mealIcon;
 
   return (
     <LinearGradient colors={character.bg} style={{ flex: 1 }}>
-      <Sparkle emoji="✨" duration={3000} style={{ top: 40, left: 30, fontSize: 24, opacity: 0.6 }} />
-      <Sparkle emoji="⭐" duration={2500} style={{ top: 80, right: 40, fontSize: 20, opacity: 0.4 }} />
-      <Sparkle emoji="✨" duration={2000} style={{ top: 200, left: 20, fontSize: 16, opacity: 0.3 }} />
+      <Sparkle Icon={Sparkles} size={24} color="rgba(255,255,255,0.6)" duration={3000} style={{ top: 40, left: 30, opacity: 0.6 }} />
+      <Sparkle Icon={Star} size={20} color="rgba(255,255,255,0.4)" duration={2500} style={{ top: 80, right: 40 }} />
+      <Sparkle Icon={Sparkles} size={16} color="rgba(255,255,255,0.3)" duration={2000} style={{ top: 200, left: 20 }} />
 
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 }}>
         <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 3, textTransform: 'uppercase' }]}>
           Tonight you are
         </Text>
-        <Animated.Text style={{ fontSize: 80, marginVertical: 8, transform: [{ scale: emojiScale }] }}>
-          {character.emoji}
-        </Animated.Text>
+        <Animated.View style={{ marginVertical: 8, transform: [{ scale: iconScale }] }}>
+          <CharacterIcon size={80} color="#fff" />
+        </Animated.View>
         <Text style={[fw(900), { fontSize: 32, color: '#fff', textAlign: 'center' }]}>{character.name}</Text>
         <Text style={[fw(700), { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>{character.show}</Text>
 
@@ -47,7 +58,7 @@ function Reveal({ character, onContinue }: { character: CharacterProfile; onCont
             Their signature order
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            <Text style={{ fontSize: 40 }}>{character.mealEmoji}</Text>
+            <MealIcon size={40} color="#fff" />
             <View>
               <Text style={[fw(800), { fontSize: 18, color: '#fff' }]}>{character.mealName}</Text>
               <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }]}>{character.mealDesc}</Text>
@@ -60,8 +71,9 @@ function Reveal({ character, onContinue }: { character: CharacterProfile; onCont
         </Text>
 
         <TouchableOpacity onPress={onContinue} activeOpacity={0.85} style={{ width: '100%', marginTop: 20 }}>
-          <View style={{ height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={[fw(900), { fontSize: 16, color: '#1a1a2e' }]}>🍽️ Find meals like this</Text>
+          <View style={{ height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+            <Utensils size={20} color={colors.navy} />
+            <Text style={[fw(900), { fontSize: 16, color: colors.navy }]}>Find meals like this</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -133,7 +145,7 @@ export default function CharacterMatchScreen() {
           onPress={() => router.push('/home')}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22, color: '#fff' }}>←</Text>
+          <ChevronLeft size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
           <LinearGradient
@@ -151,7 +163,10 @@ export default function CharacterMatchScreen() {
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 28 }} showsVerticalScrollIndicator={false}>
         <Animated.View style={{ opacity: fadeAnim, gap: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 36 }}>{question.emoji}</Text>
+            {(() => {
+              const QuestionIcon = question.Icon;
+              return <QuestionIcon size={36} color="#fff" />;
+            })()}
             <View style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.2)' }}>
               <Text style={[fw(800), { fontSize: 11, color: '#c4b5fd', letterSpacing: 1, textTransform: 'uppercase' }]}>
                 Character Match
@@ -178,9 +193,14 @@ export default function CharacterMatchScreen() {
                   gap: 14,
                 }}
               >
-                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: opt.iconBg, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
-                </View>
+                {(() => {
+                  const OptionIcon = opt.Icon;
+                  return (
+                    <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: opt.iconBg, alignItems: 'center', justifyContent: 'center' }}>
+                      <OptionIcon size={22} color="#fff" />
+                    </View>
+                  );
+                })()}
                 <View style={{ flex: 1 }}>
                   <Text style={[fw(800), { fontSize: 14, color: '#fff' }]}>{opt.label}</Text>
                   <Text style={[fw(600), { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }]}>{opt.sub}</Text>

@@ -1,7 +1,11 @@
+import type { ComponentType, ReactNode } from 'react';
+import { Bike, Car, Package, Truck, Utensils } from 'lucide-react-native';
 import type { Recommendation } from '../types';
 
+export type AppIcon = ComponentType<{ size?: number; color?: string }>;
+
 export interface DeliveryApp {
-  icon: string;
+  icon: AppIcon;
   name: string;
   bg: string;
   eta: string;
@@ -15,10 +19,10 @@ export interface DeliveryApp {
 
 /** Demo delivery-app roster — cosmetic only, no real delivery API is integrated. Prices in ₹ to match the AI service's dish pricing. */
 export const DELIVERY_APPS: DeliveryApp[] = [
-  { icon: '🟠', name: 'DoorDash', bg: '#fff1f0', eta: '25-35 min', fee: '₹29 delivery', feeAmount: 29 },
-  { icon: '🟢', name: 'Uber Eats', bg: '#ecfdf5', eta: '20-30 min', fee: '₹19 delivery', feeAmount: 19 },
-  { icon: '🔴', name: 'Grubhub', bg: '#fef2f2', eta: '30-40 min', fee: '₹9 delivery', feeAmount: 9 },
-  { icon: '🟡', name: 'Postmates', bg: '#fefce8', eta: '25-40 min', fee: 'Free delivery', feeAmount: 0 },
+  { icon: Bike, name: 'DoorDash', bg: '#fff1f0', eta: '25-35 min', fee: '₹29 delivery', feeAmount: 29 },
+  { icon: Car, name: 'Uber Eats', bg: '#ecfdf5', eta: '20-30 min', fee: '₹19 delivery', feeAmount: 19 },
+  { icon: Truck, name: 'Grubhub', bg: '#fef2f2', eta: '30-40 min', fee: '₹9 delivery', feeAmount: 9 },
+  { icon: Package, name: 'Postmates', bg: '#fefce8', eta: '25-40 min', fee: 'Free delivery', feeAmount: 0 },
 ];
 
 /**
@@ -36,7 +40,7 @@ export function swiggyDeliveryOption(rec: Recommendation): DeliveryApp | null {
   const etaMin = match.item?.eta_min ?? match.restaurant?.eta_min;
 
   return {
-    icon: '🍽️',
+    icon: Utensils,
     name: 'Swiggy',
     bg: '#fff3e0',
     eta: etaMin != null ? `${etaMin} min` : 'Live now',

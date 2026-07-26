@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
-import { fw, colors } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { fw } from '../../constants/theme';
 
 export interface ChipOption {
   id: string;
@@ -24,6 +25,7 @@ export default function ChipSelector({
   multiSelect = true,
   accent = '#f97316',
 }: ChipSelectorProps) {
+  const { theme } = useTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
       {options.map((option) => {
@@ -40,13 +42,13 @@ export default function ChipSelector({
               paddingHorizontal: 16,
               paddingVertical: 10,
               borderRadius: 20,
-              backgroundColor: isSelected ? accent : '#fff',
+              backgroundColor: isSelected ? accent : theme.card,
               borderWidth: 2,
-              borderColor: isSelected ? accent : 'rgba(0,0,0,0.08)',
+              borderColor: isSelected ? accent : theme.border,
             }}
           >
             {option.emoji ? <Text style={{ fontSize: 16 }}>{option.emoji}</Text> : null}
-            <Text style={[fw(800), { fontSize: 14, color: isSelected ? '#fff' : colors.navy }]}>
+            <Text style={[fw(800), { fontSize: 14, color: isSelected ? '#fff' : theme.text }]}>
               {option.label}
             </Text>
           </TouchableOpacity>

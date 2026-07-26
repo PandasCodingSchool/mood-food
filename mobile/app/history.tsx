@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Heart } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
+import { dishEmoji } from '../src/utils/dishVisuals';
+import Screen from '../src/components/Screen';
 import BottomNav from '../src/components/BottomNav';
 import { fetchHistory, toggleSaved, type HistoryItem } from '../src/services/history';
 
@@ -19,6 +23,7 @@ function formatDate(iso: string): string {
 }
 
 export default function HistoryScreen() {
+  const { theme } = useTheme();
   const [tab, setTab] = useState<Tab>('all');
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,21 +55,21 @@ export default function HistoryScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5eb" />
+    <Screen>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
       <View style={{ paddingTop: 60, paddingHorizontal: 24 }}>
-        <Text style={[fw(900), { fontSize: 24, color: colors.navy }]}>History</Text>
-        <Text style={[fw(600), { fontSize: 13, color: '#94a3b8', marginTop: 4 }]}>Your past picks & saved meals</Text>
+        <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>History</Text>
+        <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4 }]}>Your past picks & saved meals</Text>
       </View>
 
-      <View style={{ flexDirection: 'row', margin: 24, marginBottom: 0, backgroundColor: 'rgba(0,0,0,0.04)', borderRadius: 14, padding: 3 }}>
+      <View style={{ flexDirection: 'row', margin: 24, marginBottom: 0, backgroundColor: theme.surface, borderRadius: 14, padding: 3 }}>
         {(['all', 'saved', 'ordered'] as Tab[]).map((t) => (
           <TouchableOpacity
             key={t}
             onPress={() => setTab(t)}
-            style={{ flex: 1, paddingVertical: 10, borderRadius: 11, backgroundColor: tab === t ? '#fff' : 'transparent', alignItems: 'center' }}
+            style={{ flex: 1, paddingVertical: 10, borderRadius: 11, backgroundColor: tab === t ? theme.card : 'transparent', alignItems: 'center' }}
           >
-            <Text style={[fw(800), { fontSize: 13, color: tab === t ? colors.navy : '#94a3b8', textTransform: 'capitalize' }]}>{t}</Text>
+            <Text style={[fw(800), { fontSize: 13, color: tab === t ? theme.text : theme.subtext, textTransform: 'capitalize' }]}>{t}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -81,22 +86,24 @@ export default function HistoryScreen() {
         >
           {items.length === 0 ? (
             <View style={{ alignItems: 'center', paddingTop: 48, gap: 12 }}>
-              <Text style={{ fontSize: 56 }}>🍽️</Text>
-              <Text style={[fw(800), { fontSize: 17, color: colors.navy }]}>
+              <Text style={{ fontSize: 48 }}>🍽️</Text>
+              <Text style={[fw(800), { fontSize: 17, color: theme.text }]}>
                 {tab === 'saved' ? 'No saved meals yet' : tab === 'ordered' ? 'No orders yet' : 'No history yet'}
               </Text>
-              <Text style={[fw(600), { fontSize: 13, color: '#94a3b8', textAlign: 'center' }]}>
+              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center' }]}>
                 Play a game and place an order to see it here
               </Text>
             </View>
           ) : (
             items.map((item) => (
-              <View key={item.id} style={{ backgroundColor: '#fff', borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}>
+              <View key={item.id} style={{ backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden', shadowColor: theme.shadow, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 }}>
                 <LinearGradient
                   colors={[item.gradientStart, item.gradientEnd] as [string, string]}
                   style={{ padding: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
                 >
-                  <Text style={{ fontSize: 36 }}>{item.emoji}</Text>
+                  <Text style={{ fontSize: 36 }}>
+                    {dishEmoji({ dish: { name: item.dishName, cuisine: item.cuisine ?? '', category: '' } })}
+                  </Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[fw(800), { fontSize: 16, color: '#fff' }]} numberOfLines={1}>{item.dishName}</Text>
                     <Text style={[fw(600), { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 }]}>{item.cuisine}</Text>
@@ -105,24 +112,24 @@ export default function HistoryScreen() {
                     onPress={() => handleToggleSaved(item)}
                     style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}
                   >
-                    <Text style={{ fontSize: 16 }}>{item.saved ? '❤️' : '🤍'}</Text>
+                    <Heart size={18} color={item.saved ? colors.rose : '#fff'} fill={item.saved ? colors.rose : 'transparent'} />
                   </TouchableOpacity>
                 </LinearGradient>
                 <View style={{ padding: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View style={{ flexDirection: 'row', gap: 6 }}>
                     {item.priceInr > 0 && (
-                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(249,115,22,0.08)' }}>
+                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.orange + '18' }}>
                         <Text style={[fw(700), { fontSize: 11, color: colors.orange }]}>₹{item.priceInr}</Text>
                       </View>
                     )}
                     {item.platform && (
-                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.04)' }}>
-                        <Text style={[fw(700), { fontSize: 11, color: '#64748b' }]}>{item.platform}</Text>
+                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: theme.surface }}>
+                        <Text style={[fw(700), { fontSize: 11, color: theme.subtext }]}>{item.platform}</Text>
                       </View>
                     )}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={[fw(600), { fontSize: 11, color: '#94a3b8' }]}>{formatDate(item.createdAt)}</Text>
+                    <Text style={[fw(600), { fontSize: 11, color: theme.subtext }]}>{formatDate(item.createdAt)}</Text>
                     {item.ordered && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green, marginLeft: 4 }} />}
                   </View>
                 </View>
@@ -133,6 +140,6 @@ export default function HistoryScreen() {
       )}
 
       <BottomNav active="history" />
-    </View>
+    </Screen>
   );
 }

@@ -2,25 +2,37 @@ import { useRef, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { DeliveryApp } from '../../src/constants/deliveryApps';
+import { Check, PartyPopper, Sparkles, Gift, Truck, Package, Clock, Home, History } from 'lucide-react-native';
+import { DELIVERY_APPS, swiggyDeliveryOption, type AppIcon, type DeliveryApp } from '../../src/constants/deliveryApps';
+import { useTheme } from '../../src/context/ThemeContext';
 import { fw, colors } from '../../src/constants/theme';
 import { bounceIn, floatLoop, pulseLoop } from '../../src/utils/animations';
 import type { Recommendation } from '../../src/types';
 
-function CelebrationEmoji({ emoji, style, duration }: { emoji: string; style: object; duration: number }) {
+function CelebrationIcon({ Icon, size, color, style, duration }: { Icon: AppIcon; size: number; color: string; style: object; duration: number }) {
   const translateY = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = floatLoop(translateY, 8, duration);
     return () => loop.stop();
   }, []);
-  return <Animated.Text style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>{emoji}</Animated.Text>;
+  return (
+    <Animated.View style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>
+      <Icon size={size} color={color} />
+    </Animated.View>
+  );
 }
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
-  const { rec: rawRec, app: rawApp, total } = useLocalSearchParams<{ rec: string; app: string; total: string }>();
+  const { theme } = useTheme();
+  const { rec: rawRec, appName, total } = useLocalSearchParams<{ rec: string; appName: string; total: string }>();
   const rec: Recommendation = JSON.parse(rawRec);
-  const app: DeliveryApp = JSON.parse(rawApp);
+  const app: DeliveryApp = useMemo(() => {
+    const liveOption = swiggyDeliveryOption(rec);
+    if (liveOption && liveOption.name === appName) return liveOption;
+    return DELIVERY_APPS.find((a) => a.name === appName) ?? DELIVERY_APPS[0];
+  }, [appName, rec]);
+  const AppIcon = app.icon;
   const orderNum = useMemo(() => Math.floor(1000 + Math.random() * 9000).toString(), []);
 
   const checkScale = useRef(new Animated.Value(0.3)).current;
@@ -33,8 +45,8 @@ export default function OrderSuccessScreen() {
   }, []);
 
   return (
-    <LinearGradient colors={['#f0fdf4', '#dcfce7', '#bbf7d0']} style={{ flex: 1 }}>
-      <StatusBar barStyle="dark-content" />
+    <LinearGradient colors={[theme.bg, theme.surface, theme.surface]} style={{ flex: 1 }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ flex: 1, alignItems: 'center', paddingTop: 100, paddingHorizontal: 32, paddingBottom: 40 }}>
         <View style={{ marginTop: 20 }}>
           <Animated.View
@@ -48,61 +60,63 @@ export default function OrderSuccessScreen() {
             }}
           >
             <LinearGradient colors={['#22c55e', '#4ade80']} style={{ width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 60, color: '#fff' }}>✓</Text>
+              <Check size={60} color="#fff" />
             </LinearGradient>
           </Animated.View>
-          <CelebrationEmoji emoji="🎉" duration={2000} style={{ top: -20, left: -20, fontSize: 24 }} />
-          <CelebrationEmoji emoji="✨" duration={2500} style={{ top: -10, right: -25, fontSize: 20 }} />
-          <CelebrationEmoji emoji="🎊" duration={2200} style={{ bottom: -15, left: -15, fontSize: 18 }} />
+          <CelebrationIcon Icon={PartyPopper} size={24} color={colors.orange} duration={2000} style={{ top: -20, left: -20 }} />
+          <CelebrationIcon Icon={Sparkles} size={20} color={colors.purple} duration={2500} style={{ top: -10, right: -25 }} />
+          <CelebrationIcon Icon={Gift} size={18} color={colors.rose} duration={2200} style={{ bottom: -15, left: -15 }} />
         </View>
 
-        <Text style={[fw(900), { fontSize: 28, color: colors.navy, textAlign: 'center', marginTop: 32 }]}>Order Confirmed!</Text>
-        <Text style={[fw(600), { fontSize: 14, color: '#64748b', textAlign: 'center', marginTop: 8, maxWidth: 260, lineHeight: 20 }]}>
+        <Text style={[fw(900), { fontSize: 28, color: theme.text, textAlign: 'center', marginTop: 32 }]}>Order Confirmed!</Text>
+        <Text style={[fw(600), { fontSize: 14, color: theme.subtext, textAlign: 'center', marginTop: 8, maxWidth: 260, lineHeight: 20 }]}>
           Your {rec.dish.name} is on its way. Sit tight!
         </Text>
 
-        <View style={{ width: '100%', marginTop: 32, padding: 20, borderRadius: 20, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 }}>
+        <View style={{ width: '100%', marginTop: 32, padding: 20, borderRadius: 20, backgroundColor: theme.card, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, elevation: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 22 }}>{app.icon}</Text>
+              <AppIcon size={22} color={theme.text} />
             </View>
             <View>
-              <Text style={[fw(800), { fontSize: 14, color: colors.navy }]}>
+              <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>
                 {app.name}{app.isLive && app.restaurantName ? ` · ${app.restaurantName}` : ''}
               </Text>
-              <Text style={[fw(600), { fontSize: 12, color: '#64748b' }]}>Order #MF-{orderNum}</Text>
+              <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>Order #MF-{orderNum}</Text>
             </View>
           </View>
 
-          <ProgressStep icon="✓" iconBg={colors.green} label="Order placed" labelColor={colors.navy} lineColor={colors.green} />
+          <ProgressStep Icon={Check} iconBg={colors.green} label="Order placed" labelColor={theme.text} lineColor={colors.green} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' }}>
               <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff', transform: [{ scale: pulseDot }] }} />
             </View>
-            <Text style={[fw(700), { fontSize: 13, color: colors.navy }]}>Preparing your food</Text>
+            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>Preparing your food</Text>
           </View>
-          <View style={{ width: 2, height: 20, backgroundColor: 'rgba(0,0,0,0.08)', marginLeft: 13 }} />
-          <ProgressStep icon="🚗" iconBg="rgba(0,0,0,0.06)" label="On its way" labelColor="#94a3b8" lineColor="rgba(0,0,0,0.08)" muted />
-          <ProgressStep icon="📦" iconBg="rgba(0,0,0,0.06)" label="Delivered" labelColor="#94a3b8" muted last />
+          <View style={{ width: 2, height: 20, backgroundColor: theme.border, marginLeft: 13 }} />
+          <ProgressStep Icon={Truck} iconBg={theme.surface} label="On its way" labelColor={theme.subtext} lineColor={theme.border} muted />
+          <ProgressStep Icon={Package} iconBg={theme.surface} label="Delivered" labelColor={theme.subtext} muted last />
 
-          <View style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.06)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 20 }}>🕐</Text>
+          <View style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: colors.orange + '0F', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Clock size={20} color={colors.orange} />
             <View>
-              <Text style={[fw(800), { fontSize: 14, color: colors.navy }]}>ETA: {app.eta}</Text>
-              <Text style={[fw(600), { fontSize: 12, color: '#64748b' }]}>Arriving at your door</Text>
+              <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>ETA: {app.eta}</Text>
+              <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>Arriving at your door</Text>
             </View>
           </View>
         </View>
 
         <View style={{ width: '100%', gap: 10, marginTop: 'auto' }}>
           <TouchableOpacity onPress={() => router.push('/home')} activeOpacity={0.85}>
-            <View style={{ height: 52, borderRadius: 26, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>🎮 Play another game</Text>
+            <View style={{ height: 52, borderRadius: 26, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+              <Home size={20} color="#fff" />
+              <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Play another game</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/history')} activeOpacity={0.7}>
-            <View style={{ height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[fw(700), { fontSize: 14, color: '#64748b' }]}>View order history</Text>
+            <View style={{ height: 48, borderRadius: 24, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}>
+              <History size={18} color={theme.text} />
+              <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>View order history</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -112,7 +126,7 @@ export default function OrderSuccessScreen() {
 }
 
 function ProgressStep({
-  icon,
+  Icon,
   iconBg,
   label,
   labelColor,
@@ -120,7 +134,7 @@ function ProgressStep({
   muted,
   last,
 }: {
-  icon: string;
+  Icon: AppIcon;
   iconBg: string;
   label: string;
   labelColor: string;
@@ -132,7 +146,7 @@ function ProgressStep({
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={[fw(900), { fontSize: muted ? 14 : 12, color: muted ? undefined : '#fff' }]}>{icon}</Text>
+          <Icon size={muted ? 14 : 12} color={muted ? '#94a3b8' : '#fff'} />
         </View>
         <Text style={[fw(muted ? 600 : 700), { fontSize: 13, color: labelColor }]}>{label}</Text>
       </View>

@@ -2,17 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Utensils } from 'lucide-react-native';
 import { DAY_SCENES, type DayMood } from '../../src/constants/storyBeats';
 import { getDayMood } from '../../src/utils/storyEngine';
-import { fw } from '../../src/constants/theme';
+import { fw, colors } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
-import { bounceIn, floatLoop } from '../../src/utils/animations';
+import { floatLoop } from '../../src/utils/animations';
 import { logSignal } from '../../src/services/signals';
 
 function Reveal({ mood, onContinue }: { mood: DayMood; onContinue: () => void }) {
-  const emojiScale = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => { bounceIn(emojiScale); }, []);
-
   return (
     <LinearGradient colors={['#0f172a', '#1e293b', '#334155']} style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" />
@@ -20,7 +18,10 @@ function Reveal({ mood, onContinue }: { mood: DayMood; onContinue: () => void })
         <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: 3, textTransform: 'uppercase' }]}>
           Your day says you're feeling
         </Text>
-        <Animated.Text style={{ fontSize: 64, marginVertical: 12, transform: [{ scale: emojiScale }] }}>{mood.emoji}</Animated.Text>
+        {(() => {
+          const MoodIcon = mood.Icon;
+          return <MoodIcon size={64} color="#fff" />;
+        })()}
         <Text style={[fw(900), { fontSize: 30, color: '#fff', textAlign: 'center' }]}>{mood.label}</Text>
         <Text style={[fw(600), { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', maxWidth: 280, lineHeight: 20, marginTop: 4 }]}>
           {mood.desc}
@@ -29,15 +30,19 @@ function Reveal({ mood, onContinue }: { mood: DayMood; onContinue: () => void })
         <View style={{ marginTop: 24, width: '100%', flexDirection: 'row', gap: 10 }}>
           {mood.tags.map((tag, i) => (
             <View key={i} style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, marginBottom: 4 }}>{tag.emoji}</Text>
-              <Text style={[fw(700), { fontSize: 11, color: 'rgba(255,255,255,0.7)' }]}>{tag.label}</Text>
+              {(() => {
+                const TagIcon = tag.Icon;
+                return <TagIcon size={24} color="rgba(255,255,255,0.9)" />;
+              })()}
+              <Text style={[fw(700), { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>{tag.label}</Text>
             </View>
           ))}
         </View>
 
         <TouchableOpacity onPress={onContinue} activeOpacity={0.85} style={{ width: '100%', marginTop: 28 }}>
-          <LinearGradient colors={['#0891b2', '#22d3ee']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>🍽️ Get my meal picks</Text>
+          <LinearGradient colors={['#0891b2', '#22d3ee']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+            <Utensils size={20} color="#fff" />
+            <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>Get my meal picks</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -109,7 +114,7 @@ export default function DayStoryScreen() {
           onPress={() => router.push('/home')}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22, color: '#fff' }}>←</Text>
+          <ChevronLeft size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
           {DAY_SCENES.map((_, i) => (
@@ -145,7 +150,10 @@ export default function DayStoryScreen() {
             transform: [{ translateY: sceneFloat }],
           }}
         >
-          <Text style={{ fontSize: 64 }}>{scene.emoji}</Text>
+          {(() => {
+            const SceneIcon = scene.Icon;
+            return <SceneIcon size={64} color="#fff" />;
+          })()}
         </Animated.View>
       </View>
 
@@ -173,7 +181,10 @@ export default function DayStoryScreen() {
                   gap: 12,
                 }}
               >
-                <Text style={{ fontSize: 24 }}>{choice.emoji}</Text>
+                {(() => {
+                  const ChoiceIcon = choice.Icon;
+                  return <ChoiceIcon size={24} color="#fff" />;
+                })()}
                 <Text style={[fw(700), { fontSize: 14, color: '#fff', flex: 1, lineHeight: 18 }]}>{choice.label}</Text>
               </TouchableOpacity>
             );

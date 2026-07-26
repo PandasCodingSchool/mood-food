@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated } from 'react-native';
+import type { ComponentType } from 'react';
+import { View, Text, Animated, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { fw } from '../constants/theme';
+import { Brain, Search, Sparkles } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
+import { fw, colors } from '../constants/theme';
 import { floatLoop } from '../utils/animations';
 
-const PHASES = [
-  { emoji: '🧠', text: 'Reading your mood...', sub: 'Analyzing vibes' },
-  { emoji: '🍳', text: 'Matching cuisines...', sub: 'Scanning 500+ restaurants' },
-  { emoji: '✨', text: 'Curating your picks...', sub: 'Almost there!' },
+type LucideIcon = ComponentType<{ size?: number; color?: string }>;
+
+const PHASES: Array<{ Icon: LucideIcon; text: string; sub: string }> = [
+  { Icon: Brain, text: 'Reading your mood...', sub: 'Analyzing vibes' },
+  { Icon: Search, text: 'Matching cuisines...', sub: 'Scanning 500+ restaurants' },
+  { Icon: Sparkles, text: 'Curating your picks...', sub: 'Almost there!' },
 ];
 
 /** Animated multi-phase loading screen shown while fetchRecommendations resolves. */
 export default function LoadingScreen() {
+  const { theme } = useTheme();
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [progress, setProgress] = useState(8);
   const floatY = useRef(new Animated.Value(0)).current;
@@ -32,18 +38,22 @@ export default function LoadingScreen() {
   }, []);
 
   const phase = PHASES[phaseIdx];
+  const PhaseIcon = phase.Icon;
 
   return (
-    <LinearGradient colors={['#f97316', '#fb923c', '#fbbf24']} locations={[0, 0.4, 1]} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ alignItems: 'center', gap: 24, paddingHorizontal: 32 }}>
-        <Animated.Text style={{ fontSize: 72, transform: [{ translateY: floatY }] }}>{phase.emoji}</Animated.Text>
-        <Text style={[fw(900), { fontSize: 22, color: '#fff', textAlign: 'center', maxWidth: 260, lineHeight: 28 }]}>
+        <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+          <PhaseIcon size={72} color={colors.orange} />
+        </Animated.View>
+        <Text style={[fw(900), { fontSize: 22, color: theme.text, textAlign: 'center', maxWidth: 260, lineHeight: 28 }]}>
           {phase.text}
         </Text>
-        <View style={{ width: 200, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)', overflow: 'hidden' }}>
-          <View style={{ height: '100%', borderRadius: 3, backgroundColor: '#fff', width: `${progress}%` }} />
+        <View style={{ width: 200, height: 6, borderRadius: 3, backgroundColor: theme.border, overflow: 'hidden' }}>
+          <View style={{ height: '100%', borderRadius: 3, backgroundColor: colors.orange, width: `${progress}%` }} />
         </View>
-        <Text style={[fw(700), { fontSize: 14, color: 'rgba(255,255,255,0.8)' }]}>{phase.sub}</Text>
+        <Text style={[fw(700), { fontSize: 14, color: theme.subtext }]}>{phase.sub}</Text>
       </View>
     </LinearGradient>
   );

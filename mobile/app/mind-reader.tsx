@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Sparkles } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
 import { fetchRecommendations } from '../src/services/aiRecommendations';
 import { fw, colors } from '../src/constants/theme';
-import { dishEmoji, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
+import { dishIcon, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
 import LoadingScreen from '../src/components/LoadingScreen';
 import { logSignal } from '../src/services/signals';
 import { trackEvent } from '../src/utils/analytics';
@@ -15,6 +17,7 @@ import type { Recommendation } from '../src/types';
 // confidence > 0.8 (gated server-side by the orchestrator's question_budget).
 export default function MindReaderScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);
   const [imageFailed, setImageFailed] = useState(false);
@@ -49,9 +52,9 @@ export default function MindReaderScreen() {
 
   if (!rec) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff5eb', padding: 24 }}>
-        <Text style={{ fontSize: 48 }}>🔮</Text>
-        <Text style={[fw(800), { fontSize: 18, color: colors.navy, marginTop: 16, textAlign: 'center' }]}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg, padding: 24 }}>
+        <Sparkles size={56} color={colors.purple} />
+        <Text style={[fw(800), { fontSize: 18, color: theme.text, marginTop: 16, textAlign: 'center' }]}>
           Couldn't read your mind this time
         </Text>
         <TouchableOpacity onPress={() => router.push('/home')} activeOpacity={0.85} style={{ marginTop: 24 }}>
@@ -69,28 +72,31 @@ export default function MindReaderScreen() {
     <LinearGradient colors={['#1e1b4b', '#4338ca']} style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" />
       <View style={{ paddingTop: 70, paddingHorizontal: 24, alignItems: 'center' }}>
-        <Text style={{ fontSize: 36 }}>🔮</Text>
+        <Sparkles size={36} color="#fff" />
         <Text style={[fw(900), { fontSize: 22, color: '#fff', textAlign: 'center', marginTop: 10 }]}>
           I think you want...
         </Text>
       </View>
 
       <View style={{ padding: 24, paddingTop: 28 }}>
-        <View style={{ borderRadius: 24, overflow: 'hidden', backgroundColor: '#fff' }}>
+        <View style={{ borderRadius: 24, overflow: 'hidden', backgroundColor: theme.card }}>
           <View style={{ height: 180 }}>
             {imageUrl ? (
               <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setImageFailed(true)} />
             ) : (
               <LinearGradient colors={dishGradient(0)} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 72 }}>{dishEmoji(rec)}</Text>
+                {(() => {
+                  const Icon = dishIcon(rec);
+                  return <Icon size={72} color="#fff" />;
+                })()}
               </LinearGradient>
             )}
           </View>
           <View style={{ padding: 20 }}>
-            <Text style={[fw(900), { fontSize: 22, color: colors.navy }]}>{rec.dish.name}</Text>
-            <Text style={[fw(600), { fontSize: 13, color: '#64748b', marginTop: 4 }]}>{rec.dish.cuisine}</Text>
+            <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>{rec.dish.name}</Text>
+            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4 }]}>{rec.dish.cuisine}</Text>
             {rec.ai_reasoning?.psychological_hook && (
-              <Text style={[fw(600), { fontSize: 14, color: '#475569', marginTop: 14, lineHeight: 20, fontStyle: 'italic' }]}>
+              <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 14, lineHeight: 20, fontStyle: 'italic' }]}>
                 "{rec.ai_reasoning.psychological_hook}"
               </Text>
             )}

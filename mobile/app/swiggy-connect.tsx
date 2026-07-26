@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, ScrollView, ActivityIndicator, Linking, AppState } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, MapPin, Clock, Coins, Unlink, Link2, Check } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
+import Screen from '../src/components/Screen';
 import { getHeaders } from '../src/services/apiBase';
 import { fetchCurrentUser } from '../src/services/auth';
 import { initiateSwiggyOAuth, unlinkSwiggy } from '../src/services/swiggy';
 
 export default function SwiggyConnectScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [linked, setLinked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -64,16 +68,16 @@ export default function SwiggyConnectScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5eb" />
+    <Screen>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
       <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
+          <ChevronLeft size={22} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 20, color: colors.navy }]}>Connect Swiggy</Text>
+        <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>Connect Swiggy</Text>
       </View>
 
       {loading ? (
@@ -86,11 +90,13 @@ export default function SwiggyConnectScreen() {
             colors={linked ? ['#f0fdf4', '#dcfce7'] : ['#fff7ed', '#fef3c7']}
             style={{ borderRadius: 20, padding: 24, alignItems: 'center', gap: 12 }}
           >
-            <Text style={{ fontSize: 56 }}>{linked ? '✅' : '🍽️'}</Text>
-            <Text style={[fw(900), { fontSize: 20, color: colors.navy, textAlign: 'center' }]}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: linked ? 'rgba(34,197,94,0.12)' : 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+              {linked ? <Check size={36} color={colors.green} /> : <Link2 size={36} color={colors.orange} />}
+            </View>
+            <Text style={[fw(900), { fontSize: 20, color: theme.text, textAlign: 'center' }]}>
               {linked ? 'Swiggy Connected' : 'Connect your Swiggy'}
             </Text>
-            <Text style={[fw(600), { fontSize: 13, color: '#64748b', textAlign: 'center', lineHeight: 20 }]}>
+            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center', lineHeight: 20 }]}>
               {linked
                 ? 'Your Swiggy account is linked. MoodFood uses your location and order history to recommend nearby restaurants.'
                 : 'Link your Swiggy account so MoodFood can show real restaurants near you, live ETAs, and actual menu prices.'}
@@ -100,18 +106,18 @@ export default function SwiggyConnectScreen() {
           {!linked && (
             <View style={{ gap: 10 }}>
               {[
-                { icon: '📍', title: 'Nearby restaurants', desc: 'See which places can deliver to you right now' },
-                { icon: '🕐', title: 'Live ETAs', desc: 'Real delivery times, not estimates' },
-                { icon: '💰', title: 'Actual prices', desc: 'Menu prices from open restaurants near you' },
+                { icon: <MapPin size={24} color={colors.orange} />, title: 'Nearby restaurants', desc: 'See which places can deliver to you right now' },
+                { icon: <Clock size={24} color={colors.orange} />, title: 'Live ETAs', desc: 'Real delivery times, not estimates' },
+                { icon: <Coins size={24} color={colors.orange} />, title: 'Actual prices', desc: 'Menu prices from open restaurants near you' },
               ].map((item) => (
                 <View
                   key={item.title}
-                  style={{ padding: 16, borderRadius: 14, backgroundColor: '#fff', flexDirection: 'row', gap: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' }}
+                  style={{ padding: 16, borderRadius: 14, backgroundColor: theme.card, flexDirection: 'row', gap: 12, alignItems: 'center', borderWidth: 1, borderColor: theme.border }}
                 >
-                  <Text style={{ fontSize: 24 }}>{item.icon}</Text>
+                  <View style={{ width: 32, alignItems: 'center' }}>{item.icon}</View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[fw(800), { fontSize: 14, color: colors.navy }]}>{item.title}</Text>
-                    <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 2 }]}>{item.desc}</Text>
+                    <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>{item.title}</Text>
+                    <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 2 }]}>{item.desc}</Text>
                   </View>
                 </View>
               ))}
@@ -119,8 +125,8 @@ export default function SwiggyConnectScreen() {
           )}
 
           {error && (
-            <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#fff0f0', borderWidth: 1, borderColor: '#fecaca' }}>
-              <Text style={[fw(600), { fontSize: 13, color: '#dc2626' }]}>⚠️ {error}</Text>
+            <View style={{ padding: 14, borderRadius: 12, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
+              <Text style={[fw(600), { fontSize: 13, color: colors.red }]}>{error}</Text>
             </View>
           )}
 
@@ -129,12 +135,12 @@ export default function SwiggyConnectScreen() {
               onPress={handleUnlink}
               disabled={connecting}
               activeOpacity={0.85}
-              style={{ padding: 16, borderRadius: 14, backgroundColor: '#fff0f0', borderWidth: 1, borderColor: '#fecaca', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: connecting ? 0.6 : 1 }}
+              style={{ padding: 16, borderRadius: 14, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: connecting ? 0.6 : 1 }}
             >
               {connecting
-                ? <ActivityIndicator size="small" color="#dc2626" />
-                : <Text style={{ fontSize: 18 }}>🔗</Text>}
-              <Text style={[fw(700), { fontSize: 15, color: '#dc2626' }]}>
+                ? <ActivityIndicator size="small" color={colors.red} />
+                : <Unlink size={20} color={colors.red} />}
+              <Text style={[fw(700), { fontSize: 15, color: colors.red }]}>
                 {connecting ? 'Unlinking…' : 'Disconnect Swiggy'}
               </Text>
             </TouchableOpacity>
@@ -146,7 +152,7 @@ export default function SwiggyConnectScreen() {
               >
                 {connecting
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={{ fontSize: 20 }}>🔗</Text>}
+                  : <Link2 size={20} color="#fff" />}
                 <Text style={[fw(900), { fontSize: 17, color: '#fff' }]}>
                   {connecting ? 'Opening Swiggy…' : 'Connect Swiggy'}
                 </Text>
@@ -154,11 +160,11 @@ export default function SwiggyConnectScreen() {
             </TouchableOpacity>
           )}
 
-          <Text style={[fw(600), { fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 16 }]}>
+          <Text style={[fw(600), { fontSize: 11, color: theme.subtext, textAlign: 'center', lineHeight: 16 }]}>
             MoodFood only reads your delivery address to find nearby restaurants. We never place orders or access payment details on your behalf.
           </Text>
         </ScrollView>
       )}
-    </View>
+    </Screen>
   );
 }
