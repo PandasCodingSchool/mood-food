@@ -1,14 +1,11 @@
 import { View, Text, TouchableOpacity } from 'react-native';
-import type { ComponentType } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { fw } from '../../constants/theme';
-
-type LucideIcon = ComponentType<{ size?: number; color?: string }>;
 
 export interface ChipOption {
   id: string;
   label: string;
-  Icon?: LucideIcon;
+  emoji?: string;
 }
 
 interface ChipSelectorProps {
@@ -33,7 +30,6 @@ export default function ChipSelector({
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
       {options.map((option) => {
         const isSelected = selected.includes(option.id);
-        const OptionIcon = option.Icon;
         return (
           <TouchableOpacity
             key={option.id}
@@ -51,7 +47,7 @@ export default function ChipSelector({
               borderColor: isSelected ? accent : theme.border,
             }}
           >
-            {OptionIcon ? <OptionIcon size={16} color={isSelected ? '#fff' : theme.text} /> : null}
+            {option.emoji ? <Text style={{ fontSize: 16 }}>{option.emoji}</Text> : null}
             <Text style={[fw(800), { fontSize: 14, color: isSelected ? '#fff' : theme.text }]}>
               {option.label}
             </Text>

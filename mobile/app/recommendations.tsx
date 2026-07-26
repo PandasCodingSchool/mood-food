@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ComponentType } from 'react';
-import { ChevronLeft, RefreshCw, Frown, PartyPopper, Trophy, Dices, ArrowRight, Scale, History, Wallet, Meh, Smile, Battery, Utensils, Compass } from 'lucide-react-native';
+import { ChevronLeft, RefreshCw, Frown, PartyPopper, ArrowRight } from 'lucide-react-native';
 import { useTheme } from '../src/context/ThemeContext';
 import {
   fetchRecommendations,
@@ -12,7 +11,8 @@ import {
 } from '../src/services/aiRecommendations';
 import { trackEvent } from '../src/utils/analytics';
 import { fw, colors } from '../src/constants/theme';
-import { dishIcon, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
+import { dishEmoji, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
+import { pressScale } from '../src/utils/animations';
 import BottomNav from '../src/components/BottomNav';
 import LoadingScreen from '../src/components/LoadingScreen';
 import ChipSelector from '../src/components/inputs/ChipSelector';
@@ -20,19 +20,17 @@ import BlindBetStars from '../src/components/BlindBetStars';
 import { logSignal } from '../src/services/signals';
 import type { Recommendation, RecommendationResponse } from '../src/types';
 
-type LucideIcon = ComponentType<{ size?: number; color?: string }>;
-
 // 4.2 — Veto + why: turns a useless "no" into a precise model update.
-const VETO_REASONS: Array<{ id: string; label: string; Icon: LucideIcon }> = [
-  { id: 'too_heavy', label: 'Too heavy', Icon: Scale },
-  { id: 'had_recently', label: 'Had it recently', Icon: History },
-  { id: 'too_pricey', label: 'Too pricey', Icon: Wallet },
-  { id: 'not_feeling_it', label: 'Not feeling it', Icon: Meh },
+const VETO_REASONS = [
+  { id: 'too_heavy', label: 'Too heavy', emoji: '⚖️' },
+  { id: 'had_recently', label: 'Had it recently', emoji: '🕓' },
+  { id: 'too_pricey', label: 'Too pricey', emoji: '💸' },
+  { id: 'not_feeling_it', label: 'Not feeling it', emoji: '😶' },
 ];
 
-const MOOD_ICONS: Record<string, LucideIcon> = {
-  happy: Smile, tired: Battery, stressed: Frown, celebrating: PartyPopper,
-  relaxed: Smile, adventurous: Compass,
+const MOOD_EMOJIS: Record<string, string> = {
+  happy: '😊', tired: '😴', stressed: '😫', celebrating: '🎉',
+  relaxed: '😌', adventurous: '🧭',
 };
 
 function MealCard({
@@ -51,6 +49,7 @@ function MealCard({
   const { theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
+  const scale = useRef(new Animated.Value(1)).current;
   const [imageFailed, setImageFailed] = useState(false);
   const [showReasons, setShowReasons] = useState(false);
 
@@ -69,9 +68,11 @@ function MealCard({
     : rec.practical_details?.estimated_price;
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+    <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
       <TouchableOpacity
         activeOpacity={0.9}
+        onPressIn={() => pressScale(scale, 0.97)}
+        onPressOut={() => pressScale(scale, 1)}
         onPress={onTap}
         style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: theme.card, marginBottom: 16, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
       >
@@ -85,10 +86,7 @@ function MealCard({
             />
           ) : (
             <LinearGradient colors={dishGradient(index)} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-              {(() => {
-                const Icon = dishIcon(rec);
-                return <Icon size={64} color="#fff" />;
-              })()}
+              <Text style={{ fontSize: 56 }}>{dishEmoji(rec)}</Text>
             </LinearGradient>
           )}
           {matchPct && (
@@ -98,13 +96,13 @@ function MealCard({
           )}
           {index === 0 && (
             <View style={{ position: 'absolute', top: 12, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#4ade80', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Trophy size={12} color="#fff" />
+              <Text style={{ fontSize: 12 }}>🏆</Text>
               <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>Top Pick</Text>
             </View>
           )}
           {rec.is_wildcard && (
             <View style={{ position: 'absolute', top: index === 0 ? 40 : 12, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#a855f7', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Dices size={12} color="#fff" />
+              <Text style={{ fontSize: 12 }}>🎲</Text>
               <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>Shake it up</Text>
             </View>
           )}
@@ -237,17 +235,14 @@ export default function RecommendationsScreen() {
           </View>
           <View style={{ width: 40 }} />
         </View>
-        {quizResults?.mood && (() => {
-          const MoodIcon = MOOD_ICONS[quizResults.mood] ?? Utensils;
-          return (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16 }}>
-              <MoodIcon size={14} color={theme.subtext} />
-              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center' }]}>
-                Based on your mood: {quizResults.mood}
-              </Text>
-            </View>
-          );
-        })()}
+        {quizResults?.mood && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16 }}>
+            <Text style={{ fontSize: 14 }}>{MOOD_EMOJIS[quizResults.mood] ?? '🍽️'}</Text>
+            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center' }]}>
+              Based on your mood: {quizResults.mood}
+            </Text>
+          </View>
+        )}
         {data?.live_status === 'partial' && (
           <Text style={[fw(600), { fontSize: 12, color: colors.orange, textAlign: 'center', marginTop: 8 }]}>
             Some picks are live on Swiggy; others are curated estimates.

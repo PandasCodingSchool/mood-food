@@ -1,9 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import type { ComponentType } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Sparkles, ChevronRight, Clock, Smile, Film, Building2, BookOpen, HelpCircle, IceCream, Hand, Layers, Disc, Gamepad2, Swords, Scale, ScanLine, Trophy, Sun, Users, Target, Package, ChefHat } from 'lucide-react-native';
+import { Bell, Sparkles, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../src/context/ThemeContext';
 import Screen from '../src/components/Screen';
 import BottomNav from '../src/components/BottomNav';
@@ -15,17 +14,16 @@ import { trackEvent } from '../src/utils/analytics';
 import { hasCheckedInToday } from '../src/services/moodState';
 import { fetchLearnedProfile, flushSignals } from '../src/services/signals';
 import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from '../src/services/nostalgiaGate';
+import { fadeUp, floatLoop, bounceIn, pressScale } from '../src/utils/animations';
 import type { LearnedProfile } from '../src/types';
-
-type LucideIcon = ComponentType<{ size?: number; color?: string }>;
 
 const GAMES: Array<{
   id: string;
   route: string;
   title: string;
   desc: string;
-  Icon: LucideIcon;
-  bgIcon: LucideIcon;
+  emoji: string;
+  bgEmoji: string;
   meta: string;
   colors: readonly [string, string];
 }> = [
@@ -34,8 +32,8 @@ const GAMES: Array<{
     route: '/games/character',
     title: 'Character Match',
     desc: "Find out which TV character you are tonight — and what they'd eat",
-    Icon: Smile,
-    bgIcon: Film,
+    emoji: '🎭',
+    bgEmoji: '🍿',
     meta: '2 min · Fun quiz',
     colors: ['#7c3aed', '#a78bfa'] as const,
   },
@@ -44,8 +42,8 @@ const GAMES: Array<{
     route: '/games/story',
     title: 'Day Story',
     desc: "Live a mini workday — we'll read your mood from your choices",
-    Icon: Building2,
-    bgIcon: BookOpen,
+    emoji: '📖',
+    bgEmoji: '☕',
     meta: '3 min · Story mode',
     colors: ['#0891b2', '#22d3ee'] as const,
   },
@@ -54,8 +52,8 @@ const GAMES: Array<{
     route: '/games/quiz',
     title: 'Mood Scoop',
     desc: 'Scoop your mood with quick questions about cravings & budget',
-    Icon: HelpCircle,
-    bgIcon: IceCream,
+    emoji: '❓',
+    bgEmoji: '🍦',
     meta: '90 sec · Quick picks',
     colors: ['#f97316', '#fbbf24'] as const,
   },
@@ -64,8 +62,8 @@ const GAMES: Array<{
     route: '/games/swipe-vibe',
     title: 'Snack Match',
     desc: 'Swipe food cards left or right until your cravings click',
-    Icon: Hand,
-    bgIcon: Layers,
+    emoji: '👆',
+    bgEmoji: '🍪',
     meta: '1 min · Swipe game',
     colors: ['#e11d48', '#fb7185'] as const,
   },
@@ -74,8 +72,8 @@ const GAMES: Array<{
     route: '/games/wheel',
     title: 'Meal Roulette',
     desc: 'Spin for a meal vibe — accept the winner or roll again',
-    Icon: Disc,
-    bgIcon: Gamepad2,
+    emoji: '🎰',
+    bgEmoji: '🎮',
     meta: '30 sec · Instant pick',
     colors: ['#16a34a', '#4ade80'] as const,
   },
@@ -84,8 +82,8 @@ const GAMES: Array<{
     route: '/games/this-or-that',
     title: 'This or That',
     desc: 'Quick-fire duels that teach us what you really trade off for',
-    Icon: Swords,
-    bgIcon: Scale,
+    emoji: '⚔️',
+    bgEmoji: '⚖️',
     meta: '45 sec · Duels',
     colors: ['#1e1b4b', '#4338ca'] as const,
   },
@@ -94,8 +92,8 @@ const GAMES: Array<{
     route: '/games/craving-radar',
     title: 'Craving Radar',
     desc: 'Tap the sensations pulling you — crunchy, melty, spicy, fresh',
-    Icon: ScanLine,
-    bgIcon: Sparkles,
+    emoji: '🛰️',
+    bgEmoji: '✨',
     meta: '10 sec · Tap cloud',
     colors: ['#7c2d12', '#f97316'] as const,
   },
@@ -104,8 +102,8 @@ const GAMES: Array<{
     route: '/games/bracket',
     title: 'Summer Cravings Bracket',
     desc: 'Tournament-style — pick a winner each round, limited time',
-    Icon: Trophy,
-    bgIcon: Sun,
+    emoji: '🏆',
+    bgEmoji: '☀️',
     meta: '1 min · Seasonal',
     colors: ['#b45309', '#f59e0b'] as const,
   },
@@ -114,8 +112,8 @@ const GAMES: Array<{
     route: '/group',
     title: 'Group Decide',
     desc: "Everyone swipes, we find what nobody's miserable about",
-    Icon: Users,
-    bgIcon: Target,
+    emoji: '👥',
+    bgEmoji: '🎯',
     meta: '2 min · With friends',
     colors: ['#be185d', '#f472b6'] as const,
   },
@@ -124,8 +122,8 @@ const GAMES: Array<{
     route: '/games/pantry',
     title: "What's in Your Kitchen",
     desc: 'Tell us what you have — cook it or order instead',
-    Icon: Package,
-    bgIcon: ChefHat,
+    emoji: '🥫',
+    bgEmoji: '👨‍🍳',
     meta: '20 sec · Cook or order',
     colors: ['#166534', '#22c55e'] as const,
   },
@@ -136,20 +134,22 @@ function GameCard({ game, index }: { game: (typeof GAMES)[number]; index: number
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const emojiScale = useRef(new Animated.Value(0.3)).current;
+  const floatY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 400, delay: index * 80, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 400, delay: index * 80, useNativeDriver: true }),
-    ]).start();
+    fadeUp(opacity, translateY, index * 80);
+    bounceIn(emojiScale, 100);
+    const floatAnim = floatLoop(floatY, 10, 1800);
+    return () => floatAnim.stop();
   }, []);
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+        onPressIn={() => pressScale(scale, 0.97)}
+        onPressOut={() => pressScale(scale, 1)}
         onPress={() => {
           trackEvent('game_selected', { game: game.id });
           router.push(game.route as never);
@@ -161,26 +161,18 @@ function GameCard({ game, index }: { game: (typeof GAMES)[number]; index: number
           end={{ x: 1, y: 1 }}
           style={{ borderRadius: 20, padding: 20, minHeight: 160, overflow: 'hidden', marginBottom: 16 }}
         >
-          {(() => {
-            const BgIcon = game.bgIcon;
-            const Icon = game.Icon;
-            return (
-              <>
-                <View style={{ position: 'absolute', top: -20, right: -10, opacity: 0.2, transform: [{ rotate: '15deg' }] }}>
-                  <BgIcon size={80} color="#fff" />
-                </View>
-                <View style={{ marginBottom: 8 }}>
-                  <Icon size={32} color="#fff" />
-                </View>
-              </>
-            );
-          })()}
+          <Animated.View style={{ position: 'absolute', top: -20, right: -10, opacity: 0.2, transform: [{ rotate: '15deg' }, { translateY: floatY }] }}>
+            <Text style={{ fontSize: 80 }}>{game.bgEmoji}</Text>
+          </Animated.View>
+          <Animated.View style={{ marginBottom: 8, transform: [{ scale: emojiScale }] }}>
+            <Text style={{ fontSize: 36 }}>{game.emoji}</Text>
+          </Animated.View>
           <Text style={[fw(800), { fontSize: 18, color: '#fff' }]}>{game.title}</Text>
           <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 4, lineHeight: 18 }]}>
             {game.desc}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 }}>
-            <Clock size={12} color="rgba(255,255,255,0.9)" />
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)' }}>⏱️</Text>
             <Text style={[fw(700), { fontSize: 12, color: 'rgba(255,255,255,0.9)' }]}>{game.meta}</Text>
           </View>
         </LinearGradient>

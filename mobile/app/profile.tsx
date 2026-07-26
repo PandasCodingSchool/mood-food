@@ -1,72 +1,74 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, ActivityIndicator, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ComponentType } from 'react';
-import { Trophy, Bell, Link2, LogOut, LogIn, Sun, Moon, Sparkles, Leaf, Sprout, Beef, Wheat, CircleDot, Star, Cookie, Milk, Shrimp, Egg, Bean, Circle, Banknote, Wallet, Crown, Sandwich, Fish, Soup, Salad, Utensils, AlertTriangle, Globe } from 'lucide-react-native';
 import { fw, colors } from '../src/constants/theme';
 import BottomNav from '../src/components/BottomNav';
 import { fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
 import { fetchPreferences, savePreferences, type UserPreferences } from '../src/services/preferences';
 import { useTheme } from '../src/context/ThemeContext';
 import { fetchLearnedProfile } from '../src/services/signals';
+import { pressScale, bounceIn } from '../src/utils/animations';
 import type { LearnedProfile } from '../src/types';
 
-type LucideIcon = ComponentType<{ size?: number; color?: string }>;
-
-const DIETS: Array<{ id: string; Icon: LucideIcon; label: string }> = [
-  { id: 'veg', Icon: Leaf, label: 'Vegetarian' },
-  { id: 'vegan', Icon: Sprout, label: 'Vegan' },
-  { id: 'keto', Icon: Beef, label: 'Keto' },
-  { id: 'gf', Icon: Wheat, label: 'Gluten-free' },
-  { id: 'halal', Icon: CircleDot, label: 'Halal' },
-  { id: 'kosher', Icon: Star, label: 'Kosher' },
+const DIETS = [
+  { id: 'veg', emoji: '🥬', label: 'Vegetarian' },
+  { id: 'vegan', emoji: '🌱', label: 'Vegan' },
+  { id: 'keto', emoji: '🥩', label: 'Keto' },
+  { id: 'gf', emoji: '🌾', label: 'Gluten-free' },
+  { id: 'halal', emoji: '🟢', label: 'Halal' },
+  { id: 'kosher', emoji: '✡️', label: 'Kosher' },
 ];
-const ALLERGIES: Array<{ id: string; Icon: LucideIcon; label: string }> = [
-  { id: 'nuts', Icon: Cookie, label: 'Nuts' },
-  { id: 'dairy', Icon: Milk, label: 'Dairy' },
-  { id: 'shellfish', Icon: Shrimp, label: 'Shellfish' },
-  { id: 'eggs', Icon: Egg, label: 'Eggs' },
-  { id: 'soy', Icon: Bean, label: 'Soy' },
+const ALLERGIES = [
+  { id: 'nuts', emoji: '🥜', label: 'Nuts' },
+  { id: 'dairy', emoji: '🥛', label: 'Dairy' },
+  { id: 'shellfish', emoji: '🦐', label: 'Shellfish' },
+  { id: 'eggs', emoji: '🥚', label: 'Eggs' },
+  { id: 'soy', emoji: '🌱', label: 'Soy' },
 ];
-const BUDGETS: Array<{ id: number; Icon: LucideIcon; label: string }> = [
-  { id: 0, Icon: Circle, label: 'Budget' },
-  { id: 1, Icon: Banknote, label: 'Moderate' },
-  { id: 2, Icon: Wallet, label: 'Splurge' },
-  { id: 3, Icon: Crown, label: 'No limit' },
+const BUDGETS = [
+  { id: 0, emoji: '🪙', label: 'Budget' },
+  { id: 1, emoji: '💵', label: 'Moderate' },
+  { id: 2, emoji: '💸', label: 'Splurge' },
+  { id: 3, emoji: '👑', label: 'No limit' },
 ];
-const CUISINES: Array<{ id: string; Icon: LucideIcon; label: string }> = [
-  { id: 'ital', Icon: Wheat, label: 'Italian' },
-  { id: 'mex', Icon: Sandwich, label: 'Mexican' },
-  { id: 'jpn', Icon: Fish, label: 'Japanese' },
-  { id: 'ind', Icon: Soup, label: 'Indian' },
-  { id: 'thai', Icon: Soup, label: 'Thai' },
-  { id: 'kor', Icon: Soup, label: 'Korean' },
-  { id: 'med', Icon: Salad, label: 'Mediterranean' },
-  { id: 'usa', Icon: Beef, label: 'American' },
+const CUISINES = [
+  { id: 'ital', emoji: '🍝', label: 'Italian' },
+  { id: 'mex', emoji: '🌮', label: 'Mexican' },
+  { id: 'jpn', emoji: '🍣', label: 'Japanese' },
+  { id: 'ind', emoji: '🍛', label: 'Indian' },
+  { id: 'thai', emoji: '🍜', label: 'Thai' },
+  { id: 'kor', emoji: '🍲', label: 'Korean' },
+  { id: 'med', emoji: '🥗', label: 'Mediterranean' },
+  { id: 'usa', emoji: '🍔', label: 'American' },
 ];
 
-function Chip({ Icon, label, active, onPress }: { Icon: LucideIcon; label: string; active: boolean; onPress: () => void }) {
+function Chip({ emoji, label, active, onPress }: { emoji: string; label: string; active: boolean; onPress: () => void }) {
   const { theme } = useTheme();
+  const scale = useRef(new Animated.Value(1)).current;
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.8}
-      style={{
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 14,
-        backgroundColor: active ? colors.orange : theme.surface,
-        borderWidth: 1.5,
-        borderColor: active ? colors.orange : theme.border,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-      }}
-    >
-      <Icon size={14} color={active ? '#fff' : theme.text} />
-      <Text style={[fw(700), { fontSize: 13, color: active ? '#fff' : theme.text }]}>{label}</Text>
-    </TouchableOpacity>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        onPressIn={() => pressScale(scale, 0.95)}
+        onPressOut={() => pressScale(scale, 1)}
+        onPress={onPress}
+        activeOpacity={0.8}
+        style={{
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderRadius: 14,
+          backgroundColor: active ? colors.orange : theme.surface,
+          borderWidth: 1.5,
+          borderColor: active ? colors.orange : theme.border,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <Text style={{ fontSize: 14 }}>{emoji}</Text>
+        <Text style={[fw(700), { fontSize: 13, color: active ? '#fff' : theme.text }]}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -83,6 +85,55 @@ function Section({ title, icon, children }: { title: string; icon?: ReactNode; c
   );
 }
 
+function BudgetButton({ emoji, label, active, onPress }: { emoji: string; label: string; active: boolean; onPress: () => void }) {
+  const { theme } = useTheme();
+  const scale = useRef(new Animated.Value(1)).current;
+  return (
+    <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
+      <TouchableOpacity
+        onPressIn={() => pressScale(scale, 0.95)}
+        onPressOut={() => pressScale(scale, 1)}
+        onPress={onPress}
+        activeOpacity={0.8}
+        style={{
+          flex: 1,
+          paddingVertical: 12,
+          borderRadius: 14,
+          backgroundColor: active ? colors.orange : theme.surface,
+          borderWidth: 1.5,
+          borderColor: active ? colors.orange : theme.border,
+          alignItems: 'center',
+        }}
+      >
+        <Text style={{ fontSize: 20 }}>{emoji}</Text>
+        <Text style={[fw(700), { fontSize: 11, color: active ? '#fff' : theme.text, marginTop: 4 }]}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function MenuRow({ emoji, label, onPress }: { emoji: string; label: string; onPress: () => void }) {
+  const { theme } = useTheme();
+  const scale = useRef(new Animated.Value(1)).current;
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        onPressIn={() => pressScale(scale, 0.97)}
+        onPressOut={() => pressScale(scale, 1)}
+        onPress={onPress}
+        activeOpacity={0.8}
+        style={{ padding: 14, paddingHorizontal: 16, borderRadius: 14, backgroundColor: theme.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 24, alignItems: 'center' }}><Text style={{ fontSize: 20 }}>{emoji}</Text></View>
+          <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>{label}</Text>
+        </View>
+        <Text style={{ fontSize: 14, color: theme.subtext }}>›</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 const DEFAULT_PREFS: UserPreferences = { diets: [], allergies: [], cuisines: [], budget: 1 };
 
 export default function ProfileScreen() {
@@ -94,6 +145,11 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [learned, setLearned] = useState<LearnedProfile | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avatarScale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    bounceIn(avatarScale, 100);
+  }, []);
 
   useEffect(() => {
     Promise.all([fetchCurrentUser(), fetchPreferences()])
@@ -161,9 +217,11 @@ export default function ProfileScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 16 }}>
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}>
-              <Utensils size={32} color="#fff" />
-            </LinearGradient>
+            <Animated.View style={{ transform: [{ scale: avatarScale }] }}>
+              <LinearGradient colors={['#f97316', '#fbbf24']} style={{ width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 32 }}>🍽️</Text>
+              </LinearGradient>
+            </Animated.View>
             <View style={{ flex: 1 }}>
               <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>{displayName}</Text>
               <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 2 }]}>{displaySub}</Text>
@@ -191,7 +249,7 @@ export default function ProfileScreen() {
               )}
               {learned.accuracy_meter && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}>
-                  <Sparkles size={14} color="#fff" />
+                  <Text style={{ fontSize: 14 }}>✨</Text>
                   <Text style={[fw(700), { fontSize: 12, color: '#fff' }]}>
                     {Math.round(learned.accuracy_meter.accuracy * 100)}% mind-read accuracy
                   </Text>
@@ -200,74 +258,49 @@ export default function ProfileScreen() {
             </LinearGradient>
           )}
 
-          <Section title="Dietary Preferences" icon={<Salad size={16} color={colors.green} />}>
+          <Section title="Dietary Preferences" icon={<Text style={{ fontSize: 16 }}>🥗</Text>}>
             {DIETS.map((d) => (
-              <Chip key={d.id} Icon={d.Icon} label={d.label} active={prefs.diets.includes(d.id)} onPress={() => toggleList('diets', d.id)} />
+              <Chip key={d.id} emoji={d.emoji} label={d.label} active={prefs.diets.includes(d.id)} onPress={() => toggleList('diets', d.id)} />
             ))}
           </Section>
 
-          <Section title="Allergies & Restrictions" icon={<AlertTriangle size={16} color={colors.red} />}>
+          <Section title="Allergies & Restrictions" icon={<Text style={{ fontSize: 16 }}>⚠️</Text>}>
             {ALLERGIES.map((a) => (
-              <Chip key={a.id} Icon={a.Icon} label={a.label} active={prefs.allergies.includes(a.id)} onPress={() => toggleList('allergies', a.id)} />
+              <Chip key={a.id} emoji={a.emoji} label={a.label} active={prefs.allergies.includes(a.id)} onPress={() => toggleList('allergies', a.id)} />
             ))}
           </Section>
 
           <View style={{ marginTop: 24 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <Wallet size={16} color={colors.orange} />
+              <Text style={{ fontSize: 16 }}>💰</Text>
               <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>Default Budget</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {BUDGETS.map((b) => {
-                const active = prefs.budget === b.id;
-                const BudgetIcon = b.Icon;
-                return (
-                  <TouchableOpacity
-                    key={b.id}
-                    onPress={() => setBudget(b.id)}
-                    activeOpacity={0.8}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      borderRadius: 14,
-                      backgroundColor: active ? colors.orange : theme.surface,
-                      borderWidth: 1.5,
-                      borderColor: active ? colors.orange : theme.border,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <BudgetIcon size={20} color={active ? '#fff' : theme.text} />
-                    <Text style={[fw(700), { fontSize: 11, color: active ? '#fff' : theme.text, marginTop: 4 }]}>{b.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {BUDGETS.map((b) => (
+                <BudgetButton
+                  key={b.id}
+                  emoji={b.emoji}
+                  label={b.label}
+                  active={prefs.budget === b.id}
+                  onPress={() => setBudget(b.id)}
+                />
+              ))}
             </View>
           </View>
 
-          <Section title="Favorite Cuisines" icon={<Globe size={16} color={colors.blue} />}>
+          <Section title="Favorite Cuisines" icon={<Text style={{ fontSize: 16 }}>🌍</Text>}>
             {CUISINES.map((c) => (
-              <Chip key={c.id} Icon={c.Icon} label={c.label} active={prefs.cuisines.includes(c.id)} onPress={() => toggleList('cuisines', c.id)} />
+              <Chip key={c.id} emoji={c.emoji} label={c.label} active={prefs.cuisines.includes(c.id)} onPress={() => toggleList('cuisines', c.id)} />
             ))}
           </Section>
 
           <View style={{ marginTop: 24, gap: 2 }}>
             {[
-              { icon: <Trophy size={20} color={colors.orange} />, label: 'Quests & streaks', onPress: () => router.push('/quests' as never) },
-              { icon: <Bell size={20} color={colors.orange} />, label: 'Notifications', onPress: () => router.push('/notifications' as never) },
-              { icon: <Link2 size={20} color={colors.orange} />, label: 'Connected delivery apps', onPress: () => router.push('/swiggy-connect' as never) },
+              { emoji: '🏆', label: 'Quests & streaks', onPress: () => router.push('/quests' as never) },
+              { emoji: '🔔', label: 'Notifications', onPress: () => router.push('/notifications' as never) },
+              { emoji: '🔗', label: 'Connected delivery apps', onPress: () => router.push('/swiggy-connect' as never) },
             ].map((item) => (
-              <TouchableOpacity
-                key={item.label}
-                onPress={item.onPress}
-                activeOpacity={0.8}
-                style={{ padding: 14, paddingHorizontal: 16, borderRadius: 14, backgroundColor: theme.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{ width: 24, alignItems: 'center' }}>{item.icon}</View>
-                  <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>{item.label}</Text>
-                </View>
-                <Text style={{ fontSize: 14, color: theme.subtext }}>›</Text>
-              </TouchableOpacity>
+              <MenuRow key={item.label} emoji={item.emoji} label={item.label} onPress={item.onPress} />
             ))}
           </View>
 
@@ -286,7 +319,7 @@ export default function ProfileScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={{ width: 24, alignItems: 'center' }}>
-                {theme.dark ? <Moon size={20} color={colors.purple} /> : <Sun size={20} color={colors.orange} />}
+                <Text style={{ fontSize: 20 }}>{theme.dark ? '🌙' : '☀️'}</Text>
               </View>
               <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>Dark mode</Text>
             </View>
@@ -305,7 +338,7 @@ export default function ProfileScreen() {
               style={{ marginTop: 8, padding: 14, paddingHorizontal: 16, borderRadius: 14, backgroundColor: 'rgba(239,68,68,0.08)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
             >
               <View style={{ width: 24, alignItems: 'center' }}>
-                <LogOut size={20} color={colors.red} />
+                <Text style={{ fontSize: 20 }}>🚪</Text>
               </View>
               <Text style={[fw(700), { fontSize: 14, color: colors.red }]}>Log out</Text>
             </TouchableOpacity>
@@ -316,7 +349,7 @@ export default function ProfileScreen() {
               style={{ marginTop: 8, padding: 14, paddingHorizontal: 16, borderRadius: 14, backgroundColor: 'rgba(249,115,22,0.08)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
             >
               <View style={{ width: 24, alignItems: 'center' }}>
-                <LogIn size={20} color={colors.orange} />
+                <Text style={{ fontSize: 20 }}>👉</Text>
               </View>
               <Text style={[fw(700), { fontSize: 14, color: colors.orange }]}>Log in / Sign up</Text>
             </TouchableOpacity>

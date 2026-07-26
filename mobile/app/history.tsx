@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Utensils } from 'lucide-react-native';
+import { Heart } from 'lucide-react-native';
 import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
-import { dishIcon } from '../src/utils/dishVisuals';
+import { dishEmoji } from '../src/utils/dishVisuals';
 import Screen from '../src/components/Screen';
 import BottomNav from '../src/components/BottomNav';
 import { fetchHistory, toggleSaved, type HistoryItem } from '../src/services/history';
@@ -86,7 +86,7 @@ export default function HistoryScreen() {
         >
           {items.length === 0 ? (
             <View style={{ alignItems: 'center', paddingTop: 48, gap: 12 }}>
-              <Utensils size={56} color={theme.subtext} />
+              <Text style={{ fontSize: 48 }}>🍽️</Text>
               <Text style={[fw(800), { fontSize: 17, color: theme.text }]}>
                 {tab === 'saved' ? 'No saved meals yet' : tab === 'ordered' ? 'No orders yet' : 'No history yet'}
               </Text>
@@ -101,10 +101,9 @@ export default function HistoryScreen() {
                   colors={[item.gradientStart, item.gradientEnd] as [string, string]}
                   style={{ padding: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
                 >
-                  {(() => {
-                    const Icon = dishIcon({ dish: { name: item.dishName, cuisine: item.cuisine ?? '', category: '' } });
-                    return <Icon size={36} color="#fff" />;
-                  })()}
+                  <Text style={{ fontSize: 36 }}>
+                    {dishEmoji({ dish: { name: item.dishName, cuisine: item.cuisine ?? '', category: '' } })}
+                  </Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[fw(800), { fontSize: 16, color: '#fff' }]} numberOfLines={1}>{item.dishName}</Text>
                     <Text style={[fw(600), { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 }]}>{item.cuisine}</Text>
