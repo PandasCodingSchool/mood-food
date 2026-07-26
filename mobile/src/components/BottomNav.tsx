@@ -1,21 +1,21 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Home, List, Zap } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
 import { colors, fw } from '../constants/theme';
 import { logSignal } from '../services/signals';
 
 type Tab = 'games' | 'history' | 'results' | 'profile';
 
-const TABS: { key: Tab; icon: string; label: string; route: '/home' | '/history' | '/profile' }[] = [
-  { key: 'games', icon: '🎮', label: 'Games', route: '/home' },
-  { key: 'history', icon: '📋', label: 'History', route: '/history' },
-  { key: 'profile', icon: '👤', label: 'Profile', route: '/profile' },
+const TABS: { key: Tab; icon: typeof Home; label: string; route: '/home' | '/history' }[] = [
+  { key: 'games', icon: Home, label: 'Games', route: '/home' },
+  { key: 'history', icon: List, label: 'History', route: '/history' },
 ];
 
 export default function BottomNav({ active }: { active: Tab }) {
   const router = useRouter();
+  const { theme } = useTheme();
 
-  // 5.4 — Decision-fatigue SOS button: one tap, no questions, AI commits
-  // immediately. Usage frequency itself is the signal (see orchestrator).
   const handleSos = () => {
     void logSignal('sos', {});
     router.push('/mind-reader');
@@ -29,31 +29,32 @@ export default function BottomNav({ active }: { active: Tab }) {
         left: 0,
         right: 0,
         height: 90,
-        backgroundColor: 'rgba(255,245,235,0.97)',
+        backgroundColor: theme.navBg,
         flexDirection: 'row',
         alignItems: 'flex-start',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
+        paddingHorizontal: 48,
         paddingTop: 12,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.05)',
+        borderTopColor: theme.border,
       }}
     >
       {TABS.map((tab) => {
-        // "results" contextually relabels the History tab when reached via gameplay, matching the design.
         const isActive = tab.key === active || (tab.key === 'history' && active === 'results');
         const label = tab.key === 'history' && active === 'results' ? 'Results' : tab.label;
+        const Icon = tab.icon;
         return (
           <TouchableOpacity
             key={tab.key}
             activeOpacity={0.7}
             onPress={() => !isActive && router.push(tab.route)}
-            style={{ alignItems: 'center', gap: 4, opacity: isActive ? 1 : 0.4 }}
+            style={{ alignItems: 'center', gap: 4, opacity: isActive ? 1 : 0.45 }}
           >
-            <Text style={{ fontSize: 24 }}>{tab.icon}</Text>
+            <Icon size={24} color={isActive ? colors.orange : theme.subtext} />
             <Text
               style={[
                 fw(isActive ? 800 : 700),
-                { fontSize: 10, color: isActive ? colors.orange : colors.navy },
+                { fontSize: 10, color: isActive ? colors.orange : theme.subtext },
               ]}
             >
               {label}
@@ -68,21 +69,22 @@ export default function BottomNav({ active }: { active: Tab }) {
         style={{
           position: 'absolute',
           top: -22,
-          alignSelf: 'center',
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          backgroundColor: colors.purple,
+          left: '60%',
+          marginLeft: 0,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: colors.orange,
           alignItems: 'center',
           justifyContent: 'center',
           shadowColor: '#000',
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 6,
+          shadowOpacity: 0.25,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 8,
         }}
       >
-        <Text style={{ fontSize: 22 }}>🆘</Text>
+        <Zap size={26} color="#fff" fill="#fff" />
       </TouchableOpacity>
     </View>
   );

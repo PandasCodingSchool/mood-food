@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { Star } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
 import { fw, colors } from '../constants/theme';
 import { logSignal } from '../services/signals';
 
@@ -12,6 +14,7 @@ interface BlindBetStarsProps {
 // against the eventual post-meal score to measure self-knowledge
 // calibration per cuisine (bridges taste and calibration).
 export default function BlindBetStars({ dishId, dishName }: BlindBetStarsProps) {
+  const { theme } = useTheme();
   const [bet, setBet] = useState<number | null>(null);
 
   const handleBet = (score: number) => {
@@ -21,13 +24,13 @@ export default function BlindBetStars({ dishId, dishName }: BlindBetStarsProps) 
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}>
-      <Text style={[fw(700), { fontSize: 11, color: '#94a3b8' }]}>
+      <Text style={[fw(700), { fontSize: 11, color: theme.subtext }]}>
         {bet ? 'Your bet:' : "How much will you like this?"}
       </Text>
       <View style={{ flexDirection: 'row', gap: 2 }}>
         {[1, 2, 3, 4, 5].map((n) => (
           <TouchableOpacity key={n} onPress={() => handleBet(n)} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}>
-            <Text style={{ fontSize: 14, color: bet != null && n <= bet ? colors.amber : '#e2e8f0' }}>★</Text>
+            <Star size={14} color={bet != null && n <= bet ? colors.amber : theme.border} fill={bet != null && n <= bet ? colors.amber : 'transparent'} />
           </TouchableOpacity>
         ))}
       </View>

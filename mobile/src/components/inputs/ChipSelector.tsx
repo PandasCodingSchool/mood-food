@@ -1,10 +1,14 @@
 import { View, Text, TouchableOpacity } from 'react-native';
-import { fw, colors } from '../../constants/theme';
+import type { ComponentType } from 'react';
+import { useTheme } from '../../context/ThemeContext';
+import { fw } from '../../constants/theme';
+
+type LucideIcon = ComponentType<{ size?: number; color?: string }>;
 
 export interface ChipOption {
   id: string;
   label: string;
-  emoji?: string;
+  Icon?: LucideIcon;
 }
 
 interface ChipSelectorProps {
@@ -24,10 +28,12 @@ export default function ChipSelector({
   multiSelect = true,
   accent = '#f97316',
 }: ChipSelectorProps) {
+  const { theme } = useTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
       {options.map((option) => {
         const isSelected = selected.includes(option.id);
+        const OptionIcon = option.Icon;
         return (
           <TouchableOpacity
             key={option.id}
@@ -40,13 +46,13 @@ export default function ChipSelector({
               paddingHorizontal: 16,
               paddingVertical: 10,
               borderRadius: 20,
-              backgroundColor: isSelected ? accent : '#fff',
+              backgroundColor: isSelected ? accent : theme.card,
               borderWidth: 2,
-              borderColor: isSelected ? accent : 'rgba(0,0,0,0.08)',
+              borderColor: isSelected ? accent : theme.border,
             }}
           >
-            {option.emoji ? <Text style={{ fontSize: 16 }}>{option.emoji}</Text> : null}
-            <Text style={[fw(800), { fontSize: 14, color: isSelected ? '#fff' : colors.navy }]}>
+            {OptionIcon ? <OptionIcon size={16} color={isSelected ? '#fff' : theme.text} /> : null}
+            <Text style={[fw(800), { fontSize: 14, color: isSelected ? '#fff' : theme.text }]}>
               {option.label}
             </Text>
           </TouchableOpacity>
