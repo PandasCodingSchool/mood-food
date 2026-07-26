@@ -7,6 +7,8 @@ import { getCharacterMatch } from '../../src/utils/characterEngine';
 import { fw } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
 import { bounceIn, floatLoop } from '../../src/utils/animations';
+import { playPopSound, playWinSound } from '../../src/utils/sounds';
+import { hapticSelect, hapticSuccess } from '../../src/utils/haptics';
 
 function Sparkle({ style, emoji, duration }: { style: object; emoji: string; duration: number }) {
   const translateY = useRef(new Animated.Value(0)).current;
@@ -84,6 +86,8 @@ export default function CharacterMatchScreen() {
   };
 
   const handleSelect = (optionIndex: number) => {
+    hapticSelect();
+    playPopSound();
     const newAnswers = [...answers, optionIndex];
     setAnswers(newAnswers);
 
@@ -92,6 +96,8 @@ export default function CharacterMatchScreen() {
         animateNext(() => setStep((s) => s + 1));
       } else {
         const result = getCharacterMatch(newAnswers);
+        hapticSuccess();
+        playWinSound();
         trackEvent('character_matched', { character: result.name });
         setMatch(result);
       }

@@ -30,7 +30,8 @@
       "expo-router",
       "expo-status-bar",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-audio"
     ],
     "extra": {
       "router": {},

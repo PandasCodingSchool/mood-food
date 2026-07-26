@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SNACK_CARDS } from '../../src/constants/snackCards';
 import { fw, colors } from '../../src/constants/theme';
+import { playSwipeSound, playSuccessSound } from '../../src/utils/sounds';
+import { hapticSelect, hapticSuccess, hapticWarning } from '../../src/utils/haptics';
 import { trackEvent } from '../../src/utils/analytics';
 import { logSignals } from '../../src/services/signals';
 import type { GameSwipe } from '../../src/types';
@@ -29,6 +31,10 @@ export default function SnackMatchScreen() {
 
   const finishSwipe = useCallback(
     (direction: 'left' | 'right' | 'super') => {
+      if (direction === 'left') hapticWarning();
+      else hapticSelect();
+      playSwipeSound();
+
       const isLike = direction !== 'left';
       const newLiked = isLike ? [...liked, card.emoji] : liked;
       if (isLike) setLiked(newLiked);
@@ -49,6 +55,8 @@ export default function SnackMatchScreen() {
         const nextIdx = idx + 1;
         setIdx(nextIdx);
         if (nextIdx >= SNACK_CARDS.length) {
+          hapticSuccess();
+          playSuccessSound();
           trackEvent('game_completed', { game: 'snack_match', liked: newLiked });
           // 2.1 — swipe-to-train: batch-post reactionTime-weighted swipes.
           void logSignals([

@@ -1,10 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MOOD_SCOOP_QUESTIONS, QUIZ_TOTAL_QUESTIONS } from '../../src/constants/quizQuestions';
+import { buildDynamicQuestions, getTotalQuestions, type QuizQuestion } from '../../src/utils/quizEngine';
 import { fw, colors } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
+import { playPopSound } from '../../src/utils/sounds';
+import { hapticSelect } from '../../src/utils/haptics';
 
 export default function QuizScreen() {
   const router = useRouter();
@@ -12,7 +14,9 @@ export default function QuizScreen() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const question = MOOD_SCOOP_QUESTIONS[step];
+  const questions = useMemo(() => buildDynamicQuestions(answers), [answers]);
+  const question: QuizQuestion = questions[step];
+  const totalQuestions = getTotalQuestions();
 
   const animateNext = (cb: () => void) => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
@@ -22,11 +26,13 @@ export default function QuizScreen() {
   };
 
   const handleSelect = (value: string) => {
+    hapticSelect();
+    playPopSound();
     const newAnswers = { ...answers, [question.outputKey]: value };
     setAnswers(newAnswers);
 
     setTimeout(() => {
-      if (step < MOOD_SCOOP_QUESTIONS.length - 1) {
+      if (step < questions.length - 1) {
         animateNext(() => setStep((s) => s + 1));
       } else {
         trackEvent('quiz_completed', newAnswers);
@@ -42,7 +48,7 @@ export default function QuizScreen() {
     }, 400);
   };
 
-  const progress = ((step + 1) / QUIZ_TOTAL_QUESTIONS) * 100;
+  const progress = ((step + 1) / totalQuestions) * 100;
 
   return (
     <LinearGradient colors={['#fff5eb', '#ffffff']} style={{ flex: 1 }}>
@@ -63,7 +69,7 @@ export default function QuizScreen() {
           />
         </View>
         <Text style={[fw(800), { fontSize: 13, color: '#94a3b8' }]}>
-          {step + 1}/{QUIZ_TOTAL_QUESTIONS}
+          {step + 1}/{totalQuestions}
         </Text>
       </View>
 

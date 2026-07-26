@@ -35,12 +35,7 @@ function OnboardContent({ step, index }: { step: (typeof ONBOARD_STEPS)[number];
   }, []);
 
   return (
-    <ScrollView
-      style={styles.illustrationArea}
-      contentContainerStyle={styles.illustrationContent}
-      showsVerticalScrollIndicator={false}
-      scrollEnabled={false}
-    >
+    <View style={styles.illustrationContent}>
       <View style={styles.orbitStage}>
         <Animated.Text style={[styles.mainEmoji, { transform: [{ scale: mainScale }] }]}>
           {step.mainEmoji}
@@ -68,7 +63,7 @@ function OnboardContent({ step, index }: { step: (typeof ONBOARD_STEPS)[number];
           </View>
         )}
       </Animated.View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -111,49 +106,51 @@ export default function OnboardingScreen() {
 
   return (
     <LinearGradient colors={step.colors} style={styles.container}>
-      <View style={styles.topRow}>
-        <View style={styles.dots}>
-          {ONBOARD_STEPS.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                {
-                  width: i === stepIndex ? 28 : 8,
-                  backgroundColor: i <= stepIndex ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.2)',
-                },
-              ]}
-            />
-          ))}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.topRow}>
+          <View style={styles.dots}>
+            {ONBOARD_STEPS.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  {
+                    width: i === stepIndex ? 28 : 8,
+                    backgroundColor: i <= stepIndex ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.2)',
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          {!isLast && (
+            <TouchableOpacity onPress={goToAuth} activeOpacity={0.7}>
+              <Text style={[styles.skip, fw(700)]}>Skip</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {!isLast && (
-          <TouchableOpacity onPress={goToAuth} activeOpacity={0.7}>
-            <Text style={[styles.skip, fw(700)]}>Skip</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
-      <OnboardContent key={stepIndex} step={step} index={stepIndex} />
+        <OnboardContent key={stepIndex} step={step} index={stepIndex} />
 
-      <View style={styles.ctaArea}>
-        <GradientButton
-          label={isLast ? "Let's eat! 🍽️" : 'Continue'}
-          colors={step.btnColors}
-          onPress={handleNext}
-        />
-      </View>
+        <View style={styles.ctaArea}>
+          <GradientButton
+            label={isLast ? "Let's eat! 🍽️" : 'Continue'}
+            colors={step.btnColors}
+            onPress={handleNext}
+          />
+        </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 32, paddingBottom: 40 },
+  container: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingTop: 60, paddingHorizontal: 32, paddingBottom: 40, justifyContent: 'space-between' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dots: { flexDirection: 'row', gap: 6 },
   dot: { height: 6, borderRadius: 3 },
   skip: { fontSize: 14, color: 'rgba(255,255,255,0.6)', padding: 4 },
-  illustrationArea: { flex: 1 },
-  illustrationContent: { alignItems: 'center', justifyContent: 'center', flexGrow: 1, paddingBottom: 8 },
+  illustrationContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
   orbitStage: { width: 260, height: 260, marginBottom: 16, overflow: 'visible', alignItems: 'center', justifyContent: 'center' },
   mainEmoji: { fontSize: 88, lineHeight: 100, textAlign: 'center' },
   orbitEmoji: { position: 'absolute' },
