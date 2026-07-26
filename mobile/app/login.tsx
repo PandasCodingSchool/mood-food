@@ -6,12 +6,15 @@ import {
   ScrollView,
   StatusBar,
   Animated,
-  Image,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ChevronLeft, Phone, Lock, ArrowRight } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
+import Screen from '../src/components/Screen';
 import GradientButton from '../src/components/GradientButton';
 import AuthTextField from '../src/components/AuthTextField';
 import { fadeUp } from '../src/utils/animations';
@@ -22,8 +25,10 @@ const PHONE_RE = /^\+?[0-9\s-]{7,15}$/;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ phone?: string; password?: string }>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -62,8 +67,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff5eb' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5eb" />
+    <Screen>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{ flexGrow: 1, padding: 24, paddingTop: 60, paddingBottom: 40 }}
@@ -72,24 +77,37 @@ export default function LoginScreen() {
         >
           <TouchableOpacity
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/onboarding'))}
-            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: theme.surface,
+              borderWidth: 1,
+              borderColor: theme.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 32,
+            }}
           >
-            <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
+            <ChevronLeft size={22} color={theme.text} />
           </TouchableOpacity>
 
-          <Animated.View style={{ opacity, transform: [{ translateY }], alignItems: 'center', marginBottom: 32 }}>
+          <View style={{ width: 100, height: 100, borderRadius: 50, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
             <Image
               source={require('../assets/moodfood-logo.png')}
-              style={{ width: 72, height: 72, marginBottom: 16 }}
+              style={{ width: 100, height: 100 }}
               resizeMode="contain"
             />
-            <Text style={[fw(900), { fontSize: 26, color: colors.navy }]}>Welcome back</Text>
-            <Text style={[fw(600), { fontSize: 14, color: '#94a3b8', marginTop: 6, textAlign: 'center' }]}>
+          </View>
+
+          <Animated.View style={{ opacity, transform: [{ translateY }], alignItems: 'flex-start', marginBottom: 28 }}>
+            <Text style={[fw(900), { fontSize: 34, color: theme.text, lineHeight: 42 }]}>Welcome back</Text>
+            <Text style={[fw(600), { fontSize: 15, color: theme.subtext, marginTop: 8 }]}>
               Log in to save your cravings and pick up where you left off.
             </Text>
           </Animated.View>
 
-          <View style={{ gap: 16 }}>
+          <View style={{ gap: 18 }}>
             <AuthTextField
               label="Phone Number"
               value={phone}
@@ -99,26 +117,34 @@ export default function LoginScreen() {
               autoCorrect={false}
               returnKeyType="next"
               error={errors.phone}
+              icon={<Phone size={20} color={theme.muted} />}
             />
             <AuthTextField
               label="Password"
               value={password}
               onChangeText={(t) => { setPassword(t); if (errors.password) setErrors((e) => ({ ...e, password: undefined })); }}
               placeholder="••••••••"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               autoCapitalize="none"
               returnKeyType="done"
               onSubmitEditing={handleLogin}
               error={errors.password}
+              icon={<Lock size={20} color={theme.muted} />}
             />
+            <TouchableOpacity onPress={() => setShowPassword((s) => !s)} style={{ alignSelf: 'flex-end' }}>
+              <Text style={[fw(700), { fontSize: 12, color: colors.orange }]}>
+                {showPassword ? 'Hide password' : 'Show password'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <GradientButton
             label={submitting ? 'Logging in…' : 'Log In'}
-            colors={['#f97316', '#fbbf24']}
             onPress={handleLogin}
             disabled={submitting}
-            style={{ marginTop: 28 }}
+            icon={<ArrowRight size={20} color="#fff" />}
+            colors={['#ea580c', '#f97316']}
+            style={{ marginTop: 32 }}
           />
 
           {apiError ? (
@@ -127,18 +153,18 @@ export default function LoginScreen() {
             </Text>
           ) : null}
 
-          <TouchableOpacity onPress={handleGuest} activeOpacity={0.7} style={{ marginTop: 16, alignItems: 'center' }}>
-            <Text style={[fw(700), { fontSize: 14, color: '#94a3b8' }]}>Continue as guest</Text>
+          <TouchableOpacity onPress={handleGuest} activeOpacity={0.7} style={{ marginTop: 18, alignItems: 'center' }}>
+            <Text style={[fw(700), { fontSize: 14, color: theme.muted }]}>Continue as guest</Text>
           </TouchableOpacity>
 
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 'auto', paddingTop: 32 }}>
-            <Text style={[fw(600), { fontSize: 14, color: '#64748b' }]}>New here?</Text>
+            <Text style={[fw(600), { fontSize: 14, color: theme.subtext }]}>New here?</Text>
             <TouchableOpacity onPress={() => router.push('/signup')} activeOpacity={0.7}>
               <Text style={[fw(800), { fontSize: 14, color: colors.orange }]}>Create an account</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </Screen>
   );
 }

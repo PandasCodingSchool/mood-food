@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, Animated, Easing, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Utensils, Check, RefreshCw, Disc } from 'lucide-react-native';
+import { useTheme } from '../../src/context/ThemeContext';
 import { WHEEL_SEGMENTS, type WheelSegment } from '../../src/constants/wheelSegments';
-import { fw } from '../../src/constants/theme';
+import { fw, colors } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
 import { pulseLoop } from '../../src/utils/animations';
 import { playPopSound, playSuccessSound } from '../../src/utils/sounds';
@@ -18,6 +20,7 @@ const SEGMENT_COLORS = ['#f97316', '#dc2626', '#16a34a', '#ec4899', '#eab308', '
 
 export default function MealRouletteScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<WheelSegment | null>(null);
   const rotation = useRef(new Animated.Value(0)).current;
@@ -83,7 +86,7 @@ export default function MealRouletteScreen() {
           onPress={() => router.push('/home')}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22, color: '#fff' }}>←</Text>
+          <ChevronLeft size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={[fw(900), { fontSize: 20, color: '#fff' }]}>Meal Roulette</Text>
@@ -145,7 +148,10 @@ export default function MealRouletteScreen() {
                   }}
                 />
                 <View style={{ position: 'absolute', top: WHEEL_SIZE * 0.14, left: WHEEL_SIZE * 0.56, transform: [{ rotate: `${SEGMENT_ANGLE / 2}deg` }] }}>
-                  <Text style={{ fontSize: 20 }}>{seg.emoji}</Text>
+                  {(() => {
+                    const SegmentIcon = seg.Icon;
+                    return <SegmentIcon size={20} color="#fff" />;
+                  })()}
                 </View>
               </View>
             );
@@ -163,7 +169,7 @@ export default function MealRouletteScreen() {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 28 }}>🍽️</Text>
+            <Utensils size={28} color={colors.navy} />
           </View>
         </Animated.View>
       </View>
@@ -172,16 +178,21 @@ export default function MealRouletteScreen() {
         {result && (
           <>
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 48, marginBottom: 8 }}>{result.emoji}</Text>
+              {(() => {
+                const ResultIcon = result.Icon;
+                return <ResultIcon size={48} color="#fff" />;
+              })()}
               <Text style={[fw(900), { fontSize: 24, color: '#fff' }]}>{result.label}</Text>
               <Text style={[fw(600), { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>{result.sub}</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-              <TouchableOpacity onPress={handleAccept} style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: '#4ade80', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>✅ Let's go!</Text>
+              <TouchableOpacity onPress={handleAccept} style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: '#4ade80', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+                <Check size={20} color="#fff" />
+                <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Let's go!</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={spin} style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>🔄 Spin again</Text>
+              <TouchableOpacity onPress={spin} style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+                <RefreshCw size={20} color="#fff" />
+                <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Spin again</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -192,8 +203,9 @@ export default function MealRouletteScreen() {
             <Text style={[fw(700), { fontSize: 16, color: 'rgba(255,255,255,0.8)' }]}>Tap the button to spin!</Text>
             <Animated.View style={{ width: '100%', transform: [{ scale: pulseScale }] }}>
               <TouchableOpacity onPress={spin} activeOpacity={0.85}>
-                <LinearGradient colors={['#4ade80', '#22c55e']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>🎡 SPIN THE WHEEL</Text>
+                <LinearGradient colors={['#4ade80', '#22c55e']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10 }}>
+                  <Disc size={22} color="#fff" />
+                  <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>SPIN THE WHEEL</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>

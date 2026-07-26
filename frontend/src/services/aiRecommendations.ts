@@ -5,26 +5,41 @@ import type {
   GameData,
 } from "../types";
 import { BUDGET_TIERS } from "../constants/budget";
+import { getTodayCheckin } from "../utils/moodState";
+import { getPassiveWeather, hasLocationConsent } from "./context";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
+function newRequestId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /**
- * Fetch AI-powered recommendations from backend
- * Falls back to rule-based if AI service fails
+ * Fetch AI-powered recommendations from backend.
+ * Backend owns shortlist + live Swiggy verification + ranking.
  */
 export async function fetchRecommendations(
   quizResults: QuizResults,
   gameData: GameData | null = null,
   refresh = false,
   swiggyAddressId?: string,
+  signal?: AbortSignal,
 ): Promise<RecommendationResponse> {
-  // Use gameData from quizResults if available (GameResult includes gameData)
   const finalGameData =
     gameData ||
     ((quizResults as any).gameData as GameData | undefined) ||
     null;
   const context = buildRequestContext(quizResults, finalGameData, refresh);
-  const body: Record<string, unknown> = { ...context };
+  if (hasLocationConsent()) {
+    context.userContext.situational.weather = await getPassiveWeather();
+  }
+  const body: Record<string, unknown> = {
+    ...context,
+    request_id: newRequestId(),
+  };
   if (swiggyAddressId) {
     body.swiggy_address_id = swiggyAddressId;
   }
@@ -36,6 +51,7 @@ export async function fetchRecommendations(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (response.status === 429) {
@@ -59,6 +75,9 @@ export async function fetchRecommendations(
       })),
     };
   } catch (error) {
+    if ((error as Error)?.name === "AbortError") {
+      throw error;
+    }
     console.error("Failed to fetch recommendations:", error);
     throw error;
   }
@@ -73,6 +92,7 @@ function buildRequestContext(
   refresh = false,
 ): AIRequestContext {
   const { mood, craving, budget, preference } = quizResults;
+  const checkin = getTodayCheckin();
 
   const budgetMap: Record<
     string,
@@ -99,8 +119,10 @@ function buildRequestContext(
     userContext: {
       mood: {
         primary: mood,
-        energyLevel: estimateEnergyLevel(mood),
-        socialContext: "alone",
+        energyLevel: checkin?.energy ?? estimateEnergyLevel(mood),
+        socialContext: checkin && checkin.social >= 6 ? "friends" : "alone",
+        ...(checkin?.hunger != null && { hungerLevel: checkin.hunger }),
+        ...(checkin?.stress != null && { stressLevel: checkin.stress }),
       },
       preferences: {
         cuisineTypes: [craving],
@@ -120,6 +142,7 @@ function buildRequestContext(
         budget: budgetMap[budget] || budgetMap.moderate,
         timeAvailable: 30,
         deliveryPreferred: true,
+        ...(checkin?.occasion && { occasion: checkin.occasion }),
       },
       gameData: gameData || {
         type: "quiz",
@@ -130,10 +153,11 @@ function buildRequestContext(
       },
     },
     recommendationConfig: {
-      count: 3,
+      count: gameData?.type === "mind_reader" ? 1 : 3,
       diversity: "medium",
       includeExplanations: true,
       includeAlternatives: true,
+      ...(gameData?.type === "mind_reader" && { mode: "mind_reader" }),
       ...(refresh && {
         temperature: parseFloat((0.5 + Math.random() * 0.5).toFixed(2)),
       }),

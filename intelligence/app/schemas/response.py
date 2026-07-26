@@ -29,7 +29,7 @@ class Restaurant(BaseModel):
 
 class Alternative(BaseModel):
     dish_id: str
-    type: str  # healthier_swap | budget_swap
+    type: str  # healthier_swap | budget_swap | similar_tier_swap | popular_pick
     name: str
     reason: str
     # Full dish info so the frontend can render a swap as its own detail card.
@@ -58,6 +58,10 @@ class Recommendation(BaseModel):
     id: str
     rank: int
     confidence: float = Field(ge=0, le=1)
+    # Predicted enjoyment 0-1 from the learned taste model (calibration loop).
+    predicted_score: Optional[float] = None
+    # True when this pick is an anti-rut wildcard ("shake it up?").
+    is_wildcard: bool = False
     dish: DishSummary
     image_url: str
     ai_reasoning: AiReasoning
@@ -79,16 +83,32 @@ class AiMetadata(BaseModel):
 class Insights(BaseModel):
     detected_mood_profile: str
     preference_evolution: Optional[str] = None
+    next_meal_prediction: Optional[str] = None
+    persona_drift: Optional[str] = None
+
+
+class LearnedMeta(BaseModel):
+    """Learned-model metadata attached to every response."""
+
+    confidence: Optional[float] = None
+    question_budget: Optional[int] = None
+    persona: Optional[str] = None
+    mode: str = "standard"
+    accuracy_meter: Optional[dict] = None
 
 
 class RecommendationResponse(BaseModel):
     success: bool
     recommendations: list[Recommendation] = Field(default_factory=list)
     ai_metadata: Optional[AiMetadata] = None
+    meta: Optional[LearnedMeta] = None
     insights: Optional[Insights] = None
     error: Optional[str] = None
     swiggy_matches: Optional[dict] = None
     swiggy_address_id: Optional[str] = None
+    # "live" | "partial" | "offline" — how much of the response is Swiggy-verified.
+    live_status: Optional[str] = None
+    request_id: Optional[str] = None
 
 
 class DishDetailResponse(BaseModel):

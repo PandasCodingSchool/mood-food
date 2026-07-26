@@ -1,13 +1,17 @@
 import express from "express";
 import { getRecommendations } from "../utils/recommendationEngine.js";
+import { getActiveSwiggyToken } from "../lib/swiggyUserToken.js";
+import { randomUUID } from "crypto";
 
 const router = express.Router();
 
 // External AI Service configuration
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const AI_SERVICE_KEY = process.env.AI_SERVICE_KEY;
-const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS || "30000"); // 30s default, handles cold starts
-const AI_MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES || "2");
+// Quality-first pipeline (shortlist + Swiggy + GPT) needs a longer budget.
+const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS || "90000");
+// Avoid launching a second expensive attempt while the first may still be running.
+const AI_MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES || "0");
 const AI_RETRY_BASE_DELAY_MS = parseInt(
   process.env.AI_RETRY_BASE_DELAY_MS || "400",
 );
@@ -28,7 +32,7 @@ router.post("/", async (req, res) => {
 
   // Build contract-compliant snake_case request for AI service
   // Character context is included in gameData for AI to reason about
-  const aiRequest = buildAiRequest(body);
+  const aiRequest = buildAiRequest(body, req.user?.id);
 
   if (gameData.type === "character_match" && gameData.character?.id) {
     console.log(
@@ -40,7 +44,13 @@ router.post("/", async (req, res) => {
   // Try external AI service first
   if (AI_SERVICE_URL) {
     try {
-      const aiResponse = await fetchAIService(aiRequest);
+      const userToken = await getActiveSwiggyToken(req.user?.id);
+      const aiResponse = await fetchAIService(aiRequest, userToken);
+      // Open the calibration loop: persist a prediction row per recommendation
+      // (resolved later by the post-meal prompt). Non-fatal on failure.
+      recordPredictions(req.user?.id, aiResponse).catch((err) =>
+        console.warn("Prediction rows insert failed:", err.message),
+      );
       // AI service returns contract-compliant snake_case response — pass through
       return res.json(aiResponse);
     } catch (error) {
@@ -81,6 +91,7 @@ router.post("/", async (req, res) => {
       pairing_suggestions: [],
     })),
     insights: null,
+    live_status: "offline",
     error: "AI unavailable — showing top-rated fallbacks.",
   });
 });
@@ -89,12 +100,12 @@ router.post("/", async (req, res) => {
  * Call external AI service
  * Simply passes through the request body to the service
  */
-async function fetchAIService(context) {
+async function fetchAIService(context, userToken) {
   let lastError;
 
   for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
     try {
-      return await fetchAIServiceOnce(context, attempt + 1);
+      return await fetchAIServiceOnce(context, attempt + 1, userToken);
     } catch (error) {
       lastError = error;
 
@@ -113,7 +124,7 @@ async function fetchAIService(context) {
   throw lastError;
 }
 
-async function fetchAIServiceOnce(context, attempt) {
+async function fetchAIServiceOnce(context, attempt, userToken) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT);
 
@@ -123,6 +134,9 @@ async function fetchAIServiceOnce(context, attempt) {
 
   if (AI_SERVICE_KEY) {
     headers["Authorization"] = `Bearer ${AI_SERVICE_KEY}`;
+  }
+  if (userToken) {
+    headers["X-Swiggy-User-Token"] = userToken;
   }
 
   console.log(
@@ -177,7 +191,7 @@ function sleep(ms) {
  * Build contract-compliant snake_case request body for AI service.
  * Maps frontend camelCase fields to the FE-API-CONTRACT schema.
  */
-function buildAiRequest(body) {
+function buildAiRequest(body, userId) {
   const ctx = body?.userContext || {};
   const game = ctx?.gameData || {};
   const prefs = ctx?.preferences || {};
@@ -194,7 +208,21 @@ function buildAiRequest(body) {
         social_context:
           ctx.mood.socialContext === "alone" ? "solo" : ctx.mood.socialContext,
       }),
+      ...(ctx?.mood?.hungerLevel != null && {
+        hunger_level: ctx.mood.hungerLevel,
+      }),
+      ...(ctx?.mood?.stressLevel != null && {
+        stress_level: ctx.mood.stressLevel,
+      }),
     },
+    ...(Array.isArray(ctx?.comfortAnchors) &&
+      ctx.comfortAnchors.length && {
+        comfort_anchors: ctx.comfortAnchors.map((a) => ({
+          food: a.food,
+          trigger: a.trigger,
+        })),
+      }),
+    ...(ctx?.automationPref && { automation_pref: ctx.automationPref }),
     ...(Object.keys(prefs).length && {
       preferences: {
         cuisine_types: prefs.cuisineTypes || [],
@@ -221,6 +249,10 @@ function buildAiRequest(body) {
         ...(sit.deliveryPreferred != null && {
           delivery_preferred: sit.deliveryPreferred,
         }),
+        ...(sit.occasion && { occasion: sit.occasion }),
+        ...(sit.hoursSinceLastMeal != null && {
+          hours_since_last_meal: sit.hoursSinceLastMeal,
+        }),
       },
     }),
     ...(Object.keys(game).length && {
@@ -240,6 +272,18 @@ function buildAiRequest(body) {
           },
         }),
         swipes: game.raw?.swipes || game.swipes || [],
+        ...(Array.isArray(game.cravingTags) &&
+          game.cravingTags.length && { craving_tags: game.cravingTags }),
+        ...(Array.isArray(game.duelResults) &&
+          game.duelResults.length && {
+            duel_results: game.duelResults.map((d) => ({
+              dimension_a: d.dimensionA ?? d.dimension_a,
+              dimension_b: d.dimensionB ?? d.dimension_b,
+              winner: d.winner,
+            })),
+          }),
+        ...(Array.isArray(game.pantryItems) &&
+          game.pantryItems.length && { pantry_items: game.pantryItems }),
         ...(game.sliderValues && {
           slider_values: {
             adventurous: game.sliderValues.adventurous,
@@ -271,13 +315,55 @@ function buildAiRequest(body) {
     include_explanations: cfg.includeExplanations ?? true,
     include_alternatives: cfg.includeAlternatives ?? true,
     ...(cfg.temperature != null && { temperature: cfg.temperature }),
+    ...(cfg.mode && { mode: cfg.mode }),
   };
 
   return {
     user_context,
     recommendation_config,
     ...(body?.swiggy_address_id && { swiggy_address_id: body.swiggy_address_id }),
+    ...(userId && { user_id: userId }),
+    request_id: body?.request_id || randomUUID(),
   };
+}
+
+/**
+ * Persist prediction rows for the calibration loop (4.1). The post-meal
+ * prompt resolves them later via POST /api/predictions/:id/resolve.
+ */
+async function recordPredictions(userId, aiResponse) {
+  if (!userId || !aiResponse?.recommendations?.length) return;
+  const { getDb, isPostgres } = await import("../db.js");
+  const db = getDb();
+  const pg = isPostgres();
+  const recId = aiResponse.request_id || randomUUID();
+  const confidence = aiResponse.meta?.confidence ?? null;
+
+  for (const rec of aiResponse.recommendations.slice(0, 5)) {
+    const id = randomUUID();
+    const params = [
+      id,
+      userId,
+      recId,
+      rec.dish?.id || null,
+      rec.dish?.name || null,
+      rec.predicted_score ?? null,
+      confidence,
+    ];
+    if (pg) {
+      await db.query(
+        `INSERT INTO predictions (id, user_id, rec_id, dish_id, dish_name, predicted_score, confidence)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        params,
+      );
+    } else {
+      await db.run(
+        `INSERT INTO predictions (id, user_id, rec_id, dish_id, dish_name, predicted_score, confidence)
+         VALUES (?,?,?,?,?,?,?)`,
+        params,
+      );
+    }
+  }
 }
 
 function mapTimeOfDay(timeOfDay) {

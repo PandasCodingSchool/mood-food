@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Image, Text } from 'react-native';
-import { resolveDishImage, dishEmoji } from '../utils/dishVisuals';
+import { Image } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { resolveDishImage, dishIcon } from '../utils/dishVisuals';
 import type { Recommendation } from '../types';
 
-/** Small inline dish visual — real Swiggy/AI photo when available, emoji fallback otherwise. */
+/** Small inline dish visual — real Swiggy/AI photo when available, icon fallback otherwise. */
 export default function DishThumbnail({
   rec,
   size = 44,
@@ -13,6 +14,7 @@ export default function DishThumbnail({
   size?: number;
   fontSize?: number;
 }) {
+  const { theme } = useTheme();
   const [failed, setFailed] = useState(false);
   const url = !failed ? resolveDishImage(rec) : null;
 
@@ -26,5 +28,6 @@ export default function DishThumbnail({
       />
     );
   }
-  return <Text style={{ fontSize: fontSize ?? size * 0.8 }}>{dishEmoji(rec)}</Text>;
+  const Icon = dishIcon(rec);
+  return <Icon size={fontSize ?? size * 0.8} color={theme.text} />;
 }

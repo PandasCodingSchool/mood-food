@@ -82,6 +82,24 @@ async function getSwiggyTokenInfo(userId) {
   };
 }
 
+// Resolve the user id for a request: prefer the session-middleware user,
+// fall back to looking up the x-session-id header. Returns null if unknown.
+export async function resolveUserId(req) {
+  if (req.user?.id) return req.user.id;
+  const sessionId = req.headers[SESSION_HEADER] || req.user?.sessionId;
+  if (!sessionId) return null;
+  const db = getDb();
+  const pg = isPostgres();
+  const sql = pg
+    ? "SELECT id FROM users WHERE session_id = $1 LIMIT 1"
+    : "SELECT id FROM users WHERE session_id = ? LIMIT 1";
+  const result = pg
+    ? await db.query(sql, [sessionId])
+    : await db.get(sql, [sessionId]);
+  const row = pg ? result.rows[0] : result;
+  return row?.id || null;
+}
+
 export async function getUserMe(sessionId) {
   const user = await getOrCreateUser(sessionId);
   const swiggy = await getSwiggyTokenInfo(user.id);

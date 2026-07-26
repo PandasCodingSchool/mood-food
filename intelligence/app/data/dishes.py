@@ -1,11 +1,34 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 _DISHES_JSON = Path(__file__).parent / "dishes.json"
 _CHARACTER_MAPPING_JSON = Path(__file__).parent / "character_dish_mapping.json"
+
+# Focused Swiggy search hints for dishes that otherwise fall into the wrong
+# category (e.g. Indian cuisine → "Biryani") or need synonym matching.
+_SWIGGY_HINTS: dict[str, dict] = {
+    "in_023": {  # Mutton Curry — must not match rajmah / paneer curry
+        "aliases": ["Mutton Curry", "Goat Curry", "Lamb Curry", "Mutton Rogan Josh"],
+        "search_category": "North Indian",
+    },
+    "in_027": {  # Paneer Tikka Masala — reject rolls/wraps
+        "aliases": ["Paneer Tikka Masala", "Paneer Butter Masala", "Paneer Makhani"],
+        "search_category": "North Indian",
+    },
+    "in_028": {  # Andhra Biryani — compatible chicken/andhra biryani aliases OK
+        "aliases": [
+            "Andhra Biryani",
+            "Andhra Chicken Biryani",
+            "Spicy Andhra Biryani",
+            "Andhra Chicken Biryani Thali",
+        ],
+        "search_category": "Biryani",
+    },
+}
 
 
 @dataclass
@@ -32,11 +55,27 @@ class DishRecord:
     health_score: float               # 1-10
     image_url: str
     img_processed: bool = False
+    # main | starter | complimentary — see app/services/dish_tier.py. Complimentary
+    # items (breads, pickles, accompaniment salads) are never swap targets.
+    tier: str = "main"
+    # Optional Swiggy matching hints (from JSON or _SWIGGY_HINTS overlay).
+    swiggy_aliases: list[str] = field(default_factory=list)
+    swiggy_search_category: Optional[str] = None
 
 
 def _load_dishes() -> list[DishRecord]:
     with _DISHES_JSON.open() as f:
-        return [DishRecord(**record) for record in json.load(f)]
+        raw = json.load(f)
+    dishes: list[DishRecord] = []
+    for record in raw:
+        hint = _SWIGGY_HINTS.get(record.get("id", ""), {})
+        if hint.get("aliases") and not record.get("swiggy_aliases"):
+            record = {**record, "swiggy_aliases": list(hint["aliases"])}
+        if hint.get("search_category") and not record.get("swiggy_search_category"):
+            record = {**record, "swiggy_search_category": hint["search_category"]}
+        known = {f.name for f in DishRecord.__dataclass_fields__.values()}  # type: ignore[attr-defined]
+        dishes.append(DishRecord(**{k: v for k, v in record.items() if k in known}))
+    return dishes
 
 
 DISHES: list[DishRecord] = _load_dishes()

@@ -1,29 +1,15 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { getDb, isPostgres } from "../db.js";
+import { resolveUserId } from "../middleware/session.js";
 
 const router = Router();
-
-async function getUserIdFromSession(sessionId) {
-  const db = getDb();
-  const pg = isPostgres();
-  const sql = pg
-    ? "SELECT id FROM users WHERE session_id = $1 LIMIT 1"
-    : "SELECT id FROM users WHERE session_id = ? LIMIT 1";
-  const result = pg
-    ? await db.query(sql, [sessionId])
-    : await db.get(sql, [sessionId]);
-  const row = pg ? result.rows[0] : result;
-  return row?.id || null;
-}
 
 // GET /api/user/notifications  — list newest 50
 router.get("/", async (req, res) => {
   try {
-    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
-    if (!sessionId) return res.status(401).json({ error: "No session" });
-    const userId = await getUserIdFromSession(sessionId);
-    if (!userId) return res.status(401).json({ error: "User not found" });
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: "No session" });
 
     const db = getDb();
     const pg = isPostgres();
@@ -56,10 +42,9 @@ router.get("/", async (req, res) => {
 // POST /api/user/notifications  — create a notification (internal / webhook use)
 router.post("/", async (req, res) => {
   try {
-    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
     const { userId: targetUserId, type = "info", title, body, data = {} } = req.body || {};
 
-    const userId = targetUserId || (sessionId ? await getUserIdFromSession(sessionId) : null);
+    const userId = targetUserId || (await resolveUserId(req));
     if (!userId) return res.status(401).json({ error: "No user" });
     if (!title) return res.status(400).json({ error: "title is required" });
 
@@ -90,10 +75,8 @@ router.post("/", async (req, res) => {
 // PATCH /api/user/notifications/read  — mark all as read
 router.patch("/read", async (req, res) => {
   try {
-    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
-    if (!sessionId) return res.status(401).json({ error: "No session" });
-    const userId = await getUserIdFromSession(sessionId);
-    if (!userId) return res.status(401).json({ error: "User not found" });
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: "No session" });
 
     const db = getDb();
     const pg = isPostgres();
@@ -113,10 +96,8 @@ router.patch("/read", async (req, res) => {
 // PATCH /api/user/notifications/:id/read  — mark single as read
 router.patch("/:id/read", async (req, res) => {
   try {
-    const sessionId = req.headers["x-session-id"] || req.user?.sessionId;
-    if (!sessionId) return res.status(401).json({ error: "No session" });
-    const userId = await getUserIdFromSession(sessionId);
-    if (!userId) return res.status(401).json({ error: "User not found" });
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: "No session" });
 
     const db = getDb();
     const pg = isPostgres();

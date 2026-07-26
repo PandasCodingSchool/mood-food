@@ -76,6 +76,15 @@ class SwiggyMCPError(Exception):
         self.retryable = retryable
 
 
+class SwiggyAddressRequiredError(SwiggyMCPError):
+    """No addressId could be resolved and live address lookup is disabled.
+
+    Raised instead of silently calling get_addresses when
+    settings.swiggy_address_retrieval_enabled is False — callers should surface
+    this distinctly (e.g. prompt the user to connect/select an address).
+    """
+
+
 def _import_mcp():
     """Import the MCP SDK lazily so the service still boots if it's not installed."""
     try:

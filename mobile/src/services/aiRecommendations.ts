@@ -3,13 +3,35 @@ import type {
   AIRequestContext,
   RecommendationResponse,
   GameData,
+  EnrichedMatch,
 } from "../types";
 import { API_BASE_URL, getHeaders } from "./apiBase";
+import { getTodayCheckin } from "./moodState";
+
+// Lightweight in-memory address store (no AsyncStorage dependency).
+let _savedAddressId = "";
+
+export async function getSavedAddressId(): Promise<string> {
+  return _savedAddressId;
+}
+
+export async function saveAddressId(id: string): Promise<void> {
+  _savedAddressId = id || "";
+}
+
+export function isSwiggyLive(): boolean {
+  return process.env.EXPO_PUBLIC_SWIGGY_LIVE === "true";
+}
+
+function newRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export async function fetchRecommendations(
   quizResults: QuizResults,
   gameData: GameData | null = null,
   refresh = false,
+  swiggyAddressId?: string,
 ): Promise<RecommendationResponse> {
   const finalGameData =
     gameData ||
@@ -17,12 +39,19 @@ export async function fetchRecommendations(
       | GameData
       | undefined) ||
     null;
-  const context = buildRequestContext(quizResults, finalGameData, refresh);
+  const context = await buildRequestContext(quizResults, finalGameData, refresh);
+  const body: Record<string, unknown> = {
+    ...context,
+    request_id: newRequestId(),
+  };
+  if (swiggyAddressId) {
+    body.swiggy_address_id = swiggyAddressId;
+  }
 
   const response = await fetch(`${API_BASE_URL}/ai-recommendations`, {
     method: "POST",
     headers: await getHeaders(),
-    body: JSON.stringify(context),
+    body: JSON.stringify(body),
   });
 
   if (response.status === 429) {
@@ -41,16 +70,21 @@ export async function fetchRecommendations(
       ...rec,
       id: rec.id || `rec_${i}`,
       dish: rec.dish || { name: "", cuisine: "" },
+      swiggy:
+        (data.swiggy_matches?.[rec.dish?.id || rec.id] as EnrichedMatch | undefined) ||
+        rec.swiggy ||
+        null,
     })),
   };
 }
 
-function buildRequestContext(
+async function buildRequestContext(
   quizResults: QuizResults,
   gameData: GameData | null,
   refresh = false,
-): AIRequestContext {
+): Promise<AIRequestContext> {
   const { mood, craving, budget, preference } = quizResults;
+  const checkin = await getTodayCheckin();
 
   const budgetMap: Record<
     string,
@@ -88,8 +122,10 @@ function buildRequestContext(
     userContext: {
       mood: {
         primary: mood,
-        energyLevel: energyMap[mood] ?? 5,
-        socialContext: "alone",
+        energyLevel: checkin?.energy ?? energyMap[mood] ?? 5,
+        socialContext: checkin && checkin.social >= 6 ? "friends" : "alone",
+        ...(checkin?.hunger != null && { hungerLevel: checkin.hunger }),
+        ...(checkin?.stress != null && { stressLevel: checkin.stress }),
       },
       preferences: {
         cuisineTypes: [craving],
@@ -109,14 +145,16 @@ function buildRequestContext(
         budget: budgetMap[budget] || budgetMap.moderate,
         timeAvailable: 30,
         deliveryPreferred: true,
+        ...(checkin?.occasion && { occasion: checkin.occasion }),
       },
       gameData: gameData || { type: "quiz", mood, craving, budget, preference },
     },
     recommendationConfig: {
-      count: 3,
+      count: gameData?.type === "mind_reader" ? 1 : 3,
       diversity: "medium",
       includeExplanations: true,
       includeAlternatives: true,
+      ...(gameData?.type === "mind_reader" && { mode: "mind_reader" }),
       ...(refresh && {
         temperature: parseFloat((0.5 + Math.random() * 0.5).toFixed(2)),
       }),

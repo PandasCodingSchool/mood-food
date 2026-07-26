@@ -12,11 +12,17 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ChevronLeft, Rocket, PartyPopper } from 'lucide-react-native';
+import { useTheme } from '../src/context/ThemeContext';
+import { fw, colors } from '../src/constants/theme';
 import { trackEvent } from '../src/utils/analytics';
 import { API_BASE_URL } from '../src/services/apiBase';
 
+const inputBase = { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16 };
+
 export default function WaitlistScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [city, setCity] = useState('');
@@ -64,22 +70,22 @@ export default function WaitlistScreen() {
 
   if (success) {
     return (
-      <SafeAreaView className="flex-1 bg-orange-50">
-        <StatusBar barStyle="dark-content" backgroundColor="#fff7ed" />
-        <View className="flex-1 items-center justify-center px-6">
-          <Text style={{ fontSize: 64 }}>🎉</Text>
-          <Text className="text-2xl font-bold text-gray-900 mt-4 text-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+          <PartyPopper size={64} color={colors.orange} />
+          <Text style={[fw(900), { fontSize: 24, color: theme.text, marginTop: 16, textAlign: 'center' }]}>
             You're on the list!
           </Text>
-          <Text className="text-gray-500 text-center mt-2 mb-10 leading-relaxed">
+          <Text style={[fw(600), { fontSize: 14, color: theme.subtext, textAlign: 'center', marginTop: 8, marginBottom: 40, lineHeight: 20 }]}>
             We'll let you know when MoodFood goes live.{'\n'}
             Get ready to eat better.
           </Text>
           <TouchableOpacity
             onPress={() => router.replace('/')}
-            className="bg-orange-500 rounded-2xl py-4 px-10"
+            style={{ backgroundColor: colors.orange, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 40 }}
           >
-            <Text className="text-white font-bold text-lg">Back to Home</Text>
+            <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Back to Home</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -87,8 +93,8 @@ export default function WaitlistScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -98,54 +104,51 @@ export default function WaitlistScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View className="flex-row items-center mb-8">
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 32 }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="mr-4 w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+              style={{ marginRight: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text className="text-gray-700 text-lg">←</Text>
+              <ChevronLeft size={22} color={theme.text} />
             </TouchableOpacity>
-            <View className="flex-1">
-              <Text className="text-2xl font-bold text-gray-900">Join Waitlist</Text>
-              <Text className="text-gray-500 text-sm">Be first to know when we launch</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>Join Waitlist</Text>
+              <Text style={[fw(600), { fontSize: 13, color: theme.subtext }]}>Be first to know when we launch</Text>
             </View>
           </View>
 
-          {/* Badge */}
-          <View className="bg-orange-50 rounded-2xl p-4 mb-8 flex-row items-center">
-            <Text style={{ fontSize: 28 }} className="mr-3">🚀</Text>
-            <View className="flex-1">
-              <Text className="text-gray-800 font-semibold text-sm">Early access</Text>
-              <Text className="text-gray-500 text-xs mt-0.5">
+          <View style={{ backgroundColor: colors.orange + '0A', borderRadius: 18, padding: 16, marginBottom: 32, flexDirection: 'row', alignItems: 'center' }}>
+            <Rocket size={28} color={colors.orange} style={{ marginRight: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[fw(800), { fontSize: 13, color: theme.text }]}>Early access</Text>
+              <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 2 }]}>
                 Join 100+ people already waiting for MoodFood
               </Text>
             </View>
           </View>
 
-          {/* Form */}
-          <View className="gap-4">
+          <View style={{ gap: 16 }}>
             <View>
-              <Text className="text-gray-700 font-semibold mb-2">Name *</Text>
+              <Text style={[fw(700), { fontSize: 14, color: theme.text, marginBottom: 8 }]}>Name *</Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
                 placeholder="Your name"
-                placeholderTextColor="#9ca3af"
-                className="border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-900 bg-white text-base"
+                placeholderTextColor={theme.muted}
+                style={{ ...inputBase, backgroundColor: theme.card, borderColor: theme.border, color: theme.text }}
                 autoCapitalize="words"
                 returnKeyType="next"
               />
             </View>
 
             <View>
-              <Text className="text-gray-700 font-semibold mb-2">Email *</Text>
+              <Text style={[fw(700), { fontSize: 14, color: theme.text, marginBottom: 8 }]}>Email *</Text>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
-                placeholderTextColor="#9ca3af"
-                className="border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-900 bg-white text-base"
+                placeholderTextColor={theme.muted}
+                style={{ ...inputBase, backgroundColor: theme.card, borderColor: theme.border, color: theme.text }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -154,29 +157,29 @@ export default function WaitlistScreen() {
             </View>
 
             <View>
-              <Text className="text-gray-700 font-semibold mb-2">City *</Text>
+              <Text style={[fw(700), { fontSize: 14, color: theme.text, marginBottom: 8 }]}>City *</Text>
               <TextInput
                 value={city}
                 onChangeText={setCity}
                 placeholder="Mumbai, Delhi, Bangalore…"
-                placeholderTextColor="#9ca3af"
-                className="border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-900 bg-white text-base"
+                placeholderTextColor={theme.muted}
+                style={{ ...inputBase, backgroundColor: theme.card, borderColor: theme.border, color: theme.text }}
                 autoCapitalize="words"
                 returnKeyType="next"
               />
             </View>
 
             <View>
-              <Text className="text-gray-700 font-semibold mb-2">
+              <Text style={[fw(700), { fontSize: 14, color: theme.text, marginBottom: 8 }]}>
                 Favourite Cuisine{' '}
-                <Text className="text-gray-400 font-normal">(optional)</Text>
+                <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text>
               </Text>
               <TextInput
                 value={cuisine}
                 onChangeText={setCuisine}
                 placeholder="Indian, Italian, Japanese…"
-                placeholderTextColor="#9ca3af"
-                className="border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-900 bg-white text-base"
+                placeholderTextColor={theme.muted}
+                style={{ ...inputBase, backgroundColor: theme.card, borderColor: theme.border, color: theme.text }}
                 autoCapitalize="words"
                 returnKeyType="done"
                 onSubmitEditing={handleSubmit}
@@ -185,25 +188,27 @@ export default function WaitlistScreen() {
           </View>
 
           {error && (
-            <View className="mt-4 bg-red-50 rounded-xl px-4 py-3">
-              <Text className="text-red-600 text-sm">{error}</Text>
+            <View style={{ marginTop: 16, backgroundColor: colors.red + '0A', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: colors.red + '20' }}>
+              <Text style={[fw(600), { fontSize: 13, color: colors.red }]}>{error}</Text>
             </View>
           )}
 
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={loading}
-            className="mt-6 bg-orange-500 rounded-2xl py-4 items-center"
-            style={{ opacity: loading ? 0.7 : 1 }}
+            style={{ marginTop: 24, backgroundColor: colors.orange, borderRadius: 16, paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, opacity: loading ? 0.7 : 1 }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text className="text-white font-bold text-lg">Join the Waitlist 🎉</Text>
+              <>
+                <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Join the Waitlist</Text>
+                <PartyPopper size={18} color="#fff" />
+              </>
             )}
           </TouchableOpacity>
 
-          <Text className="text-gray-400 text-xs text-center mt-4">
+          <Text style={[fw(600), { fontSize: 12, color: theme.muted, textAlign: 'center', marginTop: 16 }]}>
             No spam, ever. We'll only reach out when it matters.
           </Text>
         </ScrollView>

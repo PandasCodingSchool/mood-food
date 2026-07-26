@@ -55,6 +55,8 @@ class EnrichDishInput(BaseModel):
     id: str
     name: str
     cuisine: Optional[str] = None
+    aliases: list[str] = Field(default_factory=list)
+    search_category: Optional[str] = None
 
 
 class EnrichRequest(BaseModel):
@@ -82,6 +84,7 @@ class RestaurantSearchResponse(BaseModel):
     address_id: Optional[str] = None
     restaurants: list[SwiggyRestaurant] = Field(default_factory=list)
     error: Optional[str] = None
+    address_required: bool = False
 
 
 class MenuSearchResponse(BaseModel):
@@ -89,11 +92,12 @@ class MenuSearchResponse(BaseModel):
     address_id: Optional[str] = None
     items: list[SwiggyMenuItem] = Field(default_factory=list)
     error: Optional[str] = None
+    address_required: bool = False
 
 
 class SwiggyAlt(BaseModel):
     """A real Swiggy menu item suggested as an alternative from the matched restaurant."""
-    type: str  # "healthier" | "budget"
+    type: str  # "healthier" | "budget" | "similar_tier"
     item: SwiggyMenuItem
 
 
@@ -110,3 +114,4 @@ class EnrichResponse(BaseModel):
     address_id: Optional[str] = None
     matches: list[EnrichedMatch] = Field(default_factory=list)
     error: Optional[str] = None
+    address_required: bool = False

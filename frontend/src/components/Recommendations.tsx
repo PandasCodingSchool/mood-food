@@ -18,23 +18,15 @@ import {
   RotateCw,
   Leaf,
   Wallet,
-  Link2,
-  Unlink,
   Pencil,
 } from "lucide-react";
 import { fetchRecommendations } from "../services/aiRecommendations";
 import {
-  enrichRecommendations,
   isSwiggyLive,
-  fetchAddresses,
   getSavedAddressId,
-  saveAddressId,
   fetchUser,
-  initiateSwiggyOAuth,
-  unlinkSwiggyOAuth,
   updateUserProfile,
   type EnrichedMatch,
-  type SwiggyAddress,
   type MoodFoodUser,
   type UserProfileUpdate,
 } from "../services/swiggy";
@@ -42,6 +34,22 @@ import { trackEvent } from "../utils/analytics";
 import { openSwiggy } from "../utils/deliveryLinks";
 import { useState, useEffect, useRef } from "react";
 import type { QuizResults, Recommendation } from "../types";
+import ChipSelector from "./inputs/ChipSelector";
+import BlindBetStars from "./BlindBetStars";
+import NostalgiaPrompt from "./NostalgiaPrompt";
+import TwinTasteSection from "./TwinTasteSection";
+import { logSignal, fetchLearnedProfile } from "../services/signals";
+import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from "../utils/nostalgiaGate";
+import { bumpQuestProgress } from "../services/quests";
+import type { LearnedProfile } from "../types";
+
+// 4.2 — Veto + why: turns a useless "no" into a precise model update.
+const VETO_REASONS = [
+  { id: "too_heavy", label: "Too heavy", emoji: "🍔" },
+  { id: "had_recently", label: "Had it recently", emoji: "🔁" },
+  { id: "too_pricey", label: "Too pricey", emoji: "💸" },
+  { id: "not_feeling_it", label: "Not feeling it", emoji: "🤷" },
+];
 
 const moodEmojis: Record<string, string> = {
   happy: "😊",
@@ -54,10 +62,10 @@ const moodEmojis: Record<string, string> = {
 
 
 const loaderSteps = [
-  { emoji: "🧠", text: "Reading your mood..." },
-  { emoji: "🍳", text: "Consulting the flavor matrix..." },
-  { emoji: "✨", text: "Crafting your perfect match..." },
-  { emoji: "🎯", text: "Almost there..." },
+  { emoji: "🧠", text: "Understanding your mood..." },
+  { emoji: "📍", text: "Checking nearby menus..." },
+  { emoji: "✨", text: "Ranking your best matches..." },
+  { emoji: "🎯", text: "Almost ready..." },
 ];
 
 interface RecommendationsProps {
@@ -68,13 +76,23 @@ interface RecommendationsProps {
 function Recommendations({ results, onBack }: RecommendationsProps) {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
+  const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
+  const [showVetoReasonsFor, setShowVetoReasonsFor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loaderStep, setLoaderStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isAi, setIsAi] = useState(false);
   const [insights, setInsights] = useState<{
     detected_mood_profile?: string;
+    next_meal_prediction?: string | null;
   } | null>(null);
+  const [learnedProfile, setLearnedProfile] = useState<LearnedProfile | null>(null);
+  const [showNostalgia, setShowNostalgia] = useState(false);
+
+  useEffect(() => {
+    fetchLearnedProfile().then(setLearnedProfile).catch(() => {});
+    setShowNostalgia(shouldShowNostalgiaPrompt());
+  }, []);
 
   // Waitlist popup state
   const [showWaitlistPopup, setShowWaitlistPopup] = useState(false);
@@ -111,16 +129,16 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState<UserProfileUpdate>({});
   const [profileError, setProfileError] = useState<string>("");
-  const [addresses, setAddresses] = useState<SwiggyAddress[]>([]);
-  const [addressId, setAddressId] = useState<string>(getSavedAddressId());
+  const [addressId] = useState<string>(getSavedAddressId());
   const [swiggyMatches, setSwiggyMatches] = useState<
     Record<string, EnrichedMatch>
   >({});
   const [enriching, setEnriching] = useState(false);
-  // Hard constraint: when Swiggy is live, cards only render after enrich resolves.
+  // Hard constraint: when Swiggy is live, cards only render after backend resolves.
   const [enriched, setEnriched] = useState(false);
-  // Dedupe enrich so it fires once per (city + recommendation set).
-  const enrichKeyRef = useRef<string>("");
+  const [liveStatus, setLiveStatus] = useState<"live" | "partial" | "offline" | null>(null);
+  const requestGenRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Mobile carousel scroll tracking
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -140,6 +158,9 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
 
   useEffect(() => {
     loadRecommendations();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
   // Track which recommendation card is currently visible on mobile.
@@ -195,99 +216,24 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     return () => clearInterval(interval);
   }, [loading, enriching]);
 
-  // Load the current MoodFood user + connected account's saved addresses.
+  // Load the current MoodFood user (for the profile card).
   useEffect(() => {
-    fetchUser().then((me) => {
-      setUser(me);
-      if (!swiggyLive || !me?.swiggyLinked) return;
-      fetchAddresses().then((list) => {
-        setAddresses(list);
-        if (list.length && !getSavedAddressId()) {
-          const home =
-            list.find((a) => a.label.toLowerCase().includes("home")) || list[0];
-          setAddressId(home.id);
-          saveAddressId(home.id);
-        }
-      });
-    });
-  }, [swiggyLive]);
-
-  // Listen for the Swiggy OAuth popup callback.
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (
-        event.origin !== window.location.origin ||
-        event.data?.type !== "swiggy-oauth"
-      ) {
-        return;
-      }
-      if (event.data.status === "success") {
-        trackEvent("swiggy_connected");
-        fetchUser().then((me) => {
-          setUser(me);
-          if (me?.swiggyLinked) {
-            fetchAddresses().then((list) => {
-              setAddresses(list);
-              if (list.length) {
-                const home =
-                  list.find((a) => a.label.toLowerCase().includes("home")) ||
-                  list[0];
-                setAddressId(home.id);
-                saveAddressId(home.id);
-              }
-            });
-          }
-        });
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    fetchUser().then(setUser);
   }, []);
 
-  // Enrich with live Swiggy matches once recommendations are available.
-  // Re-runs whenever the selected delivery address changes.
-  useEffect(() => {
-    if (!swiggyLive || loading || error || recommendations.length === 0) return;
-
-    // One enrich per unique (address + recommendation set); guards React strict-mode
-    // double-mount and re-renders from firing duplicate MCP requests.
-    const key = `${addressId}|${recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
-    if (enrichKeyRef.current === key) return;
-    enrichKeyRef.current = key;
-
-    // Gate result application on the key (not a per-run cancelled flag) so React
-    // strict-mode's mount→cleanup→remount doesn't discard the only fetch.
-    const isCurrent = () => enrichKeyRef.current === key;
-    setEnriching(true);
-    setEnriched(false);
-    setSwiggyMatches({});
-    enrichRecommendations(recommendations, addressId)
-      .then((matches) => {
-        if (!isCurrent()) return;
-        setSwiggyMatches(matches);
-        trackEvent("swiggy_enrich_done", {
-          addressId,
-          matched: Object.keys(matches).length,
-          total: recommendations.length,
-        });
-      })
-      .catch((err) => {
-        if (isCurrent())
-          trackEvent("swiggy_enrich_error", { error: (err as Error).message });
-      })
-      .finally(() => {
-        if (isCurrent()) {
-          setEnriching(false);
-          setEnriched(true); // resolved (success or failure) — safe to show cards
-        }
-      });
-  }, [swiggyLive, addressId, loading, error, recommendations]);
-
   const loadRecommendations = async (refresh = false) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const gen = ++requestGenRef.current;
+
     setLoading(true);
+    setEnriching(swiggyLive && !!addressId);
     setLoaderStep(0);
     setError(null);
-    setEnriched(false); // re-engage the Swiggy gate for the new recommendation set
+    setEnriched(false);
+    setSwiggyMatches({});
+    setLiveStatus(null);
 
     try {
       trackEvent("recommendations_requested", results);
@@ -296,37 +242,42 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
         null,
         refresh,
         swiggyLive ? addressId : undefined,
+        controller.signal,
       );
+      if (gen !== requestGenRef.current) return;
+
       setRecommendations(data.recommendations);
       setIsAi(data.success === true && !data.error);
       setInsights(data.insights || null);
+      setLiveStatus(data.live_status ?? (swiggyLive ? "offline" : null));
 
-      // Backend already ran the Swiggy availability loop — use its embedded matches
-      // and pre-arm enrichKeyRef so the enrich useEffect doesn't re-enrich.
-      if (
-        swiggyLive &&
-        data.swiggy_matches &&
-        Object.keys(data.swiggy_matches).length > 0
-      ) {
+      // Backend owns live matching — consume embedded matches and skip client enrich.
+      if (data.swiggy_matches && Object.keys(data.swiggy_matches).length > 0) {
         setSwiggyMatches(data.swiggy_matches as Record<string, EnrichedMatch>);
-        const preKey = `${data.swiggy_address_id || addressId}|${data.recommendations.map((r) => r.dish?.id || r.id).join(",")}`;
-        enrichKeyRef.current = preKey;
-        setEnriched(true);
       }
+      setEnriched(true);
+      setEnriching(false);
 
       trackEvent("recommendations_received", {
         count: data.recommendations.length,
+        live_status: data.live_status,
       });
     } catch (err) {
+      if ((err as Error)?.name === "AbortError") return;
+      if (gen !== requestGenRef.current) return;
       const msg = (err as Error).message;
       setError(
         msg.startsWith("You've")
           ? msg
           : "Could not load recommendations. Please try again.",
       );
+      setEnriched(true);
+      setEnriching(false);
       trackEvent("recommendations_error", { error: msg });
     } finally {
-      setLoading(false);
+      if (gen === requestGenRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -350,42 +301,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       }),
     }).catch(() => {}); // Silent fail - don't block user experience
     openSwiggy(dishName);
-  };
-
-  const handleConnectSwiggy = async () => {
-    trackEvent("swiggy_connect_clicked");
-    const authUrl = await initiateSwiggyOAuth();
-    if (!authUrl) {
-      trackEvent("swiggy_connect_failed", { reason: "no_auth_url" });
-      return;
-    }
-    const width = 500;
-    const height = 650;
-    const left = Math.max(0, (window.screen.width - width) / 2);
-    const top = Math.max(0, (window.screen.height - height) / 2);
-    window.open(
-      authUrl,
-      "swiggyOAuth",
-      `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`,
-    );
-  };
-
-  const handleUnlinkSwiggy = async () => {
-    const ok = await unlinkSwiggyOAuth();
-    if (ok) {
-      trackEvent("swiggy_unlinked");
-      setUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              swiggyLinked: false,
-              swiggyUserId: null,
-              swiggyExpiresAt: null,
-            }
-          : null,
-      );
-      setAddresses([]);
-    }
   };
 
   const startEditingProfile = () => {
@@ -419,6 +334,14 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
     }
   };
 
+  const handleVeto = (item: Recommendation, reason: string) => {
+    setVetoedIds((prev) => ({ ...prev, [item.id]: reason }));
+    setShowVetoReasonsFor(null);
+    logSignal("veto", { dish_id: item.dish.id, dish_name: item.dish.name, reason });
+    if (item.is_wildcard) logSignal("wildcard_verdict", { accepted: false });
+    trackEvent("recommendation_vetoed", { dish: item.dish.name, reason });
+  };
+
   const handleShare = (item: Recommendation) => {
     trackEvent("recommendation_shared", { food: item.dish.name });
     if (navigator.share) {
@@ -439,6 +362,11 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       } else {
         next.add(item.id);
         trackEvent("recommendation_liked", { food: item.dish.name });
+        if (item.is_wildcard) {
+          logSignal("wildcard_verdict", { accepted: true });
+          bumpQuestProgress("adventure_score");
+        }
+        bumpQuestProgress("try_3_cuisines");
         // Show waitlist popup when user likes something (even if dismissed before, but not if joined)
         const hasJoined = sessionStorage.getItem("waitlistJoined");
         if (!hasJoined) {
@@ -506,6 +434,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   // cards only appear with live restaurant data (hard constraint).
   const preparing =
     loading ||
+    enriching ||
     (swiggyLive && recommendations.length > 0 && !error && !enriched);
   const showResults =
     !loading &&
@@ -525,6 +454,16 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Home
           </button>
+          {showResults && liveStatus === "partial" && (
+            <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 text-center">
+              Some picks are live on Swiggy; others are curated estimates while we find nearby matches.
+            </div>
+          )}
+          {showResults && liveStatus === "offline" && swiggyLive && (
+            <div className="mb-4 rounded-xl bg-gray-100 border border-gray-200 px-4 py-3 text-sm text-gray-600 text-center">
+              Showing curated picks — live restaurant data is temporarily unavailable.
+            </div>
+          )}
           <div className="text-center">
             {/* Character header (if character match) */}
             {recommendations.length > 0 && recommendations[0]?.characterId && (
@@ -563,8 +502,42 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
             <p className="text-gray-500 text-sm">
               {results.craving} · {results.budget} budget · {results.preference}
             </p>
+            {insights?.next_meal_prediction && (
+              <p className="text-xs text-gray-400 mt-2">
+                🔮 {insights.next_meal_prediction}
+              </p>
+            )}
           </div>
         </div>
+
+        {showNostalgia && (
+          <NostalgiaPrompt
+            onDismiss={() => {
+              setShowNostalgia(false);
+              markNostalgiaPromptShown();
+            }}
+          />
+        )}
+
+        <TwinTasteSection />
+
+        {/* 5.1 — Persona reveal */}
+        {learnedProfile?.persona && (
+          <div className="max-w-2xl mx-auto mb-6 bg-gradient-to-r from-purple-600 to-purple-400 rounded-2xl p-5 text-white">
+            <p className="text-[10px] font-black uppercase tracking-wider text-white/70">
+              Your food character
+            </p>
+            <p className="font-black text-lg mt-1">{learnedProfile.persona.archetype}</p>
+            <p className="text-sm text-white/90 mt-2 leading-relaxed">
+              {learnedProfile.persona.blurb}
+            </p>
+            {learnedProfile.accuracy_meter && (
+              <p className="text-xs font-bold mt-3">
+                🔮 {Math.round(learnedProfile.accuracy_meter.accuracy * 100)}% mind-read accuracy
+              </p>
+            )}
+          </div>
+        )}
 
         {/* AI / Fallback badge */}
         {showResults && (
@@ -581,61 +554,6 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                 <span>⚡ Smart Picks</span>
               )}
             </span>
-          </div>
-        )}
-
-        {/* Swiggy delivery-address picker / Connect CTA */}
-        {swiggyLive && showResults && (
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6 text-sm">
-            {!user?.swiggyLinked ? (
-              <button
-                onClick={handleConnectSwiggy}
-                className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full px-5 py-2.5 font-semibold shadow-sm transition-colors"
-              >
-                <Link2 className="w-4 h-4" />
-                Connect Swiggy for live prices & ETA
-              </button>
-            ) : (
-              <>
-                <div className="inline-flex items-center gap-2 bg-white rounded-full border border-gray-200 shadow-sm px-4 py-2">
-                  <MapPin className="w-4 h-4 text-orange-500" />
-                  <span className="text-gray-600">Deliver to</span>
-                  {addresses.length > 0 ? (
-                    <select
-                      value={addressId}
-                      onChange={(e) => {
-                        setAddressId(e.target.value);
-                        saveAddressId(e.target.value);
-                        trackEvent("swiggy_address_selected", {
-                          addressId: e.target.value,
-                        });
-                      }}
-                      className="max-w-[220px] bg-transparent text-gray-800 font-medium outline-none truncate"
-                    >
-                      {addresses.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label} · {a.line.slice(0, 40)}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-gray-500 italic">
-                      No saved addresses
-                    </span>
-                  )}
-                  {enriching && (
-                    <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
-                  )}
-                </div>
-                <button
-                  onClick={handleUnlinkSwiggy}
-                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-600 transition-colors"
-                >
-                  <Unlink className="w-3.5 h-3.5" />
-                  Disconnect
-                </button>
-              </>
-            )}
           </div>
         )}
 
@@ -750,9 +668,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               <div className="absolute -inset-2 rounded-full border-4 border-primary-200 border-t-primary-500 animate-spin" />
             </div>
             <p className="text-gray-700 font-medium text-lg transition-all duration-300">
-              {!loading && enriching
-                ? "Finding real restaurants near you..."
-                : loaderSteps[loaderStep].text}
+              {loaderSteps[loaderStep].text}
             </p>
             <div className="flex gap-1.5 mt-4">
               {loaderSteps.map((_, i) => (
@@ -942,6 +858,11 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                 Character pick
                               </div>
                             )}
+                            {item.is_wildcard && (
+                              <div className="bg-purple-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
+                                🎲 Shake it up
+                              </div>
+                            )}
                           </div>
 
                           {/* Action buttons */}
@@ -1108,6 +1029,38 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                               <span className="font-medium text-gray-600">Why this? </span>
                               {item.ai_reasoning.psychological_hook}
                             </div>
+                          )}
+
+                          <BlindBetStars dishId={item.dish.id} dishName={item.dish.name} />
+
+                          {/* Veto + why (4.2) */}
+                          {vetoedIds[item.id] ? (
+                            <p className="text-[11px] text-gray-400 px-1">
+                              Noted —{" "}
+                              {VETO_REASONS.find((r) => r.id === vetoedIds[item.id])?.label.toLowerCase()}
+                              . We'll adjust.
+                            </p>
+                          ) : showVetoReasonsFor === item.id ? (
+                            <div
+                              className="pt-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ChipSelector
+                                options={VETO_REASONS}
+                                selected={[]}
+                                onToggle={(reason) => handleVeto(item, reason)}
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowVetoReasonsFor(item.id);
+                              }}
+                              className="text-[11px] text-gray-400 hover:text-gray-600 text-left px-1"
+                            >
+                              Not for me →
+                            </button>
                           )}
 
                           {/* Flip hint — offers whatever isn't currently active */}
@@ -1399,13 +1352,13 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
               trackEvent("recommendation_refreshed", results);
               loadRecommendations(true);
             }}
-            disabled={loading}
-            className={`btn-secondary flex items-center ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+            disabled={preparing}
+            className={`btn-secondary flex items-center ${preparing ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             <RefreshCw
-              className={`w-5 h-5 mr-2 ${loading ? "animate-spin" : ""}`}
+              className={`w-5 h-5 mr-2 ${preparing ? "animate-spin" : ""}`}
             />
-            {loading ? "Finding picks..." : "Try Again"}
+            {preparing ? "Finding picks..." : "Try Again"}
           </button>
           <button onClick={onBack} className="btn-primary flex items-center">
             Start Over

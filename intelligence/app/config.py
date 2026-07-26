@@ -41,9 +41,34 @@ class Settings(BaseSettings):
     # diagnosing why restaurants/items aren't coming back (e.g. response-shape
     # mismatches). Leave off in production — payloads can be large.
     swiggy_debug: bool = False
+    # When false (default — the user's address hasn't been retrieved yet),
+    # resolve_address_id will NOT fall through to a live get_addresses call once
+    # explicit address_id / city map lookups are exhausted; it raises
+    # SwiggyAddressRequiredError instead so callers can prompt for an address.
+    # When true, it kicks off the live get_addresses lookup as a last resort.
+    swiggy_address_retrieval_enabled: bool = False
     log_level: str = "INFO"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # --- Learning / personalization layer ---
+    # Local SQLite model store for learned per-user state (taste vectors, mood
+    # maps, trade-off weights, calibration). Treated as a rebuildable cache over
+    # the Node backend's durable signals log — losable, always replayable.
+    model_store_path: str = "model_store.db"
+    # OpenAI embedding model for the dish "item tower" and craving/mood anchors.
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 256
+    # Cached dish-embedding matrix (rebuilt when dishes.json changes).
+    dish_embeddings_path: str = "app/data/dish_embeddings.npz"
+    # Shared secret for the Node replay feed (x-sync-key header, both tiers).
+    sync_key: str = ""
+    # Node backend base URL for pulling the signals replay feed.
+    node_base_url: str = "http://localhost:3001"
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "protected_namespaces": ("settings_",),
+    }
 
     @property
     def swiggy_city_addresses(self) -> dict[str, str]:

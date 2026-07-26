@@ -1,12 +1,17 @@
+import type { ComponentType } from 'react';
+import { Moon, Home, Users, Lightbulb, BookOpen, Smile, Frown, Meh, ClipboardList, Plane, Umbrella, Building2, Mountain, Landmark, Apple, Wheat, Flame, Milk, Search, ChefHat, Cake, Dog, Sandwich, Pizza } from 'lucide-react-native';
+
+type LucideIcon = ComponentType<{ size?: number; color?: string }>;
+
 export interface CharacterOption {
-  emoji: string;
+  Icon: LucideIcon;
   label: string;
   sub: string;
   iconBg: string;
 }
 
 export interface CharacterQuestion {
-  emoji: string;
+  Icon: LucideIcon;
   question: string;
   options: CharacterOption[];
 }
@@ -14,9 +19,9 @@ export interface CharacterQuestion {
 export interface CharacterProfile {
   name: string;
   show: string;
-  emoji: string;
+  Icon: LucideIcon;
   bg: readonly [string, string];
-  mealEmoji: string;
+  mealIcon: LucideIcon;
   mealName: string;
   mealDesc: string;
   quote: string;
@@ -29,43 +34,43 @@ export interface CharacterProfile {
 /** Matches the design's exact 4 questions — each option's index (0-3) feeds the scorer below. */
 export const CHAR_QUESTIONS: CharacterQuestion[] = [
   {
-    emoji: '🌙',
+    Icon: Moon,
     question: "It's Friday night. What's the move?",
     options: [
-      { emoji: '🛋️', label: 'Couch & snacks', sub: 'Netflix marathon, no pants', iconBg: 'rgba(249,115,22,0.2)' },
-      { emoji: '🎉', label: 'Out with the squad', sub: 'Dancing, vibes, chaos', iconBg: 'rgba(236,72,153,0.2)' },
-      { emoji: '🧪', label: 'Trying something new', sub: "That weird pop-up? I'm in", iconBg: 'rgba(59,130,246,0.2)' },
-      { emoji: '📚', label: 'Quiet night in', sub: 'Candles, tea, deep thoughts', iconBg: 'rgba(16,185,129,0.2)' },
+      { Icon: Home, label: 'Couch & snacks', sub: 'Netflix marathon, no pants', iconBg: 'rgba(249,115,22,0.2)' },
+      { Icon: Users, label: 'Out with the squad', sub: 'Dancing, vibes, chaos', iconBg: 'rgba(236,72,153,0.2)' },
+      { Icon: Lightbulb, label: 'Trying something new', sub: "That weird pop-up? I'm in", iconBg: 'rgba(59,130,246,0.2)' },
+      { Icon: BookOpen, label: 'Quiet night in', sub: 'Candles, tea, deep thoughts', iconBg: 'rgba(16,185,129,0.2)' },
     ],
   },
   {
-    emoji: '😱',
+    Icon: Frown,
     question: 'Your friend double-books you. Your reaction?',
     options: [
-      { emoji: '😂', label: '"Classic. I\'ll just eat both dinners"', sub: 'Roll with it', iconBg: 'rgba(249,115,22,0.2)' },
-      { emoji: '😤', label: '"I will remember this betrayal"', sub: 'Dramatic but fair', iconBg: 'rgba(239,68,68,0.2)' },
-      { emoji: '🤷', label: '"More solo time for me"', sub: 'Unbothered king/queen', iconBg: 'rgba(124,58,237,0.2)' },
-      { emoji: '📋', label: '"Let me reorganize everyone\'s schedule"', sub: 'Fix-it mode activated', iconBg: 'rgba(16,185,129,0.2)' },
+      { Icon: Smile, label: '"Classic. I\'ll just eat both dinners"', sub: 'Roll with it', iconBg: 'rgba(249,115,22,0.2)' },
+      { Icon: Frown, label: '"I will remember this betrayal"', sub: 'Dramatic but fair', iconBg: 'rgba(239,68,68,0.2)' },
+      { Icon: Meh, label: '"More solo time for me"', sub: 'Unbothered king/queen', iconBg: 'rgba(124,58,237,0.2)' },
+      { Icon: ClipboardList, label: '"Let me reorganize everyone\'s schedule"', sub: 'Fix-it mode activated', iconBg: 'rgba(16,185,129,0.2)' },
     ],
   },
   {
-    emoji: '✈️',
+    Icon: Plane,
     question: 'Dream vacation energy?',
     options: [
-      { emoji: '🏝️', label: 'Beach & do absolutely nothing', sub: 'Frozen drink in hand', iconBg: 'rgba(14,165,233,0.2)' },
-      { emoji: '🗼', label: 'City hopping & street food', sub: 'Every alley, every market', iconBg: 'rgba(249,115,22,0.2)' },
-      { emoji: '🏔️', label: 'Mountain cabin vibes', sub: 'Fireplace, stew, silence', iconBg: 'rgba(34,197,94,0.2)' },
-      { emoji: '🎭', label: 'Cultural deep-dive', sub: 'Museums, theatre, history', iconBg: 'rgba(124,58,237,0.2)' },
+      { Icon: Umbrella, label: 'Beach & do absolutely nothing', sub: 'Frozen drink in hand', iconBg: 'rgba(14,165,233,0.2)' },
+      { Icon: Building2, label: 'City hopping & street food', sub: 'Every alley, every market', iconBg: 'rgba(249,115,22,0.2)' },
+      { Icon: Mountain, label: 'Mountain cabin vibes', sub: 'Fireplace, stew, silence', iconBg: 'rgba(34,197,94,0.2)' },
+      { Icon: Landmark, label: 'Cultural deep-dive', sub: 'Museums, theatre, history', iconBg: 'rgba(124,58,237,0.2)' },
     ],
   },
   {
-    emoji: '🍕',
+    Icon: Pizza,
     question: 'Pick a controversial food take:',
     options: [
-      { emoji: '🍍', label: 'Pineapple on pizza is elite', sub: 'Sweet + savory = genius', iconBg: 'rgba(234,179,8,0.2)' },
-      { emoji: '🥄', label: 'Cereal is a valid dinner', sub: 'Efficient and delicious', iconBg: 'rgba(59,130,246,0.2)' },
-      { emoji: '🌶️', label: "If it's not spicy, it's not food", sub: 'Pain is flavor', iconBg: 'rgba(239,68,68,0.2)' },
-      { emoji: '🧈', label: 'Butter makes everything better', sub: 'The French were right', iconBg: 'rgba(249,115,22,0.2)' },
+      { Icon: Apple, label: 'Pineapple on pizza is elite', sub: 'Sweet + savory = genius', iconBg: 'rgba(234,179,8,0.2)' },
+      { Icon: Wheat, label: 'Cereal is a valid dinner', sub: 'Efficient and delicious', iconBg: 'rgba(59,130,246,0.2)' },
+      { Icon: Flame, label: "If it's not spicy, it's not food", sub: 'Pain is flavor', iconBg: 'rgba(239,68,68,0.2)' },
+      { Icon: Milk, label: 'Butter makes everything better', sub: 'The French were right', iconBg: 'rgba(249,115,22,0.2)' },
     ],
   },
 ];
@@ -75,9 +80,9 @@ export const CHARACTERS: CharacterProfile[] = [
   {
     name: 'Jake Peralta',
     show: 'Brooklyn Nine-Nine',
-    emoji: '🕵️',
+    Icon: Search,
     bg: ['#1e40af', '#3b82f6'],
-    mealEmoji: '🍕',
+    mealIcon: Pizza,
     mealName: 'Extra Cheesy Pizza',
     mealDesc: 'With orange soda, obviously',
     quote: '"Cool cool cool cool cool. No doubt no doubt."',
@@ -89,9 +94,9 @@ export const CHARACTERS: CharacterProfile[] = [
   {
     name: 'Monica Geller',
     show: 'Friends',
-    emoji: '👩‍🍳',
+    Icon: ChefHat,
     bg: ['#7c3aed', '#a78bfa'],
-    mealEmoji: '🍝',
+    mealIcon: Wheat,
     mealName: 'Perfect Lasagna',
     mealDesc: 'With exactly 14 layers',
     quote: '"I KNOW!" — you, when this meal arrives',
@@ -103,9 +108,9 @@ export const CHARACTERS: CharacterProfile[] = [
   {
     name: 'Leslie Knope',
     show: 'Parks & Recreation',
-    emoji: '🧇',
+    Icon: Cake,
     bg: ['#b45309', '#f59e0b'],
-    mealEmoji: '🧇',
+    mealIcon: Cake,
     mealName: 'Waffles & Whipped Cream',
     mealDesc: "From JJ's Diner, naturally",
     quote: '"We need to remember what\'s important: waffles."',
@@ -117,9 +122,9 @@ export const CHARACTERS: CharacterProfile[] = [
   {
     name: 'Shaggy Rogers',
     show: 'Scooby-Doo',
-    emoji: '🐕',
+    Icon: Dog,
     bg: ['#15803d', '#4ade80'],
-    mealEmoji: '🥪',
+    mealIcon: Sandwich,
     mealName: 'Mega Triple-Stack Sub',
     mealDesc: 'With everything. EVERYTHING.',
     quote: '"Like, I\'d do it for a Scooby Snack!"',

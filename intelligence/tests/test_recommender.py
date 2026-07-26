@@ -10,7 +10,7 @@ from app.services.recommender import (
     get_recommendations, _build_user_message, get_dishes_for_prompt,
     _fallback_response,
 )
-from app.data.dishes import DISHES
+from app.data.dishes import DISHES, DISHES_BY_ID
 
 
 class TestDishList:
@@ -157,7 +157,7 @@ class TestGetRecommendations:
             user_context=UserContext(mood=Mood(primary="stressed")),
             recommendation_config=RecommendationConfig(count=3),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         assert result.success is True
         assert len(result.recommendations) == 3
@@ -169,7 +169,7 @@ class TestGetRecommendations:
         req = RecommendationRequest(
             user_context=UserContext(mood=Mood(primary="happy")),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         for rec in result.recommendations:
             assert rec.image_url.startswith("https://")
@@ -181,7 +181,7 @@ class TestGetRecommendations:
         req = RecommendationRequest(
             user_context=UserContext(mood=Mood(primary="stressed")),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         ranks = [r.rank for r in result.recommendations]
         assert ranks == sorted(ranks)
@@ -193,7 +193,7 @@ class TestGetRecommendations:
         req = RecommendationRequest(
             user_context=UserContext(mood=Mood(primary="stressed")),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         for rec in result.recommendations:
             assert rec.ai_reasoning.mood_match
@@ -207,7 +207,7 @@ class TestGetRecommendations:
         req = RecommendationRequest(
             user_context=UserContext(mood=Mood(primary="happy")),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         assert result.ai_metadata is not None
         assert result.ai_metadata.model_used == "gpt-4o"
@@ -220,7 +220,7 @@ class TestGetRecommendations:
             user_context=UserContext(mood=Mood(primary="happy")),
             recommendation_config=RecommendationConfig(count=3),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         assert result.success is False
         assert len(result.recommendations) == 3
@@ -237,7 +237,7 @@ class TestGetRecommendations:
             user_context=UserContext(mood=Mood(primary="sad")),
             recommendation_config=RecommendationConfig(count=2),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
 
         assert result.success is False
         assert len(result.recommendations) == 2
@@ -259,7 +259,7 @@ class TestGetRecommendations:
         req = RecommendationRequest(
             user_context=UserContext(mood=Mood(primary="happy")),
         )
-        result = get_recommendations(req, llm=mock_llm)
+        result = get_recommendations(req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")])
         # Unknown IDs are skipped — result has 0 recs but success=True
         assert result.success is True
         assert len(result.recommendations) == 0
@@ -297,6 +297,25 @@ class TestCaching:
         svc.get_recommendations(req_b, llm=mock_llm)
 
         assert mock_llm.invoke.call_count == 2
+
+    def test_cache_key_ignores_swiggy_address(self, mock_llm_response):
+        import app.services.recommender as svc
+        svc._CACHE.clear()
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_llm_response
+        candidates = [DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")]
+
+        req_a = RecommendationRequest(
+            user_context=UserContext(mood=Mood(primary="stressed", energy_level=3)),
+            swiggy_address_id="addr_a",
+        )
+        req_b = RecommendationRequest(
+            user_context=UserContext(mood=Mood(primary="stressed", energy_level=3)),
+            swiggy_address_id="addr_b",
+        )
+        svc.get_recommendations(req_a, llm=mock_llm, candidate_dishes=candidates)
+        svc.get_recommendations(req_b, llm=mock_llm, candidate_dishes=candidates)
+        assert mock_llm.invoke.call_count == 1
 
 
 class TestFallbackResponse:

@@ -217,3 +217,10 @@ curl https://your-api.com/api/health
 | Railway (backend)    | ✅ $5 free credit/mo | ~$5–10/mo         |
 | Render (alternative) | ✅ Free (spins down) | $7/mo (always-on) |
 | **Total**            | **~$0/mo**           | **~$10–15/mo**    |
+
+
+
+```
+adb uninstall com.pank1999.moodfood
+npx eas-cli build --platform android --profile preview
+```

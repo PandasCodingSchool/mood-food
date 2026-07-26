@@ -10,10 +10,79 @@ export interface GameData {
   [key: string]: unknown;
 }
 
+export type BudgetTier = 'budget' | 'moderate' | 'splurge';
+export type DietPreference = 'veg' | 'non-veg' | 'both';
+
+export interface GameSwipe {
+  item: string;
+  liked: boolean;
+  reactionTime?: number; // ms — faster = stronger subconscious preference
+  dishId?: string;
+}
+
+export interface GameCharacterSignal {
+  id: string;
+  name: string;
+  show?: string;
+  emoji?: string;
+  matchPercentage?: number;
+  traits?: Record<string, number>;
+  runnerUps?: Array<{ id: string; match_percent?: number }>;
+}
+
+/** Unified game-signal payload — every game emits this shape (port of web). */
+export interface GameSignals extends GameData {
+  liked: string[];
+  disliked: string[];
+  cravings: string[];
+  cuisines: string[];
+  budgetTier: BudgetTier;
+  dietPreference: DietPreference;
+  moodVector?: { energy: number; valence: number; social: number };
+  sliderValues?: { adventurous: number; healthConscious: number; spicy: number };
+  swipes?: GameSwipe[];
+  character?: GameCharacterSignal;
+  cravingTags?: string[];
+  duelResults?: Array<{ dimensionA: string; dimensionB: string; winner: string }>;
+  pantryItems?: string[];
+  raw?: Record<string, unknown>;
+}
+
+/** One event for the personalization signals spine (POST /api/signals). */
+export interface SignalEvent {
+  type: string;
+  payload: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  clientTs?: string;
+}
+
+export interface LearnedProfile {
+  confidence?: number;
+  question_budget?: number;
+  mode?: string;
+  game_plan?: Array<{ game: string; eig: number }>;
+  accuracy_meter?: { accuracy: number; n: number } | null;
+  persona?: { archetype: string; blurb: string; drift_line?: string } | null;
+  mood_map_top?: Array<{ archetype: string; weight: number }>;
+  next_meal_prediction?: string | null;
+  n_signals?: number;
+}
+
+export interface PendingPrediction {
+  id: string;
+  recId: string;
+  dishId?: string | null;
+  dishName?: string | null;
+  userPredictedScore?: number | null;
+  createdAt: string;
+}
+
 export interface Recommendation {
   id: string;
   rank?: number;
   confidence?: number;
+  predicted_score?: number | null;
+  is_wildcard?: boolean;
   dish: {
     id?: string;
     name: string;
@@ -43,7 +112,7 @@ export interface Recommendation {
   } | null;
   alternatives?: Array<{
     dish_id: string;
-    type: 'healthier_swap' | 'budget_swap' | 'popular_pick';
+    type: 'healthier_swap' | 'budget_swap' | 'similar_tier_swap' | 'popular_pick';
     name: string;
     reason: string;
     cuisine?: string;
@@ -91,7 +160,7 @@ export interface SwiggyRestaurant {
 }
 
 export interface SwiggyAlt {
-  type: 'healthier' | 'budget';
+  type: 'healthier' | 'budget' | 'similar_tier';
   item: SwiggyMenuItem;
 }
 
@@ -108,6 +177,7 @@ export interface EnrichResponse {
   address_id?: string | null;
   matches: EnrichedMatch[];
   error?: string;
+  address_required?: boolean;
 }
 
 export interface RecommendationResponse {
@@ -117,6 +187,15 @@ export interface RecommendationResponse {
   insights?: {
     detected_mood_profile?: string;
     preference_evolution?: string;
+    next_meal_prediction?: string | null;
+    persona_drift?: string | null;
+  } | null;
+  meta?: {
+    confidence?: number;
+    question_budget?: number;
+    persona?: string | null;
+    mode?: string;
+    accuracy_meter?: { accuracy: number; n: number } | null;
   } | null;
   ai_metadata?: {
     model_used?: string;
@@ -125,6 +204,10 @@ export interface RecommendationResponse {
     cache_hit?: boolean;
   } | null;
   error?: string;
+  swiggy_matches?: Record<string, EnrichedMatch>;
+  swiggy_address_id?: string;
+  live_status?: 'live' | 'partial' | 'offline' | null;
+  request_id?: string;
 }
 
 export interface UserContext {
@@ -132,6 +215,8 @@ export interface UserContext {
     primary: string;
     energyLevel: number;
     socialContext: string;
+    hungerLevel?: number;
+    stressLevel?: number;
   };
   preferences: {
     cuisineTypes: string[];
@@ -144,8 +229,11 @@ export interface UserContext {
     budget: { min: number; max: number; currency: string };
     timeAvailable: number;
     deliveryPreferred: boolean;
+    occasion?: 'treat' | 'fuel' | 'reward';
   };
   gameData?: GameData;
+  comfortAnchors?: Array<{ food: string; trigger?: string }>;
+  automationPref?: 'hands_on' | 'balanced' | 'hands_off';
 }
 
 export interface AIRequestContext {
@@ -156,6 +244,7 @@ export interface AIRequestContext {
     includeExplanations: boolean;
     includeAlternatives: boolean;
     temperature?: number;
+    mode?: 'standard' | 'mind_reader' | 'sos' | 'wildcard' | 'group';
   };
 }
 
