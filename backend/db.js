@@ -79,6 +79,16 @@ export async function initDb() {
       // Add password_hash column to existing users (migration-safe)
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
 
+      // One-time-password storage for phone OTP login
+      await db.query(`CREATE TABLE IF NOT EXISTS otp_codes (
+        phone VARCHAR(50) PRIMARY KEY,
+        otp_hash TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+
       // Personalization columns on users (migration-safe)
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS persona_archetype VARCHAR(100)`);
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS question_budget INTEGER DEFAULT 3`);
@@ -309,6 +319,15 @@ export async function initDb() {
         password_hash TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS otp_codes (
+        phone TEXT PRIMARY KEY,
+        otp_hash TEXT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        used INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS user_preferences (
