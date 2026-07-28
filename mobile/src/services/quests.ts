@@ -23,6 +23,15 @@ export async function fetchQuests(): Promise<Quest[]> {
   }
 }
 
+export async function fetchStreak(): Promise<number> {
+  try {
+    const quests = await fetchQuests();
+    return quests.reduce((max, q) => Math.max(max, q.streakCount || 0), 0);
+  } catch {
+    return 0;
+  }
+}
+
 export async function bumpQuestProgress(key: string, count = 1): Promise<void> {
   try {
     const headers = await getHeaders();

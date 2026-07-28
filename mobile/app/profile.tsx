@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, ActivityIndicator, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { User } from 'lucide-react-native';
 import { fw, colors } from '../src/constants/theme';
 import BottomNav from '../src/components/BottomNav';
 import { fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
@@ -218,9 +219,18 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 16 }}>
             <Animated.View style={{ transform: [{ scale: avatarScale }] }}>
-              <LinearGradient colors={['#f97316', '#fbbf24']} style={{ width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 32 }}>🍽️</Text>
-              </LinearGradient>
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 36,
+                  backgroundColor: colors.orange,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <User size={34} color="#fff" />
+              </View>
             </Animated.View>
             <View style={{ flex: 1 }}>
               <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>{displayName}</Text>

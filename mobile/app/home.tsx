@@ -1,8 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Sparkles, ChevronRight } from 'lucide-react-native';
+import { Bell, Flame, Play, Sparkles, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../src/context/ThemeContext';
 import Screen from '../src/components/Screen';
 import BottomNav from '../src/components/BottomNav';
@@ -13,6 +12,7 @@ import { fw, colors } from '../src/constants/theme';
 import { trackEvent } from '../src/utils/analytics';
 import { hasCheckedInToday } from '../src/services/moodState';
 import { fetchLearnedProfile, flushSignals } from '../src/services/signals';
+import { fetchStreak } from '../src/services/quests';
 import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from '../src/services/nostalgiaGate';
 import { fadeUp, floatLoop, bounceIn, pressScale } from '../src/utils/animations';
 import type { LearnedProfile } from '../src/types';
@@ -26,6 +26,7 @@ const GAMES: Array<{
   bgEmoji: string;
   meta: string;
   colors: readonly [string, string];
+  comingSoon?: boolean;
 }> = [
   {
     id: 'character',
@@ -116,6 +117,7 @@ const GAMES: Array<{
     bgEmoji: '🎯',
     meta: '2 min · With friends',
     colors: ['#be185d', '#f472b6'] as const,
+    comingSoon: true,
   },
   {
     id: 'pantry',
@@ -126,11 +128,13 @@ const GAMES: Array<{
     bgEmoji: '👨‍🍳',
     meta: '20 sec · Cook or order',
     colors: ['#166534', '#22c55e'] as const,
+    comingSoon: true,
   },
 ];
 
 function GameCard({ game, index }: { game: (typeof GAMES)[number]; index: number }) {
   const router = useRouter();
+  const { theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const scale = useRef(new Animated.Value(1)).current;
@@ -144,38 +148,141 @@ function GameCard({ game, index }: { game: (typeof GAMES)[number]; index: number
     return () => floatAnim.stop();
   }, []);
 
+  const accent = game.comingSoon ? theme.muted : game.colors[0];
+
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
       <TouchableOpacity
-        activeOpacity={0.9}
-        onPressIn={() => pressScale(scale, 0.97)}
-        onPressOut={() => pressScale(scale, 1)}
+        activeOpacity={game.comingSoon ? 1 : 0.92}
+        disabled={game.comingSoon}
+        onPressIn={() => !game.comingSoon && pressScale(scale, 0.97)}
+        onPressOut={() => !game.comingSoon && pressScale(scale, 1)}
         onPress={() => {
+          if (game.comingSoon) return;
           trackEvent('game_selected', { game: game.id });
           router.push(game.route as never);
         }}
+        style={{
+          marginBottom: 14,
+          borderRadius: 22,
+          backgroundColor: game.comingSoon ? theme.surface : theme.card,
+          borderWidth: 1.5,
+          borderColor: accent,
+          shadowColor: '#000',
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 4,
+          overflow: 'hidden',
+        }}
       >
-        <LinearGradient
-          colors={game.colors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 20, padding: 20, minHeight: 160, overflow: 'hidden', marginBottom: 16 }}
-        >
-          <Animated.View style={{ position: 'absolute', top: -20, right: -10, opacity: 0.2, transform: [{ rotate: '15deg' }, { translateY: floatY }] }}>
-            <Text style={{ fontSize: 80 }}>{game.bgEmoji}</Text>
+        <View style={{ padding: 18, minHeight: 118, overflow: 'hidden' }}>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: -18,
+              right: -14,
+              opacity: game.comingSoon ? 0.08 : 0.18,
+              transform: [{ rotate: '12deg' }, { translateY: floatY }],
+            }}
+          >
+            <Text style={{ fontSize: 96 }}>{game.bgEmoji}</Text>
           </Animated.View>
-          <Animated.View style={{ marginBottom: 8, transform: [{ scale: emojiScale }] }}>
-            <Text style={{ fontSize: 36 }}>{game.emoji}</Text>
-          </Animated.View>
-          <Text style={[fw(800), { fontSize: 18, color: '#fff' }]}>{game.title}</Text>
-          <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 4, lineHeight: 18 }]}>
-            {game.desc}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 }}>
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)' }}>⏱️</Text>
-            <Text style={[fw(700), { fontSize: 12, color: 'rgba(255,255,255,0.9)' }]}>{game.meta}</Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Animated.View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 18,
+                backgroundColor: game.comingSoon ? theme.overlay : `${accent}18`,
+                alignItems: 'center',
+                justifyContent: 'center',
+                transform: [{ scale: emojiScale }],
+              }}
+            >
+              <Text style={{ fontSize: 28, opacity: game.comingSoon ? 0.5 : 1 }}>{game.emoji}</Text>
+            </Animated.View>
+
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text
+                  style={[
+                    fw(800),
+                    { fontSize: 17, color: game.comingSoon ? theme.muted : theme.text },
+                  ]}
+                >
+                  {game.title}
+                </Text>
+                {game.comingSoon && (
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 10,
+                      backgroundColor: theme.overlay,
+                    }}
+                  >
+                    <Text style={[fw(800), { fontSize: 9, color: theme.muted }]}>COMING SOON</Text>
+                  </View>
+                )}
+              </View>
+              <Text
+                style={[
+                  fw(600),
+                  {
+                    fontSize: 12,
+                    color: game.comingSoon ? theme.muted : theme.subtext,
+                    marginTop: 3,
+                    lineHeight: 17,
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {game.desc}
+              </Text>
+            </View>
+
+            {!game.comingSoon && (
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: `${accent}20`,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Play size={18} color={accent} fill={accent} />
+              </View>
+            )}
           </View>
-        </LinearGradient>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'flex-start',
+              gap: 6,
+              marginTop: 14,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 20,
+              backgroundColor: game.comingSoon ? theme.overlay : `${accent}15`,
+            }}
+          >
+            <Text style={{ fontSize: 11, color: game.comingSoon ? theme.muted : accent }}>⏱️</Text>
+            <Text
+              style={[
+                fw(700),
+                { fontSize: 11, color: game.comingSoon ? theme.muted : accent },
+              ]}
+            >
+              {game.comingSoon ? 'Soon' : game.meta}
+            </Text>
+          </View>
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -185,6 +292,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const [profile, setProfile] = useState<LearnedProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [streak, setStreak] = useState(0);
   const [showNostalgia, setShowNostalgia] = useState(false);
 
   useEffect(() => {
@@ -201,8 +310,12 @@ export default function HomeScreen() {
           router.replace({ pathname: '/mood-checkin', params: { next: '/home' } });
           return;
         }
-        const learned = await fetchLearnedProfile();
-        if (!cancelled) setProfile(learned);
+        const [learned, currentStreak] = await Promise.all([fetchLearnedProfile(), fetchStreak()]);
+        if (!cancelled) {
+          setProfile(learned);
+          setProfileLoading(false);
+          setStreak(currentStreak);
+        }
         if (!cancelled && (await shouldShowNostalgiaPrompt())) setShowNostalgia(true);
       })();
       return () => {
@@ -211,11 +324,10 @@ export default function HomeScreen() {
     }, [router]),
   );
 
-  // 5.5 — adaptive question budget: fewer games shown as confidence grows.
-  const visibleGames =
-    profile?.question_budget != null && profile.question_budget < GAMES.length
-      ? GAMES.slice(0, Math.max(2, profile.question_budget + 1))
-      : GAMES;
+  // Always show the full game list on the home screen. The adaptive question
+  // budget only controls how many questions the AI asks, not which games are
+  // visible.
+  const visibleGames = GAMES;
 
   return (
     <Screen>
@@ -231,12 +343,30 @@ export default function HomeScreen() {
           </View>
           <View>
             <Text style={[fw(700), { fontSize: 12, color: theme.subtext }]}>Hey there</Text>
-            <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>What's your vibe?</Text>
+            <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>What's your vibe?</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => router.push('/notifications')} activeOpacity={0.7}>
-          <Bell size={28} color={colors.orange} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/quests')}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 20,
+              backgroundColor: `${colors.orange}15`,
+            }}
+          >
+            <Flame size={18} color={colors.orange} fill={colors.orange} />
+            <Text style={[fw(800), { fontSize: 13, color: colors.orange }]}>{streak}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/notifications')} activeOpacity={0.7}>
+            <Bell size={28} color={colors.orange} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {profile?.question_budget != null && (

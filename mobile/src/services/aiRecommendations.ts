@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {
   QuizResults,
   AIRequestContext,
@@ -8,15 +9,42 @@ import type {
 import { API_BASE_URL, getHeaders } from "./apiBase";
 import { getTodayCheckin } from "./moodState";
 
-// Lightweight in-memory address store (no AsyncStorage dependency).
-let _savedAddressId = "";
+const ADDRESS_STORAGE_KEY = "moodfood.swiggy.addressId";
+
+export interface SwiggyAddress {
+  id: string;
+  label: string;
+  line: string;
+}
 
 export async function getSavedAddressId(): Promise<string> {
-  return _savedAddressId;
+  try {
+    return (await AsyncStorage.getItem(ADDRESS_STORAGE_KEY)) || "";
+  } catch {
+    return "";
+  }
 }
 
 export async function saveAddressId(id: string): Promise<void> {
-  _savedAddressId = id || "";
+  try {
+    if (id) await AsyncStorage.setItem(ADDRESS_STORAGE_KEY, id);
+    else await AsyncStorage.removeItem(ADDRESS_STORAGE_KEY);
+  } catch {
+    // best-effort
+  }
+}
+
+export async function fetchAddresses(): Promise<SwiggyAddress[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/addresses`, {
+      headers: await getHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.success ? (data.addresses as SwiggyAddress[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function isSwiggyLive(): boolean {

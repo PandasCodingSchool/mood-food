@@ -8,7 +8,10 @@ import {
   fetchRecommendations,
   getSavedAddressId,
   isSwiggyLive,
+  fetchAddresses,
+  saveAddressId,
 } from '../src/services/aiRecommendations';
+import { enrichRecommendations } from '../src/services/swiggy';
 import { trackEvent } from '../src/utils/analytics';
 import { fw, colors } from '../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
@@ -185,7 +188,17 @@ export default function RecommendationsScreen() {
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
-      const addressId = isSwiggyLive() ? await getSavedAddressId() : '';
+      let addressId = await getSavedAddressId();
+
+      // If Swiggy is live but we have no stored address, try to fetch one.
+      if (isSwiggyLive() && !addressId) {
+        const addresses = await fetchAddresses();
+        if (addresses.length > 0) {
+          addressId = addresses[0].id;
+          await saveAddressId(addressId);
+        }
+      }
+
       const res = await fetchRecommendations(
         quizResults,
         null,
@@ -196,6 +209,26 @@ export default function RecommendationsScreen() {
         source: res.source,
         live_status: res.live_status,
       });
+
+      // Fallback: if the backend did not embed live matches but Swiggy is live,
+      // call /swiggy/enrich directly to attach real restaurant/menu data.
+      const hasLiveMatches = res.swiggy_matches && Object.keys(res.swiggy_matches).length > 0;
+      if (isSwiggyLive() && addressId && !hasLiveMatches && res.recommendations.length > 0) {
+        try {
+          const enriched = await enrichRecommendations(res.recommendations, addressId);
+          if (Object.keys(enriched).length > 0) {
+            setData({
+              ...res,
+              swiggy_matches: enriched,
+              live_status: 'partial',
+            });
+            return;
+          }
+        } catch {
+          // leave original response untouched on failure
+        }
+      }
+
       setData(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load recommendations');

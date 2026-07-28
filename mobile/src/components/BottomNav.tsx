@@ -1,15 +1,16 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Home, List, User, Zap } from 'lucide-react-native';
+import { Home, List, Target, User, Zap } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { colors, fw } from '../constants/theme';
 import { logSignal } from '../services/signals';
 
-type Tab = 'games' | 'history' | 'results' | 'profile';
+type Tab = 'games' | 'history' | 'results' | 'quests' | 'profile';
 
-const TABS: { key: Tab; icon: typeof Home; label: string; route: '/home' | '/history' | '/profile' }[] = [
+const TABS: { key: Tab; icon: typeof Home; label: string; route: '/home' | '/history' | '/quests' | '/profile' }[] = [
   { key: 'games', icon: Home, label: 'Games', route: '/home' },
   { key: 'history', icon: List, label: 'History', route: '/history' },
+  { key: 'quests', icon: Target, label: 'Quests', route: '/quests' },
   { key: 'profile', icon: User, label: 'Profile', route: '/profile' },
 ];
 

@@ -2,7 +2,7 @@ import { useRef, type ReactNode } from 'react';
 import { Animated, Pressable, Text, View, type ViewStyle, type TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { pressScale } from '../utils/animations';
-import { gradients, fw } from '../constants/theme';
+import { colors as themeColors, fw } from '../constants/theme';
 
 type Props = {
   label: string;
@@ -19,7 +19,7 @@ type Props = {
 export default function GradientButton({
   label,
   onPress,
-  colors = gradients.orange,
+  colors = [themeColors.orange, themeColors.orange],
   disabled,
   height = 56,
   fontSize = 17,

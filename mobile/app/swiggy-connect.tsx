@@ -8,6 +8,7 @@ import { fw, colors } from '../src/constants/theme';
 import Screen from '../src/components/Screen';
 import { getHeaders } from '../src/services/apiBase';
 import { fetchCurrentUser } from '../src/services/auth';
+import { saveAddressId, fetchAddresses } from '../src/services/aiRecommendations';
 import { initiateSwiggyOAuth, unlinkSwiggy } from '../src/services/swiggy';
 
 export default function SwiggyConnectScreen() {
@@ -22,7 +23,14 @@ export default function SwiggyConnectScreen() {
     setLoading(true);
     try {
       const user = await fetchCurrentUser();
-      setLinked(!!user?.swiggyLinked);
+      const isLinked = !!user?.swiggyLinked;
+      setLinked(isLinked);
+      if (isLinked) {
+        const addresses = await fetchAddresses();
+        if (addresses.length > 0) {
+          await saveAddressId(addresses[0].id);
+        }
+      }
     } catch {
       setLinked(false);
     } finally {

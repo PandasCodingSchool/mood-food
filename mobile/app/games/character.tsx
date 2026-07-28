@@ -126,7 +126,17 @@ export default function CharacterMatchScreen() {
             craving: match.craving,
             budget: match.budget,
             preference: match.preference,
-            gameData: { type: 'character_match', character: match.name },
+            gameData: {
+              type: 'character_match',
+              character: {
+                id: match.id,
+                name: match.name,
+                show: match.show,
+                emoji: match.emoji,
+                traits: match.traits || {},
+                matchPercentage: 100,
+              },
+            },
           };
           trackEvent('game_completed', { game: 'character', results });
           router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });

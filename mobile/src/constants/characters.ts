@@ -17,8 +17,10 @@ export interface CharacterQuestion {
 }
 
 export interface CharacterProfile {
+  id: string;
   name: string;
   show: string;
+  emoji: string;
   Icon: LucideIcon;
   bg: readonly [string, string];
   mealIcon: LucideIcon;
@@ -29,6 +31,7 @@ export interface CharacterProfile {
   craving: string;
   budget: string;
   preference: string;
+  traits?: Record<string, number>;
 }
 
 /** Matches the design's exact 4 questions — each option's index (0-3) feeds the scorer below. */
@@ -78,8 +81,10 @@ export const CHAR_QUESTIONS: CharacterQuestion[] = [
 /** Index order matters — matched by the scorer in characterEngine.ts (0=Jake,1=Monica,2=Leslie,3=Shaggy). */
 export const CHARACTERS: CharacterProfile[] = [
   {
+    id: 'jake',
     name: 'Jake Peralta',
     show: 'Brooklyn Nine-Nine',
+    emoji: '🍕',
     Icon: Search,
     bg: ['#1e40af', '#3b82f6'],
     mealIcon: Pizza,
@@ -92,8 +97,10 @@ export const CHARACTERS: CharacterProfile[] = [
     preference: 'both',
   },
   {
+    id: 'monica',
     name: 'Monica Geller',
     show: 'Friends',
+    emoji: '🍝',
     Icon: ChefHat,
     bg: ['#7c3aed', '#a78bfa'],
     mealIcon: Wheat,
@@ -106,8 +113,10 @@ export const CHARACTERS: CharacterProfile[] = [
     preference: 'both',
   },
   {
+    id: 'leslie',
     name: 'Leslie Knope',
     show: 'Parks & Recreation',
+    emoji: '🧇',
     Icon: Cake,
     bg: ['#b45309', '#f59e0b'],
     mealIcon: Cake,
@@ -120,8 +129,10 @@ export const CHARACTERS: CharacterProfile[] = [
     preference: 'both',
   },
   {
+    id: 'shaggy',
     name: 'Shaggy Rogers',
     show: 'Scooby-Doo',
+    emoji: '🥪',
     Icon: Dog,
     bg: ['#15803d', '#4ade80'],
     mealIcon: Sandwich,

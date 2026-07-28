@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, Image, Animated, StyleSheet, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
 import { bounceIn } from '../src/utils/animations';
@@ -66,24 +65,11 @@ export default function SplashScreen() {
             }}
           />
           <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
-            <LinearGradient
-              colors={[colors.orange, '#fb923c', '#fbbf24']}
-              locations={[0, 0.4, 1]}
-              style={{
-                width: LOGO_SIZE,
-                height: LOGO_SIZE,
-                borderRadius: LOGO_SIZE / 2,
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}
-            >
-              <Image
-                source={require('../assets/moodfood-logo.png')}
-                style={{ width: 140, height: 140, borderRadius: LOGO_SIZE / 2 }}
-                resizeMode="contain"
-              />
-            </LinearGradient>
+            <Image
+              source={require('../assets/moodfood-logo.png')}
+              style={{ width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: LOGO_SIZE / 2 }}
+              resizeMode="contain"
+            />
           </Animated.View>
         </View>
         <Text style={[styles.tagline, fw(700), { color: theme.text }]}>INSTANT GOOD MOOD</Text>
