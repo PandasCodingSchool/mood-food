@@ -1,24 +1,35 @@
-"""Swiggy discovery routes (Phase 1).
+"""Swiggy discovery + ordering routes.
 
-Exposes real Swiggy restaurant/menu data so MoodFood recommendations can be
-enriched with live price/rating/ETA. All calls run against the Phase-1 service
-(bootstrap) token; per-user ordering is Phase 2.
+Discovery (search/menu/enrich) can run against the bootstrap service token;
+cart/coupon/order/track require a linked per-user token (forwarded via the
+x-swiggy-user-token header by the Node proxy) since they act on a real account.
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Request
 
 from app.schemas.swiggy import (
     AddressesResponse,
+    ApplyCouponRequest,
+    ApplyCouponResponse,
+    CartResponse,
+    CouponsResponse,
     EnrichRequest,
     EnrichResponse,
     MenuSearchRequest,
     MenuSearchResponse,
+    OrderDetailsResponse,
+    OrdersResponse,
+    PlaceOrderRequest,
+    PlaceOrderResponse,
     RestaurantSearchRequest,
     RestaurantSearchResponse,
+    TrackOrderResponse,
+    UpdateCartRequest,
 )
 from app.services.swiggy_discovery import SwiggyDiscoveryService
 from app.services.swiggy_mcp import (
@@ -27,6 +38,7 @@ from app.services.swiggy_mcp import (
     SwiggyMCPClient,
     SwiggyMCPError,
 )
+from app.services.swiggy_order import SwiggyOrderService
 
 logger = logging.getLogger("swiggy_routes")
 router = APIRouter(prefix="/api/swiggy", tags=["swiggy"])
@@ -35,6 +47,11 @@ router = APIRouter(prefix="/api/swiggy", tags=["swiggy"])
 def _service(request: Request) -> SwiggyDiscoveryService:
     user_token = request.headers.get("x-swiggy-user-token")
     return SwiggyDiscoveryService(token=user_token)
+
+
+def _order_service(request: Request) -> SwiggyOrderService:
+    user_token = request.headers.get("x-swiggy-user-token")
+    return SwiggyOrderService(token=user_token)
 
 
 @router.get("/status")
@@ -121,3 +138,120 @@ async def enrich(req: EnrichRequest, request: Request) -> EnrichResponse:
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("enrich failed: %s", exc)
         return EnrichResponse(success=False, error=str(exc))
+
+
+# --- Cart / Coupon / Order / Track (Phase 2 — ordering) ---
+
+
+@router.get("/coupons", response_model=CouponsResponse)
+async def coupons(
+    request: Request, restaurant_id: str, address_id: str, coupon_code: Optional[str] = None
+) -> CouponsResponse:
+    try:
+        return await _order_service(request).fetch_coupons(restaurant_id, address_id, coupon_code)
+    except SwiggyAddressRequiredError as exc:
+        return CouponsResponse(success=False, error=str(exc), address_required=True)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("fetch_coupons failed: %s", exc)
+        return CouponsResponse(success=False, error=str(exc))
+
+
+@router.post("/coupons/apply", response_model=ApplyCouponResponse)
+async def apply_coupon(req: ApplyCouponRequest, request: Request) -> ApplyCouponResponse:
+    try:
+        return await _order_service(request).apply_coupon(req.coupon_code, req.address_id)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("apply_coupon failed: %s", exc)
+        return ApplyCouponResponse(success=False, error=str(exc))
+
+
+@router.get("/cart", response_model=CartResponse)
+async def get_cart(request: Request, address_id: str, restaurant_name: Optional[str] = None) -> CartResponse:
+    try:
+        return await _order_service(request).get_cart(address_id, restaurant_name)
+    except SwiggyAddressRequiredError as exc:
+        return CartResponse(success=False, error=str(exc), address_required=True)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("get_cart failed: %s", exc)
+        return CartResponse(success=False, error=str(exc))
+
+
+@router.post("/cart", response_model=CartResponse)
+async def update_cart(req: UpdateCartRequest, request: Request) -> CartResponse:
+    try:
+        cart_items = [
+            {
+                "menuItemId": item.menu_item_id,
+                "quantity": item.quantity,
+                **({"variants": item.variants} if item.variants else {}),
+                **({"addons": item.addons} if item.addons else {}),
+            }
+            for item in req.items
+        ]
+        return await _order_service(request).update_cart(
+            req.restaurant_id, req.address_id, cart_items, req.restaurant_name
+        )
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("update_cart failed: %s", exc)
+        return CartResponse(success=False, error=str(exc))
+
+
+@router.delete("/cart")
+async def flush_cart(request: Request) -> dict:
+    try:
+        await _order_service(request).flush_cart()
+        return {"success": True}
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("flush_cart failed: %s", exc)
+        return {"success": False, "error": str(exc)}
+
+
+@router.post("/order", response_model=PlaceOrderResponse)
+async def place_order(req: PlaceOrderRequest, request: Request) -> PlaceOrderResponse:
+    try:
+        return await _order_service(request).place_order(
+            req.address_id, req.payment_method, req.confirmed
+        )
+    except SwiggyAddressRequiredError as exc:
+        return PlaceOrderResponse(success=False, error=str(exc), address_required=True)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("place_order failed: %s", exc)
+        return PlaceOrderResponse(success=False, error=str(exc))
+
+
+@router.get("/orders", response_model=OrdersResponse)
+async def orders(request: Request, address_id: str, order_count: int = 5) -> OrdersResponse:
+    try:
+        return await _order_service(request).get_orders(address_id, order_count)
+    except SwiggyAddressRequiredError as exc:
+        return OrdersResponse(success=False, error=str(exc), address_required=True)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("get_orders failed: %s", exc)
+        return OrdersResponse(success=False, error=str(exc))
+
+
+@router.get("/order/{order_id}", response_model=OrderDetailsResponse)
+async def order_details(request: Request, order_id: str) -> OrderDetailsResponse:
+    try:
+        return await _order_service(request).get_order_details(order_id)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("get_order_details failed: %s", exc)
+        return OrderDetailsResponse(success=False, error=str(exc))
+
+
+@router.get("/track", response_model=TrackOrderResponse)
+async def track_all(request: Request) -> TrackOrderResponse:
+    try:
+        return await _order_service(request).track_order()
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("track_order failed: %s", exc)
+        return TrackOrderResponse(success=False, error=str(exc))
+
+
+@router.get("/track/{order_id}", response_model=TrackOrderResponse)
+async def track_one(request: Request, order_id: str) -> TrackOrderResponse:
+    try:
+        return await _order_service(request).track_order(order_id)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("track_order failed: %s", exc)
+        return TrackOrderResponse(success=False, error=str(exc))

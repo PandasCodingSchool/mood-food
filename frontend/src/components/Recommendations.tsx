@@ -41,6 +41,7 @@ import TwinTasteSection from "./TwinTasteSection";
 import { logSignal, fetchLearnedProfile } from "../services/signals";
 import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from "../utils/nostalgiaGate";
 import { bumpQuestProgress } from "../services/quests";
+import CheckoutModal, { type CheckoutTarget } from "./CheckoutModal";
 import type { LearnedProfile } from "../types";
 
 // 4.2 — Veto + why: turns a useless "no" into a precise model update.
@@ -78,6 +79,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
   const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
   const [showVetoReasonsFor, setShowVetoReasonsFor] = useState<string | null>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [loaderStep, setLoaderStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -1097,24 +1099,49 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                           )}
 
                           {/* Delivery CTA */}
-                          <div className="pt-2 border-t border-gray-100 mt-1">
-                            <button
-                              onClick={() =>
-                                handleOrderOnSwiggy(liveItem?.name || d.name)
-                              }
-                              className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
-                            >
-                              <span className="flex items-center justify-center gap-2">
-                                <svg
-                                  className="w-4 h-4"
-                                  viewBox="0 0 24 24"
-                                  fill="currentColor"
-                                >
-                                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                                </svg>
-                                Order on Swiggy
-                              </span>
-                            </button>
+                          <div className="pt-2 border-t border-gray-100 mt-1 flex flex-col gap-2">
+                            {liveItem?.id && (liveItem.restaurant_id || liveRestaurant?.id) ? (
+                              <button
+                                onClick={() =>
+                                  setCheckoutTarget({
+                                    restaurantId: (liveItem.restaurant_id || liveRestaurant?.id) as string,
+                                    restaurantName: liveRestaurant?.name,
+                                    menuItemId: liveItem.id,
+                                    dishName: liveItem.name || d.name,
+                                  })
+                                }
+                                className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
+                              >
+                                <span className="flex items-center justify-center gap-2">
+                                  <svg
+                                    className="w-4 h-4"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                  >
+                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                                  </svg>
+                                  Order now!
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleOrderOnSwiggy(liveItem?.name || d.name)
+                                }
+                                className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
+                              >
+                                <span className="flex items-center justify-center gap-2">
+                                  <svg
+                                    className="w-4 h-4"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                  >
+                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                                  </svg>
+                                  Order on Swiggy
+                                </span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1486,6 +1513,10 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
       </div>
+
+      {checkoutTarget && (
+        <CheckoutModal target={checkoutTarget} onClose={() => setCheckoutTarget(null)} />
+      )}
     </div>
   );
 }

@@ -168,9 +168,19 @@ export async function initDb() {
         gradient_end VARCHAR(20) DEFAULT '#fbbf24',
         ordered BOOLEAN DEFAULT TRUE,
         saved BOOLEAN DEFAULT FALSE,
+        swiggy_order_id VARCHAR(255),
+        restaurant_id VARCHAR(255),
+        menu_item_id VARCHAR(255),
+        address_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
       await db.query(`CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(user_id)`);
+
+      // Real in-app Swiggy orders (migration-safe — order_history predates ordering)
+      await db.query(`ALTER TABLE order_history ADD COLUMN IF NOT EXISTS swiggy_order_id VARCHAR(255)`);
+      await db.query(`ALTER TABLE order_history ADD COLUMN IF NOT EXISTS restaurant_id VARCHAR(255)`);
+      await db.query(`ALTER TABLE order_history ADD COLUMN IF NOT EXISTS menu_item_id VARCHAR(255)`);
+      await db.query(`ALTER TABLE order_history ADD COLUMN IF NOT EXISTS address_id VARCHAR(255)`);
 
       // Per-user in-app notifications
       await db.query(`CREATE TABLE IF NOT EXISTS notifications (
@@ -353,6 +363,10 @@ export async function initDb() {
         gradient_end TEXT DEFAULT '#fbbf24',
         ordered INTEGER DEFAULT 1,
         saved INTEGER DEFAULT 0,
+        swiggy_order_id TEXT,
+        restaurant_id TEXT,
+        menu_item_id TEXT,
+        address_id TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -489,6 +503,10 @@ export async function initDb() {
       "ALTER TABLE users ADD COLUMN automation_pref TEXT DEFAULT 'balanced'",
       "ALTER TABLE users ADD COLUMN comfort_anchors_json TEXT",
       "ALTER TABLE users ADD COLUMN push_token TEXT",
+      "ALTER TABLE order_history ADD COLUMN swiggy_order_id TEXT",
+      "ALTER TABLE order_history ADD COLUMN restaurant_id TEXT",
+      "ALTER TABLE order_history ADD COLUMN menu_item_id TEXT",
+      "ALTER TABLE order_history ADD COLUMN address_id TEXT",
     ];
     for (const migration of sqliteMigrations) {
       try {

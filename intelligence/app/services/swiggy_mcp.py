@@ -204,6 +204,28 @@ class SwiggyMCPClient:
             raise last_error
         raise SwiggyMCPError(f"Swiggy tool '{name}' failed: {last_error}", retryable=True)
 
+    async def call_tool_once(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Call a tool exactly once — no retry loop.
+
+        Use for non-idempotent tools (place_food_order): on a transport
+        failure the caller does not know whether the order was actually
+        placed, so blindly retrying here would risk a double order. Callers
+        should instead verify via a safe, idempotent read (get_food_orders)
+        before ever attempting a second placement.
+        """
+        if self._active is not None:
+            return await self._active.call_tool_once(name, arguments)
+        if not self._token:
+            raise SwiggyAuthError(
+                "No Swiggy token available. Set SWIGGY_BOOTSTRAP_TOKEN (Phase 1) "
+                "or link a user account (Phase 2)."
+            )
+        await _await_rate_limit_cooldown(name)
+        async with _MCP_SEMAPHORE:
+            return await asyncio.wait_for(
+                self._call_once(name, arguments), timeout=settings.swiggy_timeout_s
+            )
+
     async def _call_once(self, name: str, arguments: dict[str, Any]) -> Any:
         ClientSession, streamablehttp_client = _import_mcp()
         headers = {"Authorization": f"Bearer {self._token}"}  # never logged
@@ -306,6 +328,31 @@ class _BoundSession:
 
     async def aclose(self) -> None:
         await self._reset()
+
+    async def call_tool_once(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Single-attempt call within the shared session — see SwiggyMCPClient.call_tool_once."""
+        await _await_rate_limit_cooldown(name)
+        async with _MCP_SEMAPHORE:
+            await self._ensure()
+            logger.info("→ Swiggy tool '%s' args=%s (session, no-retry)", name, _preview(arguments, 300))
+            start = time.time()
+            try:
+                result = await asyncio.wait_for(
+                    self._session.call_tool(name, arguments), timeout=settings.swiggy_timeout_s
+                )
+            except SwiggyAuthError:
+                raise
+            except SwiggyMCPError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - transport error: reconnect for next call
+                detail = _unwrap_error(exc)
+                await self._reset()
+                if _is_auth_failure_text(detail):
+                    raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
+                raise SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True) from exc
+            ms = (time.time() - start) * 1000
+            logger.info("← Swiggy tool '%s' returned in %.0fms (session, no-retry)", name, ms)
+            return _parse_tool_result(result)
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         await _await_rate_limit_cooldown(name)

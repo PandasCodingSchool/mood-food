@@ -52,6 +52,10 @@ router.get("/", async (req, res) => {
       gradientEnd: r.gradient_end,
       ordered: pg ? r.ordered : !!r.ordered,
       saved: pg ? r.saved : !!r.saved,
+      swiggyOrderId: r.swiggy_order_id,
+      restaurantId: r.restaurant_id,
+      menuItemId: r.menu_item_id,
+      addressId: r.address_id,
       createdAt: r.created_at,
     }));
 
@@ -79,6 +83,10 @@ router.post("/", async (req, res) => {
       gradientEnd = "#fbbf24",
       ordered = true,
       saved = false,
+      swiggyOrderId,
+      restaurantId,
+      menuItemId,
+      addressId,
     } = req.body || {};
 
     if (!dishName) return res.status(400).json({ error: "dishName is required" });
@@ -90,16 +98,24 @@ router.post("/", async (req, res) => {
     if (pg) {
       await db.query(
         `INSERT INTO order_history
-          (id, user_id, dish_name, cuisine, emoji, price_inr, platform, via, gradient_start, gradient_end, ordered, saved)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [id, userId, dishName, cuisine || null, emoji, priceInr, platform, via || null, gradientStart, gradientEnd, ordered, saved],
+          (id, user_id, dish_name, cuisine, emoji, price_inr, platform, via, gradient_start, gradient_end, ordered, saved,
+           swiggy_order_id, restaurant_id, menu_item_id, address_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [
+          id, userId, dishName, cuisine || null, emoji, priceInr, platform, via || null, gradientStart, gradientEnd, ordered, saved,
+          swiggyOrderId || null, restaurantId || null, menuItemId || null, addressId || null,
+        ],
       );
     } else {
       await db.run(
         `INSERT INTO order_history
-          (id, user_id, dish_name, cuisine, emoji, price_inr, platform, via, gradient_start, gradient_end, ordered, saved)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, userId, dishName, cuisine || null, emoji, priceInr, platform, via || null, gradientStart, gradientEnd, ordered ? 1 : 0, saved ? 1 : 0],
+          (id, user_id, dish_name, cuisine, emoji, price_inr, platform, via, gradient_start, gradient_end, ordered, saved,
+           swiggy_order_id, restaurant_id, menu_item_id, address_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          id, userId, dishName, cuisine || null, emoji, priceInr, platform, via || null, gradientStart, gradientEnd, ordered ? 1 : 0, saved ? 1 : 0,
+          swiggyOrderId || null, restaurantId || null, menuItemId || null, addressId || null,
+        ],
       );
     }
 

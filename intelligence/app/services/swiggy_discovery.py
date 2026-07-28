@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any, Optional
 
@@ -91,7 +92,8 @@ def normalize_restaurant(raw: dict) -> Optional[SwiggyRestaurant]:
         return None
     eta = _first(
         raw, "deliveryTimeMinutes", "eta_min", "etaMinutes", "deliveryTime",
-        "delivery_time_min", "sla",
+        "delivery_time_min", "sla", "deliveryTimeRange", "delivery_time_range",
+        "slaString",
     )
     status = _first(raw, "availabilityStatus", "availability_status", "status")
     is_open = True if status is None else str(status).upper() == "OPEN"
@@ -102,12 +104,14 @@ def normalize_restaurant(raw: dict) -> Optional[SwiggyRestaurant]:
         id=str(rid),
         name=str(name),
         rating=_to_float(_first(raw, "avgRating", "rating", "avg_rating")),
-        eta_min=_to_int(eta),
+        eta_min=_parse_eta_int(eta),
         distance_km=_to_float(_first(raw, "distanceKm", "distance_km", "distance")),
         cuisines=[str(c) for c in cuisines] if isinstance(cuisines, list) else [],
         image_url=_first(raw, "imageUrl", "image_url", "cloudinaryImageId", "image"),
         is_open=is_open,
-        cost_for_two=_parse_price_int(_first(raw, "costForTwo", "cost_for_two", "cft")),
+        cost_for_two=_parse_price_int(
+            _first(raw, "costForTwo", "cost_for_two", "cft", "costForTwoMessage")
+        ),
     )
 
 
@@ -127,7 +131,9 @@ def normalize_menu_item(raw: dict) -> Optional[SwiggyMenuItem]:
         description=_to_str(_first(raw, "description", "desc")),
         restaurant_id=_to_str(_first(raw, "restaurant_id", "restaurantId")),
         restaurant_name=_to_str(_first(raw, "restaurant_name", "restaurantName")),
-        eta_min=_to_int(_first(raw, "eta_min", "deliveryTime", "sla")),
+        eta_min=_parse_eta_int(
+            _first(raw, "eta_min", "deliveryTimeMinutes", "deliveryTime", "sla", "deliveryTimeRange")
+        ),
     )
 
 
@@ -195,6 +201,23 @@ def _parse_price_int(v: Any) -> Optional[int]:
     return int(digits) if digits else None
 
 
+def _parse_eta_int(v: Any) -> Optional[int]:
+    """Extract a single-number ETA (minutes) from a numeric value or a range
+    string like '25-30 mins' / '25-30' (real search_restaurants responses often
+    carry deliveryTimeRange instead of/alongside a numeric deliveryTimeMinutes).
+    Ranges are collapsed to their midpoint.
+    """
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return int(v)
+    numbers = re.findall(r"\d+", str(v))
+    if not numbers:
+        return None
+    values = [int(n) for n in numbers[:2]]
+    return round(sum(values) / len(values))
+
+
 class SwiggyDiscoveryService:
     def __init__(
         self,
@@ -207,6 +230,12 @@ class SwiggyDiscoveryService:
         # shared tasks so each (query) and (restaurantId) is fetched at most once.
         self._search_tasks: dict[str, "asyncio.Task[list[SwiggyRestaurant]]"] = {}
         self._menu_tasks: dict[str, "asyncio.Task[list[SwiggyMenuItem]]"] = {}
+        # get_restaurant_menu responses carry restaurant-level fields (deliveryTime,
+        # slaString, rating) alongside the menu itself, sibling to "categories" —
+        # often more reliably populated than search_restaurants' own eta field.
+        # Captured once per restaurant (from _fetch_menu_items) and used to backfill
+        # a restaurant's eta_min when the search-result copy came back empty.
+        self._restaurant_meta: dict[str, SwiggyRestaurant] = {}
         self._tier_tasks: dict[str, "asyncio.Task[dict[str, str]]"] = {}
 
     async def list_addresses(self) -> list[dict]:
@@ -332,10 +361,45 @@ class SwiggyDiscoveryService:
         except (SwiggyMCPError, SwiggyAuthError) as exc:
             logger.warning("enrich: menu fetch failed for restaurant %s: %s", restaurant_id, exc)
             return []
+        unwrapped = _unwrap_envelope(raw)
+        if isinstance(unwrapped, dict):
+            # get_restaurant_menu nests the summary under "restaurant" (sibling
+            # of "categories"); some shapes may return it flat instead — try both.
+            restaurant_node = unwrapped.get("restaurant")
+            meta = normalize_restaurant(restaurant_node) if isinstance(restaurant_node, dict) else None
+            if meta is None:
+                meta = normalize_restaurant(unwrapped)
+            if meta is not None:
+                self._restaurant_meta[restaurant_id] = meta
         items = _extract_menu_items(raw, restaurant_id)
         if not items:
             logger.warning("enrich: no menu items extracted for restaurant %s", restaurant_id)
         return items
+
+    def _backfill_restaurant_meta(self, restaurant: SwiggyRestaurant) -> SwiggyRestaurant:
+        """Fill missing fields (eta, cuisines, image, cost-for-two, rating) from
+        the cached get_restaurant_menu metadata. Restaurants built from a bare
+        matched menu item (the match_via_menu_search path) only carry id/name/
+        rating/eta straight from the item, leaving everything else empty — the
+        get_restaurant_menu response for that same restaurant (already fetched
+        for menu items / alternatives) reliably has the rest."""
+        meta = self._restaurant_meta.get(restaurant.id)
+        if meta is None:
+            return restaurant
+        updates: dict[str, Any] = {}
+        if restaurant.eta_min is None and meta.eta_min is not None:
+            updates["eta_min"] = meta.eta_min
+        if not restaurant.cuisines and meta.cuisines:
+            updates["cuisines"] = meta.cuisines
+        if restaurant.image_url is None and meta.image_url is not None:
+            updates["image_url"] = meta.image_url
+        if restaurant.cost_for_two is None and meta.cost_for_two is not None:
+            updates["cost_for_two"] = meta.cost_for_two
+        if restaurant.rating is None and meta.rating is not None:
+            updates["rating"] = meta.rating
+        if restaurant.distance_km is None and meta.distance_km is not None:
+            updates["distance_km"] = meta.distance_km
+        return restaurant.model_copy(update=updates) if updates else restaurant
 
     async def _menu_item_tiers(self, restaurant_id: str, items: list[SwiggyMenuItem]) -> dict[str, str]:
         """Cached keyword tiers — skip LLM on the hot path for latency."""
@@ -553,6 +617,7 @@ class SwiggyDiscoveryService:
             chosen = best or closest
             if chosen is not None:
                 conf, restaurant, item = chosen
+                restaurant = self._backfill_restaurant_meta(restaurant)
                 logger.info(
                     "enrich: dish %r -> %r @ %r ₹%s (conf=%.1f)",
                     dish.name, item.name, restaurant.name, item.price, conf,
@@ -564,6 +629,8 @@ class SwiggyDiscoveryService:
             queued = _scout_candidates.get(dish.id)
             if queued is not None:
                 item, restaurant, conf = queued
+                if restaurant is not None:
+                    restaurant = self._backfill_restaurant_meta(restaurant)
                 logger.info(
                     "enrich: closest-fill dish %r -> %r @ %r ₹%s (conf=%.1f)",
                     dish.name, item.name,
@@ -623,6 +690,8 @@ class SwiggyDiscoveryService:
                     if d.id not in unmatched_ids or d.id not in _scout_candidates:
                         continue
                     bl_item, bl_restaurant, _ = _scout_candidates[d.id]
+                    if bl_restaurant is not None:
+                        bl_restaurant = self._backfill_restaurant_meta(bl_restaurant)
                     decision = scout_decisions.get((d.id, bl_item.id))
                     if decision is None:
                         continue
@@ -647,6 +716,11 @@ class SwiggyDiscoveryService:
                 if m.restaurant.id.startswith("menu:"):
                     continue
                 all_items = await self._menu_items(m.restaurant.id, addr)
+                # match_via_menu_search never drills into get_restaurant_menu (it
+                # only has the matched item's own fields, which rarely carry eta),
+                # so this is the first point where restaurant-level deliveryTime
+                # becomes available for that path — backfill it here.
+                m.restaurant = self._backfill_restaurant_meta(m.restaurant)
                 tiers = await self._menu_item_tiers(m.restaurant.id, all_items)
                 alts = _pick_swiggy_alternatives(m.item, all_items, tiers, exclude_ids=used_alt_ids)
                 m.swiggy_alternatives = alts

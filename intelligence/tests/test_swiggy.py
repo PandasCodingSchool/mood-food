@@ -36,6 +36,29 @@ def test_normalize_restaurant_handles_varied_keys():
     assert r.cuisines == ["Indian"]
 
 
+def test_normalize_restaurant_falls_back_to_delivery_time_range():
+    """Real search_restaurants responses sometimes carry only deliveryTimeRange
+    (e.g. '25-30 mins') with no numeric deliveryTimeMinutes — must not silently
+    drop ETA in that case."""
+    raw = {
+        "id": "r3", "name": "Range Only", "deliveryTimeRange": "25-30 mins",
+        "availabilityStatus": "OPEN",
+    }
+    r = normalize_restaurant(raw)
+    assert r is not None
+    assert r.eta_min == 28  # midpoint of 25-30, rounded
+
+
+def test_normalize_restaurant_prefers_numeric_eta_over_range():
+    raw = {
+        "id": "r4", "name": "Both Fields", "deliveryTimeMinutes": 22,
+        "deliveryTimeRange": "40-50 mins", "availabilityStatus": "OPEN",
+    }
+    r = normalize_restaurant(raw)
+    assert r is not None
+    assert r.eta_min == 22
+
+
 def test_normalize_restaurant_closed_and_missing_id():
     assert normalize_restaurant({"name": "no id"}) is None
     closed = normalize_restaurant(
@@ -263,6 +286,95 @@ async def test_enrich_two_step_matches_real_item():
     assert m.item.name == "Spaghetti Carbonara"
     assert m.item.price == 420
     assert m.item.image_url == "https://img/x.jpg"
+
+
+@pytest.mark.asyncio
+async def test_enrich_backfills_eta_from_restaurant_menu_when_search_omits_it():
+    """search_restaurants sometimes returns no eta at all; get_restaurant_menu's
+    nested restaurant summary (sibling of "categories") reliably carries
+    deliveryTime — the final match should pick that up instead of showing none."""
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_restaurants":
+            return {"restaurants": [
+                {"id": "r1", "name": "Pimlico", "availabilityStatus": "OPEN",
+                 "cuisines": ["Continental"]},  # no eta field at all here
+            ]}
+        if name == "get_restaurant_menu":
+            return {
+                "restaurant": {
+                    "id": "r1", "name": "Pimlico", "deliveryTime": 32,
+                    "slaString": "30-35 MINS", "avgRating": 4.2,
+                },
+                "categories": [{"title": "Recommended", "items": [
+                    {"id": "i1", "name": "Chicken Parmigiano", "price": 645, "isVeg": False},
+                ]}],
+            }
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    from app.schemas.swiggy import EnrichDishInput
+
+    addr, matches = await svc.enrich(
+        [EnrichDishInput(id="d1", name="Chicken Parmigiano", cuisine="continental")],
+        address_id="a1",
+    )
+    m = matches[0]
+    assert m.matched is True
+    assert m.restaurant.eta_min == 32, "eta must be backfilled from get_restaurant_menu"
+
+
+@pytest.mark.asyncio
+async def test_enrich_backfills_eta_for_menu_search_match():
+    """match_via_menu_search (the exact-name path, tried first) builds its
+    restaurant purely from the matched item's own fields, which rarely carry
+    eta. The alternatives-computation pass at the end of enrich() calls
+    get_restaurant_menu for every real (non-'menu:'-prefixed) restaurant id
+    anyway — that must backfill eta_min too, not just the match_via_restaurants
+    fallback path."""
+    client = SwiggyMCPClient(token="test-token")
+
+    async def fake_call(name, args):
+        if name == "search_menu":
+            return {"items": [
+                {"id": "i1", "name": "Spaghetti Carbonara", "price": 420,
+                 "restaurant_id": "r1", "restaurant_name": "Pasta Palace"},
+                # no eta_min on the item — matches real search_menu behavior
+            ]}
+        if name == "get_restaurant_menu":
+            return {
+                "restaurant": {
+                    "id": "r1", "name": "Pasta Palace", "deliveryTime": 27,
+                    "cuisines": ["Italian", "Continental"],
+                    "imageUrl": "https://img/pasta-palace.jpg",
+                    "costForTwoMessage": "₹700 for two",
+                },
+                "categories": [{"title": "Recommended", "items": [
+                    {"id": "i1", "name": "Spaghetti Carbonara", "price": 420},
+                    {"id": "i2", "name": "Margherita Pizza", "price": 300},
+                ]}],
+            }
+        return {}
+
+    client.call_tool = AsyncMock(side_effect=fake_call)
+    svc = SwiggyDiscoveryService(client=client)
+
+    from app.schemas.swiggy import EnrichDishInput
+
+    addr, matches = await svc.enrich(
+        [EnrichDishInput(id="d1", name="Spaghetti Carbonara", cuisine="italian")],
+        address_id="a1",
+    )
+    m = matches[0]
+    assert m.matched is True
+    assert m.restaurant.id == "r1"  # confirms it went through match_via_menu_search, not the "menu:" synthetic id
+    assert m.restaurant.eta_min == 27, "eta must be backfilled even for the exact-name search_menu match path"
+    assert m.restaurant.cuisines == ["Italian", "Continental"]
+    assert m.restaurant.image_url == "https://img/pasta-palace.jpg"
+    assert m.restaurant.cost_for_two == 700
 
 
 @pytest.mark.asyncio

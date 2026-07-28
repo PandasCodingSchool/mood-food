@@ -256,10 +256,16 @@ async def _run_pipeline(
 
     user_token = request.headers.get("x-swiggy-user-token")
     from app.services.swiggy_token import load_token
-    from app.services.swiggy_mcp import SwiggyMCPClient
+    from app.services.swiggy_mcp import SwiggyAuthError, SwiggyMCPClient
     from app.services.swiggy_discovery import SwiggyDiscoveryService
 
     token = user_token or load_token()
+    if not token:
+        logger.warning(
+            "ai-recommendations: no Swiggy token available (no x-swiggy-user-token "
+            "header and no usable SWIGGY_BOOTSTRAP_TOKEN/stored token) — skipping "
+            "live enrichment entirely; live_status will be 'offline' with zero matches"
+        )
     if token:
         client = SwiggyMCPClient(token=token)
         service = SwiggyDiscoveryService(client=client)
@@ -280,6 +286,15 @@ async def _run_pipeline(
                     for m in matches:
                         if m.matched:
                             live_facts[m.dish_id] = m.model_dump()
+                except SwiggyAuthError as exc:
+                    logger.warning(
+                        "ai-recommendations: Swiggy token REJECTED (%s) — "
+                        "SWIGGY_BOOTSTRAP_TOKEN is likely expired (Swiggy v1 tokens "
+                        "have no refresh token; re-auth with `python -m scripts.swiggy_auth "
+                        "--save`) or the linked user's token expired. Live enrichment "
+                        "aborted for this request.", exc,
+                    )
+                    break
                 except Exception as exc:
                     logger.warning("ai-recommendations: swiggy enrich failed: %s", exc)
                     break
