@@ -94,6 +94,7 @@ export async function initDb() {
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS question_budget INTEGER DEFAULT 3`);
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS automation_pref VARCHAR(50) DEFAULT 'balanced'`);
       await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS comfort_anchors_json TEXT`);
+      await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT`);
 
       // Append-only personalization event log (the "signals spine")
       await db.query(`CREATE TABLE IF NOT EXISTS signals (
@@ -487,6 +488,7 @@ export async function initDb() {
       "ALTER TABLE users ADD COLUMN question_budget INTEGER DEFAULT 3",
       "ALTER TABLE users ADD COLUMN automation_pref TEXT DEFAULT 'balanced'",
       "ALTER TABLE users ADD COLUMN comfort_anchors_json TEXT",
+      "ALTER TABLE users ADD COLUMN push_token TEXT",
     ];
     for (const migration of sqliteMigrations) {
       try {

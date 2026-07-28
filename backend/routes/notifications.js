@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { getDb, isPostgres } from "../db.js";
 import { resolveUserId } from "../middleware/session.js";
 
+const PUSH_TOKEN_RE = /^ExponentPushToken\[[\w-]+\]$/;
+
 const router = Router();
 
 // GET /api/user/notifications  — list newest 50
@@ -69,6 +71,32 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("POST /notifications error:", err);
     return res.status(500).json({ error: "Failed to create notification" });
+  }
+});
+
+// POST /api/user/notifications/register-push-token  — store Expo push token
+router.post("/register-push-token", async (req, res) => {
+  try {
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: "No session" });
+
+    const { token } = req.body || {};
+    if (!token || !PUSH_TOKEN_RE.test(token)) {
+      return res.status(400).json({ error: "Invalid Expo push token" });
+    }
+
+    const db = getDb();
+    const pg = isPostgres();
+    const sql = pg
+      ? "UPDATE users SET push_token = $1 WHERE id = $2"
+      : "UPDATE users SET push_token = ? WHERE id = ?";
+    if (pg) await db.query(sql, [token, userId]);
+    else await db.run(sql, [token, userId]);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("POST /notifications/register-push-token error:", err);
+    return res.status(500).json({ error: "Failed to register push token" });
   }
 });
 

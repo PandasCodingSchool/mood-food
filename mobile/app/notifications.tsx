@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ComponentType } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Bell, ChevronLeft, ShoppingCart, Utensils, Ticket, Megaphone } from 'lucide-react-native';
+import { Bell, ChevronLeft, ShoppingCart, Utensils, Ticket, Megaphone, Trophy } from 'lucide-react-native';
 import { fw, colors } from '../src/constants/theme';
 import BottomNav from '../src/components/BottomNav';
 import { useTheme } from '../src/context/ThemeContext';
@@ -12,6 +12,8 @@ type NotifIcon = ComponentType<{ size?: number; color?: string }>;
 
 const TYPE_META: Record<string, { Icon: NotifIcon; accent: string }> = {
   order:  { Icon: ShoppingCart, accent: colors.orange },
+  order_placed:  { Icon: ShoppingCart, accent: colors.orange },
+  quest_completed:  { Icon: Trophy, accent: colors.purple },
   swiggy: { Icon: Utensils, accent: colors.green },
   promo:  { Icon: Ticket, accent: colors.purple },
   info:   { Icon: Megaphone, accent: colors.cyan },

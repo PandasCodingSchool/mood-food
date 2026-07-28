@@ -2,6 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import { getDb, isPostgres } from "../db.js";
 import { resolveUserId } from "../middleware/session.js";
+import { createNotification } from "../lib/notifications.js";
 
 const router = Router();
 
@@ -100,6 +101,16 @@ router.post("/", async (req, res) => {
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, userId, dishName, cuisine || null, emoji, priceInr, platform, via || null, gradientStart, gradientEnd, ordered ? 1 : 0, saved ? 1 : 0],
       );
+    }
+
+    if (ordered) {
+      void createNotification({
+        userId,
+        type: "order_placed",
+        title: "Order placed!",
+        body: `Your ${dishName} order is on its way.`,
+        data: { orderId: id, dishName, platform, priceInr },
+      });
     }
 
     return res.status(201).json({ success: true, id });

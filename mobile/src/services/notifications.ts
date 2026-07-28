@@ -2,7 +2,7 @@ import { API_BASE_URL, getHeaders } from './apiBase';
 
 export interface AppNotification {
   id: string;
-  type: 'order' | 'info' | 'promo' | 'swiggy';
+  type: 'order' | 'order_placed' | 'quest_completed' | 'info' | 'promo' | 'swiggy';
   title: string;
   body?: string | null;
   data?: Record<string, unknown>;

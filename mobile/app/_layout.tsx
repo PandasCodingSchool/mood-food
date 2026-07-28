@@ -2,6 +2,7 @@ import "../global.css";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ThemeProvider } from '../src/context/ThemeContext';
+import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { Component, type ReactNode } from "react";
 import { View, Text } from "react-native";
 import {
@@ -46,6 +47,8 @@ class ErrorBoundary extends Component<
 }
 
 export default function RootLayout() {
+  usePushNotifications();
+
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
     Nunito_600SemiBold,

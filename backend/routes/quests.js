@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getDb, isPostgres } from "../db.js";
 import { resolveUserId } from "../middleware/session.js";
 import { logSignalInternal } from "../lib/signalWriter.js";
+import { createNotification } from "../lib/notifications.js";
 
 const router = Router();
 
@@ -149,6 +150,14 @@ router.post("/:key/progress", async (req, res) => {
 
     if (status === "completed" && existing?.status !== "completed") {
       await logSignalInternal(userId, "quest_event", { quest_key: key, event: "completed" });
+      const questTitle = QUEST_DEFINITIONS.find((q) => q.key === key)?.title || "Quest";
+      void createNotification({
+        userId,
+        type: "quest_completed",
+        title: "Quest complete!",
+        body: `You completed "${questTitle}".`,
+        data: { questKey: key, questTitle },
+      });
     }
 
     return res.json({ success: true, count: nextCount, target, status });
