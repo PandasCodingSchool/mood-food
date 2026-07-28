@@ -7,7 +7,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api"
+        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api",
+        "EXPO_PUBLIC_SWIGGY_LIVE": "true"
       }
     },
     "preview": {
@@ -16,12 +17,14 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api"
+        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api",
+        "EXPO_PUBLIC_SWIGGY_LIVE": "true"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api"
+        "EXPO_PUBLIC_API_URL": "https://moodfood.fun/api",
+        "EXPO_PUBLIC_SWIGGY_LIVE": "true"
       }
     }
   },
