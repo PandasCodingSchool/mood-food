@@ -81,7 +81,7 @@ export default function OrderAppSelectScreen() {
               }}
             >
               <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
-                <AppIcon size={28} color={theme.text} />
+                <AppIcon size={28} color={colors.navy} />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

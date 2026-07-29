@@ -1,7 +1,20 @@
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { API_BASE_URL, getHeaders } from './apiBase';
+
+// Lazy-load expo-notifications because importing it eagerly in Expo Go
+// crashes on SDK 53 (remote push notifications are unavailable there).
+async function loadNotificationsModule() {
+  try {
+    return await import('expo-notifications');
+  } catch {
+    return null;
+  }
+}
+
+function isExpoGo(): boolean {
+  return Constants.executionEnvironment === 'storeClient' || Constants.appOwnership === 'expo';
+}
 
 const PUSH_TOKEN_STORAGE_KEY = 'moodfood_push_token';
 
@@ -48,6 +61,16 @@ async function registerTokenOnServer(token: string): Promise<void> {
 
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
+  if (isExpoGo()) {
+    console.log('Push token registration skipped in Expo Go');
+    return null;
+  }
+
+  const Notifications = await loadNotificationsModule();
+  if (!Notifications) {
+    console.warn('expo-notifications not available');
+    return null;
+  }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -77,6 +100,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
   try {
     const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (!tokenResponse?.data) return null;
     const token = tokenResponse.data;
 
     const lastToken = await getLastRegisteredToken();

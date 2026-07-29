@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, MapPin, Clock, Car, ShoppingCart } from 'lucide-react-native';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -15,6 +16,7 @@ import { bumpQuestProgress } from '../../src/services/quests';
 export default function OrderConfirmScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { bottom: safeBottom } = useSafeAreaInsets();
   const { rec: rawRec, rank: rawRank, appName } = useLocalSearchParams<{
     rec: string;
     rank?: string;
@@ -90,10 +92,10 @@ export default function OrderConfirmScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140, gap: 16 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 + safeBottom, gap: 16 }} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
-            <AppIcon size={20} color={theme.text} />
+            <AppIcon size={20} color={colors.navy} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -173,16 +175,24 @@ export default function OrderConfirmScreen() {
         </View>
       </ScrollView>
 
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, backgroundColor: theme.bg }}>
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40 + safeBottom, backgroundColor: theme.bg }}>
         <TouchableOpacity
           activeOpacity={0.85}
           disabled={placing}
           onPress={handlePlaceOrder}
+          style={{
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: colors.orange,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 8,
+            opacity: placing ? 0.7 : 1,
+          }}
         >
-          <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, opacity: placing ? 0.7 : 1 }}>
-            <ShoppingCart size={20} color="#fff" />
-            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>{placing ? 'Placing…' : `Place Order · ₹${total.toFixed(0)}`}</Text>
-          </LinearGradient>
+          <ShoppingCart size={20} color="#fff" />
+          <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>{placing ? 'Placing…' : `Place Order · ₹${total.toFixed(0)}`}</Text>
         </TouchableOpacity>
       </View>
     </View>

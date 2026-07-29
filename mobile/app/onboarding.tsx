@@ -146,7 +146,7 @@ export default function OnboardingScreen() {
           <GradientButton
             label={isLast ? "Let's eat!" : 'Continue'}
             icon={isLast ? <Utensils size={18} color="#fff" /> : undefined}
-            colors={step.btnColors ?? [colors.orange, '#fbbf24']}
+            colors={step.btnColors ?? [colors.orange, colors.orange]}
             onPress={handleNext}
           />
         </View>

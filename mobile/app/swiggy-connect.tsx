@@ -153,18 +153,27 @@ export default function SwiggyConnectScreen() {
               </Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={handleConnect} disabled={connecting} activeOpacity={0.85}>
-              <LinearGradient
-                colors={['#f97316', '#fbbf24']}
-                style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, opacity: connecting ? 0.7 : 1 }}
-              >
-                {connecting
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Link2 size={20} color="#fff" />}
-                <Text style={[fw(900), { fontSize: 17, color: '#fff' }]}>
-                  {connecting ? 'Opening Swiggy…' : 'Connect Swiggy'}
-                </Text>
-              </LinearGradient>
+            <TouchableOpacity
+              onPress={handleConnect}
+              disabled={connecting}
+              activeOpacity={0.85}
+              style={{
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: colors.orange,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 10,
+                opacity: connecting ? 0.7 : 1,
+              }}
+            >
+              {connecting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Link2 size={20} color="#fff" />}
+              <Text style={[fw(900), { fontSize: 17, color: '#fff' }]}>
+                {connecting ? 'Opening Swiggy…' : 'Connect Swiggy'}
+              </Text>
             </TouchableOpacity>
           )}
 

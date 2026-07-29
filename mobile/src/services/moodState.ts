@@ -16,7 +16,7 @@ export interface MoodCheckin {
 
 const KEY = 'moodfood_mood_checkin';
 
-function today(): string {
+export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 

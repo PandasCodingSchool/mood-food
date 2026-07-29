@@ -6,6 +6,12 @@ import { createNotification } from "../lib/notifications.js";
 
 const router = Router();
 
+function getYesterday(dateStr) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // 5.2 — Streaks & taste-discovery quests. Definitions are seeded once at
 // boot (idempotent upsert-by-key); the orchestrator decides WHICH quest to
 // surface (exploration lever when diversity is low) — this route is just
@@ -125,26 +131,52 @@ router.post("/:key/progress", async (req, res) => {
       : await db.get(existingSql, [userId, quest.id]);
     const existing = pg ? existingResult.rows[0] : existingResult;
 
-    const currentCount = existing ? JSON.parse(existing.progress_json || "{}").count ?? 0 : 0;
-    const nextCount = currentCount + increment;
+    const existingProgress = existing ? JSON.parse(existing.progress_json || "{}") : {};
+    const currentCount = existingProgress.count ?? 0;
+    const currentStreak = existing?.streak_count || 0;
+    const todayStr = req.body?.date || new Date().toISOString().slice(0, 10);
+
+    let nextCount = currentCount + increment;
+    let nextStreak = currentStreak;
+    let lastCheckinDate = existingProgress.lastCheckinDate;
+
+    // mood_streak_7 is a daily streak: progress equals the current streak length.
+    if (key === "mood_streak_7") {
+      if (!existing || !lastCheckinDate) {
+        // First tracked check-in: seed streak from the legacy progress count if available.
+        nextStreak = existing ? Math.min(currentCount, target) || 1 : 1;
+      } else if (lastCheckinDate === todayStr) {
+        nextStreak = currentStreak;
+      } else if (lastCheckinDate === getYesterday(todayStr)) {
+        nextStreak = currentStreak + 1;
+      } else {
+        nextStreak = 1;
+      }
+      nextCount = nextStreak;
+      lastCheckinDate = todayStr;
+    }
+
     const status = nextCount >= target ? "completed" : "active";
-    const progressJson = JSON.stringify({ count: nextCount });
+    const progressJson = JSON.stringify({
+      count: nextCount,
+      ...(lastCheckinDate ? { lastCheckinDate } : {}),
+    });
 
     if (pg) {
       await db.query(
         `INSERT INTO user_quests (user_id, quest_id, progress_json, status, streak_count, updated_at)
          VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
          ON CONFLICT (user_id, quest_id) DO UPDATE SET
-           progress_json = EXCLUDED.progress_json, status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP`,
-        [userId, quest.id, progressJson, status, existing?.streak_count || 0],
+           progress_json = EXCLUDED.progress_json, status = EXCLUDED.status, streak_count = EXCLUDED.streak_count, updated_at = CURRENT_TIMESTAMP`,
+        [userId, quest.id, progressJson, status, nextStreak],
       );
     } else {
       await db.run(
         `INSERT INTO user_quests (user_id, quest_id, progress_json, status, streak_count, updated_at)
          VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)
          ON CONFLICT(user_id, quest_id) DO UPDATE SET
-           progress_json = excluded.progress_json, status = excluded.status, updated_at = CURRENT_TIMESTAMP`,
-        [userId, quest.id, progressJson, status, existing?.streak_count || 0],
+           progress_json = excluded.progress_json, status = excluded.status, streak_count = excluded.streak_count, updated_at = CURRENT_TIMESTAMP`,
+        [userId, quest.id, progressJson, status, nextStreak],
       );
     }
 
@@ -160,7 +192,7 @@ router.post("/:key/progress", async (req, res) => {
       });
     }
 
-    return res.json({ success: true, count: nextCount, target, status });
+    return res.json({ success: true, count: nextCount, target, status, streak_count: nextStreak });
   } catch (err) {
     console.error("POST /quests/:key/progress error:", err);
     return res.status(500).json({ error: "Failed to update quest progress" });

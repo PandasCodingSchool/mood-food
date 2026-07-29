@@ -57,10 +57,18 @@ export default function MindReaderScreen() {
         <Text style={[fw(800), { fontSize: 18, color: theme.text, marginTop: 16, textAlign: 'center' }]}>
           Couldn't read your mind this time
         </Text>
-        <TouchableOpacity onPress={() => router.push('/home')} activeOpacity={0.85} style={{ marginTop: 24 }}>
-          <LinearGradient colors={['#f97316', '#fbbf24']} style={{ paddingVertical: 14, paddingHorizontal: 28, borderRadius: 24 }}>
-            <Text style={[fw(800), { color: '#fff', fontSize: 15 }]}>Back to games</Text>
-          </LinearGradient>
+        <TouchableOpacity
+          onPress={() => router.push('/home')}
+          activeOpacity={0.85}
+          style={{
+            marginTop: 24,
+            paddingVertical: 14,
+            paddingHorizontal: 28,
+            borderRadius: 24,
+            backgroundColor: colors.orange,
+          }}
+        >
+          <Text style={[fw(800), { color: '#fff', fontSize: 15 }]}>Back to games</Text>
         </TouchableOpacity>
       </View>
     );

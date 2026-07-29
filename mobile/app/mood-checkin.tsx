@@ -7,7 +7,7 @@ import { useTheme } from '../src/context/ThemeContext';
 import SliderRow from '../src/components/inputs/SliderRow';
 import { fw, colors } from '../src/constants/theme';
 import { trackEvent } from '../src/utils/analytics';
-import { saveTodayCheckin, type Occasion } from '../src/services/moodState';
+import { saveTodayCheckin, today, type Occasion } from '../src/services/moodState';
 import { logSignal } from '../src/services/signals';
 import { bumpQuestProgress } from '../src/services/quests';
 
@@ -38,7 +38,7 @@ export default function MoodCheckinScreen() {
     await saveTodayCheckin({ energy, stress, hunger, social, occasion });
     await logSignal('mood_checkin', { energy, stress, hunger, social });
     await logSignal('occasion', { occasion });
-    void bumpQuestProgress('mood_streak_7');
+    void bumpQuestProgress('mood_streak_7', 1, today());
     trackEvent('mood_checkin_completed', { energy, stress, hunger, social, occasion });
     setSaving(false);
     router.replace((next as never) || '/home');
@@ -141,14 +141,21 @@ export default function MoodCheckinScreen() {
       </View>
 
       <View style={{ paddingHorizontal: 32, marginTop: 8 }}>
-        <TouchableOpacity onPress={() => setStep(1)} activeOpacity={0.85}>
-          <LinearGradient
-            colors={['#f97316', '#fbbf24']}
-            style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10 }}
-          >
-            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>That's me</Text>
-            <ArrowRight size={20} color="#fff" />
-          </LinearGradient>
+        <TouchableOpacity
+          onPress={() => setStep(1)}
+          activeOpacity={0.85}
+          style={{
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: colors.orange,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 10,
+          }}
+        >
+          <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>That's me</Text>
+          <ArrowRight size={20} color="#fff" />
         </TouchableOpacity>
       </View>
     </LinearGradient>

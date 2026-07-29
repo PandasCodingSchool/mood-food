@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "688060774842",
+    "project_id": "moodfood-a8483",
+    "storage_bucket": "moodfood-a8483.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688060774842:android:f981d17b8be7054d53c583",
+        "android_client_info": {
+          "package_name": "com.pank1999.moodfood"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKlx5KnK-cAkzbxluVlP2C-p2RI1qS1EI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,4 @@
+import { colors } from './theme';
 import type { ComponentType } from 'react';
 import {
   Bot,
@@ -88,7 +89,7 @@ export const ONBOARD_STEPS: OnboardStep[] = [
     title: 'From hungry to eating in 90 seconds',
     desc: 'No more scrolling menus. Just play, pick, and eat.',
     accent: '#f97316',
-    btnColors: ['#f97316', '#fbbf24'],
+    btnColors: [colors.orange, colors.orange],
     features: null,
   },
 ];

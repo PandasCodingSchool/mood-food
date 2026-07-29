@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.pank1999.moodfood",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
@@ -31,7 +32,8 @@
       "expo-status-bar",
       "expo-font",
       "expo-secure-store",
-      "expo-audio"
+      "expo-audio",
+      "expo-notifications"
     ],
     "extra": {
       "router": {},

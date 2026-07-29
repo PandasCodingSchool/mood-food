@@ -13,6 +13,7 @@ import { trackEvent } from '../src/utils/analytics';
 import { hasCheckedInToday } from '../src/services/moodState';
 import { fetchLearnedProfile, flushSignals } from '../src/services/signals';
 import { fetchStreak } from '../src/services/quests';
+import { fetchNotifications } from '../src/services/notifications';
 import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from '../src/services/nostalgiaGate';
 import { fadeUp, floatLoop, bounceIn, pressScale } from '../src/utils/animations';
 import type { LearnedProfile } from '../src/types';
@@ -294,6 +295,7 @@ export default function HomeScreen() {
   const [profile, setProfile] = useState<LearnedProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [streak, setStreak] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [showNostalgia, setShowNostalgia] = useState(false);
 
   useEffect(() => {
@@ -310,11 +312,16 @@ export default function HomeScreen() {
           router.replace({ pathname: '/mood-checkin', params: { next: '/home' } });
           return;
         }
-        const [learned, currentStreak] = await Promise.all([fetchLearnedProfile(), fetchStreak()]);
+        const [learned, currentStreak, notifRes] = await Promise.all([
+          fetchLearnedProfile(),
+          fetchStreak(),
+          fetchNotifications().catch(() => ({ notifications: [], unreadCount: 0 })),
+        ]);
         if (!cancelled) {
           setProfile(learned);
           setProfileLoading(false);
           setStreak(currentStreak);
+          setUnreadCount(notifRes.unreadCount || 0);
         }
         if (!cancelled && (await shouldShowNostalgiaPrompt())) setShowNostalgia(true);
       })();
@@ -363,8 +370,30 @@ export default function HomeScreen() {
             <Flame size={18} color={colors.orange} fill={colors.orange} />
             <Text style={[fw(800), { fontSize: 13, color: colors.orange }]}>{streak}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/notifications')} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.push('/notifications')} activeOpacity={0.7} style={{ position: 'relative' }}>
             <Bell size={28} color={colors.orange} />
+            {unreadCount > 0 && (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: colors.red,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: theme.bg,
+                  paddingHorizontal: 4,
+                }}
+              >
+                <Text style={[fw(800), { fontSize: 10, color: '#fff' }]}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </View>

@@ -32,13 +32,19 @@ export async function fetchStreak(): Promise<number> {
   }
 }
 
-export async function bumpQuestProgress(key: string, count = 1): Promise<void> {
+export async function bumpQuestProgress(
+  key: string,
+  count = 1,
+  date?: string,
+): Promise<void> {
   try {
     const headers = await getHeaders();
+    const body: Record<string, unknown> = { count };
+    if (date) body.date = date;
     await fetch(`${API_BASE_URL}/quests/${encodeURIComponent(key)}/progress`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ count }),
+      body: JSON.stringify(body),
     });
   } catch {
     // best-effort
