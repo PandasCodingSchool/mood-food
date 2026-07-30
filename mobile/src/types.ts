@@ -96,6 +96,7 @@ export interface Recommendation {
     context_fit?: string;
     psychological_hook?: string;
     nostalgia_factor?: string;
+    context_tags?: string[];
   } | null;
   practical_details?: {
     estimated_price?: number;
@@ -125,6 +126,8 @@ export interface Recommendation {
       calories?: number;
       health_score?: number;
     } | null;
+    /** Populated client-side after a successful /api/swiggy/enrich-alternatives match. */
+    swiggy?: EnrichedMatch | null;
   }>;
   pairing_suggestions?: Array<{
     type: 'drink' | 'dessert' | 'side';
@@ -176,6 +179,21 @@ export interface EnrichResponse {
   success: boolean;
   address_id?: string | null;
   matches: EnrichedMatch[];
+  error?: string;
+  address_required?: boolean;
+}
+
+export interface AlternativeEnrichedMatch {
+  rec_id: string;
+  dish_id: string;
+  type: string;
+  match: EnrichedMatch;
+}
+
+export interface EnrichAlternativesResponse {
+  success: boolean;
+  address_id?: string | null;
+  matches: AlternativeEnrichedMatch[];
   error?: string;
   address_required?: boolean;
 }

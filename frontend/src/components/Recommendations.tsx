@@ -26,6 +26,7 @@ import {
   getSavedAddressId,
   fetchUser,
   updateUserProfile,
+  enrichAlternatives,
   type EnrichedMatch,
   type MoodFoodUser,
   type UserProfileUpdate,
@@ -40,7 +41,10 @@ import NostalgiaPrompt from "./NostalgiaPrompt";
 import TwinTasteSection from "./TwinTasteSection";
 import { logSignal, fetchLearnedProfile } from "../services/signals";
 import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from "../utils/nostalgiaGate";
+import { formatTag } from "../utils/formatTag";
 import { bumpQuestProgress } from "../services/quests";
+import CheckoutModal, { type CheckoutTarget } from "./CheckoutModal";
+import RestaurantMenuModal, { type MenuBrowseTarget } from "./RestaurantMenuModal";
 import type { LearnedProfile } from "../types";
 
 // 4.2 — Veto + why: turns a useless "no" into a precise model update.
@@ -78,6 +82,8 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
   const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
   const [showVetoReasonsFor, setShowVetoReasonsFor] = useState<string | null>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null);
+  const [menuBrowseTarget, setMenuBrowseTarget] = useState<MenuBrowseTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [loaderStep, setLoaderStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +263,25 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       }
       setEnriched(true);
       setEnriching(false);
+
+      // Original is already matched above (fast path, unaffected). Match
+      // healthier/budget swaps separately in the background so they never
+      // delay first paint — badges pop in once ready.
+      if (swiggyLive && addressId && data.recommendations.length > 0) {
+        enrichAlternatives(data.recommendations, addressId).then((matches) => {
+          if (gen !== requestGenRef.current || matches.length === 0) return;
+          setRecommendations((prev) =>
+            prev.map((rec) => {
+              if (!rec.alternatives) return rec;
+              const patched = rec.alternatives.map((alt) => {
+                const m = matches.find((x) => x.rec_id === rec.id && x.dish_id === alt.dish_id);
+                return m ? { ...alt, swiggy: m.match } : alt;
+              });
+              return { ...rec, alternatives: patched };
+            }),
+          );
+        });
+      }
 
       trackEvent("recommendations_received", {
         count: data.recommendations.length,
@@ -787,24 +812,26 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                 ? activeAiAlt.image_url
                 : item.image_url;
 
-              // Live Swiggy data: always the main matched restaurant.
-              // For Swiggy alts the restaurant is the same; for AI alts there's no live match.
-              const liveRestaurant = mainMatch?.restaurant;
-              const liveItem =
-                activeSwiggyItem ?? (activeAiAlt ? null : mainLiveItem);
-              const r =
-                liveRestaurant && !activeAiAlt
-                  ? {
-                      name: liveRestaurant.name,
-                      rating: liveRestaurant.rating ?? undefined,
-                      delivery_time_min:
-                        liveRestaurant.eta_min ??
-                        liveItem?.eta_min ??
-                        undefined,
-                    }
-                  : activeAiAlt
-                    ? undefined
-                    : item.restaurant;
+              // Live Swiggy data: main dish uses the main matched restaurant;
+              // AI-generated healthier/budget alts get their own streamed-in
+              // match (see enrichAlternatives above) once it arrives.
+              const activeAltMatch = activeAiAlt?.swiggy?.matched ? activeAiAlt.swiggy : null;
+              const liveRestaurant = activeAiAlt ? activeAltMatch?.restaurant : mainMatch?.restaurant;
+              const liveItem = activeAiAlt
+                ? activeAltMatch?.item ?? null
+                : (activeSwiggyItem ?? mainLiveItem);
+              const r = liveRestaurant
+                ? {
+                    name: liveRestaurant.name,
+                    rating: liveRestaurant.rating ?? undefined,
+                    delivery_time_min:
+                      liveRestaurant.eta_min ??
+                      liveItem?.eta_min ??
+                      undefined,
+                  }
+                : activeAiAlt
+                  ? undefined
+                  : item.restaurant;
               const displayPrice =
                 liveItem?.price ?? pd?.estimated_price ?? undefined;
               const displayImage = liveItem?.image_url || baseImage;
@@ -930,7 +957,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                 key={tag}
                                 className="text-xs bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full font-medium"
                               >
-                                {tag}
+                                {formatTag(tag)}
                               </span>
                             ))}
                           </div>
@@ -1097,24 +1124,70 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                           )}
 
                           {/* Delivery CTA */}
-                          <div className="pt-2 border-t border-gray-100 mt-1">
-                            <button
-                              onClick={() =>
-                                handleOrderOnSwiggy(liveItem?.name || d.name)
-                              }
-                              className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
-                            >
-                              <span className="flex items-center justify-center gap-2">
-                                <svg
-                                  className="w-4 h-4"
-                                  viewBox="0 0 24 24"
-                                  fill="currentColor"
+                          <div className="pt-2 border-t border-gray-100 mt-1 flex flex-col gap-2">
+                            {liveItem?.id && (liveItem.restaurant_id || liveRestaurant?.id) ? (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    setCheckoutTarget({
+                                      restaurantId: (liveItem.restaurant_id || liveRestaurant?.id) as string,
+                                      restaurantName: liveRestaurant?.name,
+                                      menuItemId: liveItem.id,
+                                      dishName: liveItem.name || d.name,
+                                    })
+                                  }
+                                  className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
                                 >
-                                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                                </svg>
-                                Order on Swiggy
-                              </span>
-                            </button>
+                                  <span className="flex items-center justify-center gap-2">
+                                    <svg
+                                      className="w-4 h-4"
+                                      viewBox="0 0 24 24"
+                                      fill="currentColor"
+                                    >
+                                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                                    </svg>
+                                    Order now!
+                                  </span>
+                                </button>
+                                {addressId && (
+                                  <button
+                                    onClick={() =>
+                                      setMenuBrowseTarget({
+                                        restaurantId: (liveItem.restaurant_id || liveRestaurant?.id) as string,
+                                        restaurantName: liveRestaurant?.name,
+                                        addressId,
+                                        dishId: activeAiAlt?.dish_id || item.dish?.id || item.id,
+                                        dishName: liveItem.name || d.name,
+                                        why: activeAiAlt?.reason ?? item.ai_reasoning?.mood_match,
+                                        initialMenuItemId: liveItem.id,
+                                      })
+                                    }
+                                    className="relative w-full py-2 rounded-xl text-xs font-extrabold text-purple-600 border-2 border-purple-100 hover:bg-purple-50 transition-colors"
+                                  >
+                                    Ask Captain · Browse the menu!
+                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white animate-bounce" />
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleOrderOnSwiggy(liveItem?.name || d.name)
+                                }
+                                className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-primary-500 to-secondary-500 shadow-md"
+                              >
+                                <span className="flex items-center justify-center gap-2">
+                                  <svg
+                                    className="w-4 h-4"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                  >
+                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                                  </svg>
+                                  Order on Swiggy
+                                </span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1486,6 +1559,13 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
           </div>
         )}
       </div>
+
+      {checkoutTarget && (
+        <CheckoutModal target={checkoutTarget} onClose={() => setCheckoutTarget(null)} />
+      )}
+      {menuBrowseTarget && (
+        <RestaurantMenuModal target={menuBrowseTarget} onClose={() => setMenuBrowseTarget(null)} />
+      )}
     </div>
   );
 }

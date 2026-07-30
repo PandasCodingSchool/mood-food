@@ -1,13 +1,18 @@
-import { useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native';
+import { useRef, useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StatusBar, Animated, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, PartyPopper, Sparkles, Gift, Truck, Package, Clock, Home, History } from 'lucide-react-native';
+import { Check, PartyPopper, Sparkles, Gift, Truck, Package, Clock, Home, History, PhoneCall } from 'lucide-react-native';
 import { DELIVERY_APPS, swiggyDeliveryOption, type AppIcon, type DeliveryApp } from '../../src/constants/deliveryApps';
 import { useTheme } from '../../src/context/ThemeContext';
 import { fw, colors } from '../../src/constants/theme';
 import { bounceIn, floatLoop, pulseLoop } from '../../src/utils/animations';
+import { trackOrder } from '../../src/services/swiggyOrder';
 import type { Recommendation } from '../../src/types';
+
+// track_food_order must not be polled faster than every 10s (Swiggy MCP docs).
+const TRACK_POLL_MS = 10000;
+const SWIGGY_SUPPORT_NUMBER = '080-67466729';
 
 function CelebrationIcon({ Icon, size, color, style, duration }: { Icon: AppIcon; size: number; color: string; style: object; duration: number }) {
   const translateY = useRef(new Animated.Value(0)).current;
@@ -22,10 +27,26 @@ function CelebrationIcon({ Icon, size, color, style, duration }: { Icon: AppIcon
   );
 }
 
+type TrackStep = 'placed' | 'preparing' | 'on_the_way' | 'delivered' | 'cancelled';
+
+function stepFromStatus(status: string | null | undefined): TrackStep {
+  const s = (status || '').toLowerCase();
+  if (s.includes('cancel') || s.includes('fail')) return 'cancelled';
+  if (s.includes('deliver') && !s.includes('out')) return 'delivered';
+  if (s.includes('way') || s.includes('transit') || s.includes('pickup') || s.includes('rider')) return 'on_the_way';
+  if (s.includes('prepar') || s.includes('confirm') || s.includes('accept') || s.includes('placed')) return 'preparing';
+  return 'placed';
+}
+
 export default function OrderSuccessScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { rec: rawRec, appName, total } = useLocalSearchParams<{ rec: string; appName: string; total: string }>();
+  const { rec: rawRec, appName, total, orderId } = useLocalSearchParams<{
+    rec: string;
+    appName: string;
+    total: string;
+    orderId?: string;
+  }>();
   const rec: Recommendation = JSON.parse(rawRec);
   const app: DeliveryApp = useMemo(() => {
     const liveOption = swiggyDeliveryOption(rec);
@@ -35,6 +56,11 @@ export default function OrderSuccessScreen() {
   const AppIcon = app.icon;
   const orderNum = useMemo(() => Math.floor(1000 + Math.random() * 9000).toString(), []);
 
+  const isRealOrder = !!orderId;
+  const [step, setStep] = useState<TrackStep>('placed');
+  const [liveEta, setLiveEta] = useState<string | null>(null);
+  const [trackError, setTrackError] = useState(false);
+
   const checkScale = useRef(new Animated.Value(0.3)).current;
   const pulseDot = useRef(new Animated.Value(1)).current;
 
@@ -43,6 +69,43 @@ export default function OrderSuccessScreen() {
     const loop = pulseLoop(pulseDot, 1.4, 750);
     return () => loop.stop();
   }, []);
+
+  // 4.1-adjacent: real order tracking. Polls no faster than the documented
+  // 10s floor and stops once the order reaches a terminal state.
+  useEffect(() => {
+    if (!isRealOrder || !orderId) return;
+    let cancelled = false;
+    let failCount = 0;
+
+    const poll = async () => {
+      const result = await trackOrder(orderId);
+      if (cancelled) return;
+      if (!result.success) {
+        failCount += 1;
+        if (failCount >= 3) setTrackError(true);
+        return;
+      }
+      failCount = 0;
+      setTrackError(false);
+      setStep(stepFromStatus(result.status));
+      if (result.eta) setLiveEta(result.eta);
+    };
+
+    poll();
+    const interval = setInterval(poll, TRACK_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isRealOrder, orderId]);
+
+  const handleCallSupport = () => {
+    Linking.openURL(`tel:${SWIGGY_SUPPORT_NUMBER.replace(/[^0-9]/g, '')}`);
+  };
+
+  const preparingActive = step === 'preparing' || step === 'placed';
+  const onTheWayActive = step === 'on_the_way';
+  const deliveredActive = step === 'delivered';
 
   return (
     <LinearGradient colors={[theme.bg, theme.surface, theme.surface]} style={{ flex: 1 }}>
@@ -70,7 +133,9 @@ export default function OrderSuccessScreen() {
 
         <Text style={[fw(900), { fontSize: 28, color: theme.text, textAlign: 'center', marginTop: 32 }]}>Order Confirmed!</Text>
         <Text style={[fw(600), { fontSize: 14, color: theme.subtext, textAlign: 'center', marginTop: 8, maxWidth: 260, lineHeight: 20 }]}>
-          Your {rec.dish.name} is on its way. Sit tight!
+          {step === 'cancelled'
+            ? 'Something went wrong with this order.'
+            : `Your ${rec.dish.name} is on its way. Sit tight!`}
         </Text>
 
         <View style={{ width: '100%', marginTop: 32, padding: 20, borderRadius: 20, backgroundColor: theme.card, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, elevation: 2 }}>
@@ -82,28 +147,68 @@ export default function OrderSuccessScreen() {
               <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>
                 {app.name}{app.isLive && app.restaurantName ? ` · ${app.restaurantName}` : ''}
               </Text>
-              <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>Order #MF-{orderNum}</Text>
+              <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>
+                Order #{isRealOrder ? orderId : `MF-${orderNum}`}
+              </Text>
             </View>
           </View>
 
-          <ProgressStep Icon={Check} iconBg={colors.green} label="Order placed" labelColor={theme.text} lineColor={colors.green} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' }}>
-              <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff', transform: [{ scale: pulseDot }] }} />
+          {step === 'cancelled' ? (
+            <View style={{ padding: 12, borderRadius: 12, backgroundColor: 'rgba(220,38,38,0.06)', gap: 10 }}>
+              <Text style={[fw(700), { fontSize: 13, color: '#dc2626' }]}>
+                This order was cancelled or couldn't be tracked.
+              </Text>
+              <TouchableOpacity
+                onPress={handleCallSupport}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }}
+              >
+                <PhoneCall size={16} color="#dc2626" />
+                <Text style={[fw(700), { fontSize: 12, color: '#dc2626' }]}>Call Swiggy support: {SWIGGY_SUPPORT_NUMBER}</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>Preparing your food</Text>
-          </View>
-          <View style={{ width: 2, height: 20, backgroundColor: theme.border, marginLeft: 13 }} />
-          <ProgressStep Icon={Truck} iconBg={theme.surface} label="On its way" labelColor={theme.subtext} lineColor={theme.border} muted />
-          <ProgressStep Icon={Package} iconBg={theme.surface} label="Delivered" labelColor={theme.subtext} muted last />
+          ) : (
+            <>
+              <ProgressStep Icon={Check} iconBg={colors.green} label="Order placed" labelColor={theme.text} lineColor={colors.green} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: preparingActive ? colors.green : theme.surface, alignItems: 'center', justifyContent: 'center' }}>
+                  {preparingActive ? (
+                    <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff', transform: [{ scale: pulseDot }] }} />
+                  ) : (
+                    <Clock size={14} color={theme.subtext} />
+                  )}
+                </View>
+                <Text style={[fw(preparingActive ? 700 : 600), { fontSize: 13, color: preparingActive ? theme.text : theme.subtext }]}>Preparing your food</Text>
+              </View>
+              <View style={{ width: 2, height: 20, backgroundColor: onTheWayActive || deliveredActive ? colors.green : theme.border, marginLeft: 13 }} />
+              <ProgressStep
+                Icon={Truck}
+                iconBg={onTheWayActive || deliveredActive ? colors.green : theme.surface}
+                label="On its way"
+                labelColor={onTheWayActive || deliveredActive ? theme.text : theme.subtext}
+                lineColor={deliveredActive ? colors.green : theme.border}
+                muted={!(onTheWayActive || deliveredActive)}
+                pulse={onTheWayActive}
+              />
+              <ProgressStep
+                Icon={Package}
+                iconBg={deliveredActive ? colors.green : theme.surface}
+                label="Delivered"
+                labelColor={deliveredActive ? theme.text : theme.subtext}
+                muted={!deliveredActive}
+                last
+              />
 
-          <View style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: colors.orange + '0F', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Clock size={20} color={colors.orange} />
-            <View>
-              <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>ETA: {app.eta}</Text>
-              <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>Arriving at your door</Text>
-            </View>
-          </View>
+              <View style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: colors.orange + '0F', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Clock size={20} color={colors.orange} />
+                <View>
+                  <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>ETA: {liveEta || app.eta}</Text>
+                  <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>
+                    {trackError ? 'Live tracking unavailable right now' : 'Arriving at your door'}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         <View style={{ width: '100%', gap: 10, marginTop: 'auto' }}>
@@ -133,6 +238,7 @@ function ProgressStep({
   lineColor,
   muted,
   last,
+  pulse,
 }: {
   Icon: AppIcon;
   iconBg: string;
@@ -141,6 +247,7 @@ function ProgressStep({
   lineColor?: string;
   muted?: boolean;
   last?: boolean;
+  pulse?: boolean;
 }) {
   return (
     <View>
@@ -148,7 +255,9 @@ function ProgressStep({
         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center' }}>
           <Icon size={muted ? 14 : 12} color={muted ? '#94a3b8' : '#fff'} />
         </View>
-        <Text style={[fw(muted ? 600 : 700), { fontSize: 13, color: labelColor }]}>{label}</Text>
+        <Text style={[fw(muted ? 600 : 700), { fontSize: 13, color: labelColor }]}>
+          {label}{pulse ? '…' : ''}
+        </Text>
       </View>
       {!last && <View style={{ width: 2, height: 20, backgroundColor: lineColor || 'rgba(0,0,0,0.08)', marginLeft: 13 }} />}
     </View>

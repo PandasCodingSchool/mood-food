@@ -10,7 +10,7 @@ typically returns the `data` payload directly (e.g. `{ "restaurants": [...] }`).
 Our client (`swiggy_mcp.py`) returns `structuredContent` when present and
 `swiggy_discovery._unwrap_envelope` handles both shapes.
 
-Status: ✅ wired (Phase 1 discovery) · 🔜 Phase 2 (ordering).
+Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 
 ---
 
@@ -38,44 +38,53 @@ Status: ✅ wired (Phase 1 discovery) · 🔜 Phase 2 (ordering).
 
 ## Cart
 
-### 🔜 fetch_food_coupons
+### ✅ fetch_food_coupons
 - **In:** cart context (`addressId`). **Out:** available coupons; filter `requiresOnlinePayment` (COD-only beta).
+- Wired: `SwiggyOrderService.fetch_coupons` filters to COD-eligible via `_is_cod_eligible`.
 
-### 🔜 apply_food_coupon
+### ✅ apply_food_coupon
 - **In:** `code`. **Out:** updated cart; treat as applied only when `coupon_discount > 0`.
+- Wired: `SwiggyOrderService.apply_coupon`.
 
-### 🔜 get_food_cart
+### ✅ get_food_cart
 - **In:** `addressId` (req), `restaurantName` (opt)
 - **Out:** `data` with item lines (+ `valid_addons` per item), `availablePaymentMethods[]`, `offers.coupon_applied.coupon_discount`, totals & fees.
 - Call **before** `place_food_order` to validate totals + payment methods.
+- Wired: `SwiggyOrderService.get_cart`; `place_order` always re-fetches the cart first.
 
-### 🔜 update_food_cart
+### ✅ update_food_cart
 - **In:** `restaurantId` (req), `cartItems[]` (req — items with `variants` XOR `variantsV2`, plus addons), `addressId` (req), `restaurantName` (opt)
 - Carts are restaurant-scoped; switching restaurants clears the cart. Does **not** render UI — always follow with `get_food_cart`.
+- Wired: `SwiggyOrderService.update_cart` always calls `get_food_cart` immediately after.
 
-### 🔜 flush_food_cart
+### ✅ flush_food_cart
 - **In:** _(cart context)_. Clears all items.
+- Wired: `SwiggyOrderService.flush_cart`.
 
 ---
 
 ## Order
 
-### 🔜 place_food_order
+### ✅ place_food_order
 - **In:** `addressId` (req — coords fetched automatically), `paymentMethod` (opt — must match `availablePaymentMethods` from `get_food_cart`)
 - **Rules:** explicit user confirmation **mandatory**; cart must be **< ₹1000** (beta); call `get_food_cart` first; non-idempotent → on 5xx verify with `get_food_orders` before retry; use the tool's exact success message verbatim.
+- Wired: `SwiggyOrderService.place_order` — refuses without `confirmed=true`, checks the cap against `get_cart().total` before calling the tool, calls the tool via `SwiggyMCPClient.call_tool_once` (no built-in retry — placement must never be silently retried by the transport layer), and on a retryable failure verifies via `get_food_orders` before a single bounded manual retry.
 
 ---
 
 ## Track
 
-### 🔜 get_food_orders
+### ✅ get_food_orders
 - Active orders + statuses. Also the post-failure verification call for `place_food_order`.
+- Wired: `SwiggyOrderService.get_orders`.
 
-### 🔜 get_food_order_details
+### ✅ get_food_order_details
 - **In:** `orderId`. Detailed info for one order.
+- Wired: `SwiggyOrderService.get_order_details`.
 
-### 🔜 track_food_order
+### ✅ track_food_order
 - **In:** `orderId` (opt — all active orders if omitted). **Out:** current status, ETA, progress. Poll no faster than every 10s.
+- Wired: `SwiggyOrderService.track_order`; client-side polling (mobile `order/success.tsx`) enforces the 10s floor.
 
 ---
 
@@ -92,6 +101,7 @@ Status: ✅ wired (Phase 1 discovery) · 🔜 Phase 2 (ordering).
 |---|---|
 | MCP client (transport, retry, error unwrap) | `app/services/swiggy_mcp.py` |
 | Discovery logic + response normalization | `app/services/swiggy_discovery.py` |
+| Cart/coupon/order/track logic | `app/services/swiggy_order.py` |
 | FastAPI routes (`/api/swiggy/*`) | `app/routes/swiggy.py` |
 | OAuth token minting | `scripts/swiggy_auth.py` |
 | Connectivity smoke test | `scripts/swiggy_smoke.py` |

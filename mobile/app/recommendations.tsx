@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar, Image, Share } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, RefreshCw, Frown, PartyPopper, ArrowRight } from 'lucide-react-native';
+import {
+  ChevronLeft, RefreshCw, Frown, PartyPopper, ArrowRight,
+  Heart, Share2, Flame, Clock, Zap, MapPin, Star, Sparkles,
+} from 'lucide-react-native';
 import { useTheme } from '../src/context/ThemeContext';
 import {
   fetchRecommendations,
@@ -11,17 +14,27 @@ import {
   fetchAddresses,
   saveAddressId,
 } from '../src/services/aiRecommendations';
-import { enrichRecommendations } from '../src/services/swiggy';
+import { enrichRecommendations, enrichAlternatives } from '../src/services/swiggy';
 import { trackEvent } from '../src/utils/analytics';
-import { fw, colors } from '../src/constants/theme';
+import { fw, colors, gradients } from '../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
 import { pressScale } from '../src/utils/animations';
+import { formatTag } from '../src/utils/formatTag';
 import BottomNav from '../src/components/BottomNav';
 import LoadingScreen from '../src/components/LoadingScreen';
 import ChipSelector from '../src/components/inputs/ChipSelector';
 import BlindBetStars from '../src/components/BlindBetStars';
+import GradientButton from '../src/components/GradientButton';
 import { logSignal } from '../src/services/signals';
+import { bumpQuestProgress } from '../src/services/quests';
 import type { Recommendation, RecommendationResponse } from '../src/types';
+
+function healthColor(score: number | undefined): string {
+  if (score == null) return colors.slate300;
+  if (score >= 7) return colors.green;
+  if (score >= 4) return colors.amber;
+  return colors.rose;
+}
 
 // 4.2 — Veto + why: turns a useless "no" into a precise model update.
 const VETO_REASONS = [
@@ -36,18 +49,34 @@ const MOOD_EMOJIS: Record<string, string> = {
   relaxed: '😌', adventurous: '🧭',
 };
 
+function StatTile({ icon, value, label, theme }: { icon: React.ReactNode; value: string; label: string; theme: any }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.bg, borderRadius: 12, paddingVertical: 10 }}>
+      {icon}
+      <Text style={[fw(800), { fontSize: 13, color: theme.text, marginTop: 4 }]}>{value}</Text>
+      <Text style={[fw(600), { fontSize: 10, color: theme.subtext, marginTop: 1 }]}>{label}</Text>
+    </View>
+  );
+}
+
 function MealCard({
   rec,
   index,
   onTap,
   vetoed,
   onVeto,
+  liked,
+  onToggleLike,
+  onOrderNow,
 }: {
   rec: Recommendation;
   index: number;
   onTap: () => void;
   vetoed: string | null;
   onVeto: (reason: string) => void;
+  liked: boolean;
+  onToggleLike: () => void;
+  onOrderNow: () => void;
 }) {
   const { theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -65,10 +94,24 @@ function MealCard({
 
   const matchPct = rec.confidence != null ? `${Math.round(rec.confidence * 100)}% match` : null;
   const imageUrl = !imageFailed ? resolveDishImage(rec) : null;
-  const liveRestaurant = rec.swiggy?.matched ? rec.swiggy.item?.restaurant_name || rec.swiggy.restaurant?.name : null;
-  const livePrice = rec.swiggy?.matched && rec.swiggy.item?.price != null
-    ? rec.swiggy.item.price
-    : rec.practical_details?.estimated_price;
+  const liveMatch = rec.swiggy?.matched ? rec.swiggy : null;
+  const liveRestaurantName = liveMatch?.item?.restaurant_name || liveMatch?.restaurant?.name;
+  const livePrice = liveMatch?.item?.price ?? rec.practical_details?.estimated_price;
+  const isLivePrice = liveMatch?.item?.price != null;
+  const deliveryOrPrep = liveMatch
+    ? liveMatch.restaurant?.eta_min ?? liveMatch.item?.eta_min
+    : rec.practical_details?.preparation_time;
+  const healthScore = rec.practical_details?.health_score;
+  const tags = rec.ai_reasoning?.context_tags?.length ? rec.ai_reasoning.context_tags : rec.dish.tags;
+
+  const handleShare = async () => {
+    trackEvent('recommendation_shared', { food: rec.dish.name });
+    try {
+      await Share.share({ message: `MoodFood recommended ${rec.dish.name} for me!` });
+    } catch {
+      // user dismissed the share sheet — nothing to do
+    }
+  };
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
@@ -79,7 +122,7 @@ function MealCard({
         onPress={onTap}
         style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: theme.card, marginBottom: 16, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
       >
-        <View style={{ height: 140 }}>
+        <View style={{ height: 170 }}>
           {imageUrl ? (
             <Image
               source={{ uri: imageUrl }}
@@ -92,48 +135,131 @@ function MealCard({
               <Text style={{ fontSize: 56 }}>{dishEmoji(rec)}</Text>
             </LinearGradient>
           )}
-          {matchPct && (
-            <View style={{ position: 'absolute', top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: theme.text + '40' }}>
-              <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>{matchPct}</Text>
-            </View>
-          )}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.55)']}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 70 }}
+          />
+
+          <View style={{ position: 'absolute', top: 12, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.85)' }}>
+            <Text style={[fw(800), { fontSize: 11, color: colors.navy }]}>#{index + 1}</Text>
+          </View>
+          <View style={{ position: 'absolute', top: 12, right: 12, flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={onToggleLike}
+              style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: liked ? colors.rose : 'rgba(255,255,255,0.8)' }}
+            >
+              <Heart size={14} color={liked ? '#fff' : colors.slate500} fill={liked ? '#fff' : 'none'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleShare}
+              style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.8)' }}
+            >
+              <Share2 size={14} color={colors.slate500} />
+            </TouchableOpacity>
+          </View>
           {index === 0 && (
-            <View style={{ position: 'absolute', top: 12, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#4ade80', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ position: 'absolute', top: 50, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#4ade80', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={{ fontSize: 12 }}>🏆</Text>
               <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>Top Pick</Text>
             </View>
           )}
           {rec.is_wildcard && (
-            <View style={{ position: 'absolute', top: index === 0 ? 40 : 12, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#a855f7', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ position: 'absolute', top: index === 0 ? 78 : 50, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#a855f7', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={{ fontSize: 12 }}>🎲</Text>
               <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>Shake it up</Text>
             </View>
           )}
-          {liveRestaurant && (
-            <View style={{ position: 'absolute', bottom: 10, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: theme.text + '55', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.greenLight }} />
-              <Text style={[fw(700), { fontSize: 10, color: '#fff' }]} numberOfLines={1}>Live on Swiggy · {liveRestaurant}</Text>
+
+          <View style={{ position: 'absolute', left: 12, right: 12, bottom: 10, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={[fw(800), { fontSize: 17, color: '#fff' }]} numberOfLines={1}>{rec.dish.name}</Text>
+              <Text style={[fw(600), { fontSize: 12, color: 'rgba(255,255,255,0.8)' }]} numberOfLines={1}>{rec.dish.cuisine}</Text>
             </View>
-          )}
-        </View>
-        <View style={{ padding: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={[fw(800), { fontSize: 17, color: theme.text, flex: 1 }]} numberOfLines={1}>{rec.dish.name}</Text>
-            {livePrice != null && (
-              <Text style={[fw(800), { fontSize: 15, color: colors.orange }]}>₹{livePrice}</Text>
+            {matchPct && (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>{matchPct}</Text>
+              </View>
             )}
           </View>
-          <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4 }]}>
-            {rec.dish.cuisine}{rec.dish.category ? ` · ${rec.dish.category}` : ''}
-            {rec.swiggy?.restaurant?.eta_min != null ? ` · ${rec.swiggy.restaurant.eta_min} min` : ''}
-          </Text>
-          {rec.dish.tags && rec.dish.tags.length > 0 && (
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              {rec.dish.tags.slice(0, 3).map((tag) => (
+        </View>
+
+        <View style={{ padding: 16 }}>
+          {tags && tags.length > 0 && (
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              {liveMatch?.item?.is_veg != null && (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: (liveMatch.item.is_veg ? colors.green : colors.rose) + '18', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2, borderWidth: 1.5, borderColor: liveMatch.item.is_veg ? colors.green : colors.rose }} />
+                  <Text style={[fw(700), { fontSize: 11, color: liveMatch.item.is_veg ? colors.green : colors.rose }]}>{liveMatch.item.is_veg ? 'Veg' : 'Non-Veg'}</Text>
+                </View>
+              )}
+              {tags.slice(0, 3).map((tag) => (
                 <View key={tag} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: colors.orange + '18' }}>
-                  <Text style={[fw(700), { fontSize: 11, color: colors.orange }]}>{tag}</Text>
+                  <Text style={[fw(700), { fontSize: 11, color: colors.orange }]}>{formatTag(tag)}</Text>
                 </View>
               ))}
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <StatTile
+              icon={<Flame size={14} color={colors.orange} />}
+              value={rec.practical_details?.calories != null ? String(rec.practical_details.calories) : '—'}
+              label="kcal"
+              theme={theme}
+            />
+            <StatTile
+              icon={<Clock size={14} color={colors.blue} />}
+              value={deliveryOrPrep != null ? String(deliveryOrPrep) : '—'}
+              label={liveMatch ? 'delivery' : 'prep'}
+              theme={theme}
+            />
+            <StatTile
+              icon={<Zap size={14} color={colors.green} />}
+              value={livePrice != null ? `₹${livePrice}` : '—'}
+              label={isLivePrice ? 'live' : 'est.'}
+              theme={theme}
+            />
+          </View>
+
+          {healthScore != null && (
+            <View style={{ marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>Health score</Text>
+                <Text style={[fw(700), { fontSize: 12, color: theme.text }]}>{healthScore}/10</Text>
+              </View>
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.border, marginTop: 6, overflow: 'hidden' }}>
+                <View style={{ height: '100%', width: `${(healthScore / 10) * 100}%`, borderRadius: 3, backgroundColor: healthColor(healthScore) }} />
+              </View>
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 12, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: liveMatch ? colors.orange + '14' : theme.bg }}>
+            <MapPin size={14} color={liveMatch ? colors.orange : theme.subtext} style={{ marginTop: 1 }} />
+            <Text style={[fw(700), { fontSize: 13, color: liveMatch ? colors.orange : theme.subtext, flex: 1 }]}>
+              {liveRestaurantName || 'Local restaurants'}
+            </Text>
+          </View>
+
+          {liveMatch && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.orange }}>
+                <Text style={[fw(800), { fontSize: 9, color: '#fff' }]}>LIVE</Text>
+              </View>
+              {liveMatch.restaurant?.rating != null && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Star size={11} color={colors.amber} fill={colors.amber} />
+                  <Text style={[fw(700), { fontSize: 11, color: theme.text }]}>{liveMatch.restaurant.rating}</Text>
+                </View>
+              )}
+              {liveMatch.restaurant?.eta_min != null && (
+                <Text style={[fw(600), { fontSize: 11, color: theme.subtext }]}>{liveMatch.restaurant.eta_min} min delivery</Text>
+              )}
+            </View>
+          )}
+
+          {rec.ai_reasoning?.psychological_hook && (
+            <View style={{ marginTop: 10, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.bg }}>
+              <Text style={[fw(600), { fontSize: 11, color: theme.subtext }]}>Why this? {rec.ai_reasoning.psychological_hook}</Text>
             </View>
           )}
 
@@ -165,6 +291,27 @@ function MealCard({
               <Text style={[fw(700), { fontSize: 12, color: theme.subtext }]}>Not for me →</Text>
             </TouchableOpacity>
           )}
+
+          <View
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+              marginTop: 12, height: 40, borderRadius: 20,
+              backgroundColor: colors.purple + '12', borderWidth: 1.5, borderColor: colors.purple + '40',
+            }}
+          >
+            <Sparkles size={15} color={colors.purple} />
+            <Text style={[fw(800), { fontSize: 12.5, color: colors.purple }]}>Healthier & budget swaps · Ask Captain →</Text>
+          </View>
+
+          <GradientButton
+            label="Order now!"
+            colors={gradients.orange}
+            height={44}
+            fontSize={14}
+            icon={<MapPin size={16} color="#fff" />}
+            onPress={onOrderNow}
+            style={{ marginTop: 14 }}
+          />
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -180,6 +327,25 @@ export default function RecommendationsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+
+  const toggleLike = (rec: Recommendation) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rec.id)) {
+        next.delete(rec.id);
+        trackEvent('recommendation_unliked', { food: rec.dish.name });
+      } else {
+        next.add(rec.id);
+        trackEvent('recommendation_liked', { food: rec.dish.name });
+        if (rec.is_wildcard) {
+          void logSignal('wildcard_verdict', { accepted: true });
+        }
+        void bumpQuestProgress('try_3_cuisines');
+      }
+      return next;
+    });
+  };
 
   const quizResults = rawResults ? JSON.parse(rawResults) : null;
 
@@ -217,11 +383,9 @@ export default function RecommendationsScreen() {
         try {
           const enriched = await enrichRecommendations(res.recommendations, addressId);
           if (Object.keys(enriched).length > 0) {
-            setData({
-              ...res,
-              swiggy_matches: enriched,
-              live_status: 'partial',
-            });
+            const withOriginalMatches = { ...res, swiggy_matches: enriched, live_status: 'partial' as const };
+            setData(withOriginalMatches);
+            streamAlternativeMatches(withOriginalMatches.recommendations, addressId);
             return;
           }
         } catch {
@@ -230,12 +394,36 @@ export default function RecommendationsScreen() {
       }
 
       setData(res);
+      if (isSwiggyLive() && addressId) streamAlternativeMatches(res.recommendations, addressId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load recommendations');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // Original recommendation is already live-matched by this point (fast path,
+  // unaffected). Healthier/budget swaps are matched separately in the
+  // background so they never delay first paint — badges pop in once ready.
+  const streamAlternativeMatches = (recs: Recommendation[], addressId: string) => {
+    enrichAlternatives(recs, addressId).then((matches) => {
+      if (matches.length === 0) return;
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recommendations: prev.recommendations.map((rec) => {
+            if (!rec.alternatives) return rec;
+            const patched = rec.alternatives.map((alt) => {
+              const m = matches.find((x) => x.rec_id === rec.id && x.dish_id === alt.dish_id);
+              return m ? { ...alt, swiggy: m.match } : alt;
+            });
+            return { ...rec, alternatives: patched };
+          }),
+        };
+      });
+    });
   };
 
   useEffect(() => {
@@ -322,6 +510,9 @@ export default function RecommendationsScreen() {
               vetoed={vetoedIds[rec.id] || null}
               onVeto={(reason) => handleVeto(rec, reason)}
               onTap={() => router.push({ pathname: '/meal-detail', params: { rec: JSON.stringify(rec), rank: String(i) } })}
+              liked={likedIds.has(rec.id)}
+              onToggleLike={() => toggleLike(rec)}
+              onOrderNow={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(rec), rank: String(i) } })}
             />
           ))}
 

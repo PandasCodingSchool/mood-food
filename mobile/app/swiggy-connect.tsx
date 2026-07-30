@@ -178,7 +178,7 @@ export default function SwiggyConnectScreen() {
           )}
 
           <Text style={[fw(600), { fontSize: 11, color: theme.subtext, textAlign: 'center', lineHeight: 16 }]}>
-            MoodFood only reads your delivery address to find nearby restaurants. We never place orders or access payment details on your behalf.
+            MoodFood can place orders on Swiggy on your behalf once you confirm each one — you'll always see the address, items, and total before anything is ordered. We never see or store your card/UPI details; Swiggy handles payment directly.
           </Text>
         </ScrollView>
       )}

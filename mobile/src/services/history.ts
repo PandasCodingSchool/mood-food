@@ -26,6 +26,10 @@ export interface SaveOrderPayload {
   gradientEnd?: string;
   ordered?: boolean;
   saved?: boolean;
+  swiggyOrderId?: string;
+  restaurantId?: string;
+  menuItemId?: string;
+  addressId?: string;
 }
 
 export async function fetchHistory(tab: "all" | "ordered" | "saved" = "all"): Promise<HistoryItem[]> {
