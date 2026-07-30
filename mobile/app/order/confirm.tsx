@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image, Modal, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fw, colors } from '../../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
@@ -31,6 +32,7 @@ export default function OrderConfirmScreen() {
   const params = useLocalSearchParams<{
     // Single-dish mode (the "Order now!" fast path from a recommendation card)
     rec?: string;
+
     rank?: string;
     appName?: string;
     // Cart mode (from the restaurant menu browser — restaurant-scoped, already
@@ -290,10 +292,12 @@ export default function OrderConfirmScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140, gap: 16 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 + safeBottom, gap: 16 }} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
+
             <app.icon size={20} color={colors.navy} />
+
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -498,6 +502,7 @@ export default function OrderConfirmScreen() {
         )}
       </ScrollView>
 
+
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, backgroundColor: '#fff' }}>
         {capExceeded ? (
           <TouchableOpacity activeOpacity={0.85} onPress={handleOpenInSwiggyApp}>
@@ -516,6 +521,7 @@ export default function OrderConfirmScreen() {
             </LinearGradient>
           </TouchableOpacity>
         )}
+
       </View>
 
       <Modal visible={addressPickerOpen} transparent animationType="slide" onRequestClose={() => setAddressPickerOpen(false)}>

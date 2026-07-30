@@ -69,15 +69,22 @@ export default function CravingRadarScreen() {
           onPress={handleContinue}
           disabled={selected.length === 0}
           activeOpacity={0.85}
-          style={{ opacity: selected.length === 0 ? 0.5 : 1 }}
+          style={{
+            opacity: selected.length === 0 ? 0.5 : 1,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: colors.orange,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 8,
+          }}
         >
-          <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-            <Utensils size={20} color="#fff" />
-            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>
-              Match my cravings ({selected.length})
-            </Text>
-            <ArrowRight size={18} color="#fff" />
-          </LinearGradient>
+          <Utensils size={20} color="#fff" />
+          <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>
+            Match my cravings ({selected.length})
+          </Text>
+          <ArrowRight size={18} color="#fff" />
         </TouchableOpacity>
       </View>
     </LinearGradient>

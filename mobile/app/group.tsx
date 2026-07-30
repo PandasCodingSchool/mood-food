@@ -108,11 +108,21 @@ export default function GroupScreen() {
             placeholderTextColor={theme.muted}
             style={{ padding: 14, borderRadius: 14, backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, fontSize: 14, color: theme.text }}
           />
-          <TouchableOpacity onPress={handleCreate} activeOpacity={0.85}>
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-              <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>Start a group</Text>
-              <ArrowRight size={18} color="#fff" />
-            </LinearGradient>
+          <TouchableOpacity
+            onPress={handleCreate}
+            activeOpacity={0.85}
+            style={{
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: colors.orange,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 8,
+            }}
+          >
+            <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>Start a group</Text>
+            <ArrowRight size={18} color="#fff" />
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
             <TextInput

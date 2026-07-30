@@ -481,11 +481,21 @@ export default function RecommendationsScreen() {
           <Frown size={56} color={theme.subtext} />
           <Text style={[fw(800), { fontSize: 20, color: theme.text, marginTop: 16, textAlign: 'center' }]}>Something went wrong</Text>
           <Text style={[fw(600), { color: theme.subtext, textAlign: 'center', marginTop: 8, marginBottom: 32 }]}>{error}</Text>
-          <TouchableOpacity onPress={() => load(false)} activeOpacity={0.85}>
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ borderRadius: 24, paddingVertical: 16, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[fw(800), { color: '#fff', fontSize: 16 }]}>Try Again</Text>
-              <ArrowRight size={18} color="#fff" />
-            </LinearGradient>
+          <TouchableOpacity
+            onPress={() => load(false)}
+            activeOpacity={0.85}
+            style={{
+              borderRadius: 24,
+              paddingVertical: 16,
+              paddingHorizontal: 32,
+              backgroundColor: colors.orange,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Text style={[fw(800), { color: '#fff', fontSize: 16 }]}>Try Again</Text>
+            <ArrowRight size={18} color="#fff" />
           </TouchableOpacity>
         </View>
       )}

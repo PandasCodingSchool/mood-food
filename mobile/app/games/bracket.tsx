@@ -99,11 +99,23 @@ export default function BracketScreen() {
             <Text style={[fw(900), { fontSize: 22, color: theme.text, textAlign: 'center' }]}>
               {champion.label} wins the bracket!
             </Text>
-            <TouchableOpacity onPress={handleGetResults} activeOpacity={0.85} style={{ marginTop: 16, width: '100%' }}>
-              <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-                <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>Show me my matches</Text>
-                <ArrowRight size={18} color="#fff" />
-              </LinearGradient>
+            <TouchableOpacity
+              onPress={handleGetResults}
+              activeOpacity={0.85}
+              style={{
+                marginTop: 16,
+                width: '100%',
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: colors.orange,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+              }}
+            >
+              <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>Show me my matches</Text>
+              <ArrowRight size={18} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
