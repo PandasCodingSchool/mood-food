@@ -67,6 +67,14 @@ def test_normalize_restaurant_closed_and_missing_id():
     assert closed is not None and closed.is_open is False
 
 
+def test_normalize_restaurant_rejects_empty_name():
+    # Real Swiggy payload observed with a populated id but blank name — must be
+    # treated as unmatched, not a half-populated restaurant (id truthy, name
+    # falsy), which used to desync the mobile client's badge/button gates.
+    assert normalize_restaurant({"id": "r3", "name": ""}) is None
+    assert normalize_restaurant({"id": "r4", "name": "   "}) is None
+
+
 def test_normalize_menu_item():
     item = normalize_menu_item(
         {"itemId": "i1", "itemName": "Butter Chicken", "price": 320, "restaurantId": "r1"}

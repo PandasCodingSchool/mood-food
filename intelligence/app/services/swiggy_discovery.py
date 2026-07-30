@@ -88,7 +88,7 @@ def normalize_restaurant(raw: dict) -> Optional[SwiggyRestaurant]:
     #   imageUrl, availabilityStatus ("OPEN")
     rid = _first(raw, "id", "restaurantId", "restaurant_id")
     name = _first(raw, "name", "restaurantName", "restaurant_name")
-    if rid is None or name is None:
+    if rid is None or not str(name or "").strip():
         return None
     eta = _first(
         raw, "deliveryTimeMinutes", "eta_min", "etaMinutes", "deliveryTime",
@@ -484,6 +484,84 @@ class SwiggyDiscoveryService:
                 "pageSize": min(page_size, 8),
             },
         )
+
+    async def get_restaurant_menu_structured(
+        self,
+        restaurant_id: str,
+        city: Optional[str] = None,
+        address_id: Optional[str] = None,
+        max_pages: int = 12,
+    ) -> tuple[str, Optional[SwiggyRestaurant], list[dict]]:
+        """Full menu for browsing: category-grouped, normalized items, and the
+        restaurant summary — unlike get_restaurant_menu() (raw, used internally
+        only for enrichment matching), this preserves the "categories" structure
+        instead of flattening it, and paginates until the tool stops returning
+        anything new (get_restaurant_menu's page/pageSize is per the tool's own
+        category pagination, not a simple item offset).
+
+        Returns (address_id, restaurant_or_None, [{"title": str, "items": [SwiggyMenuItem]}]).
+        """
+        addr = await self.resolve_address_id(city, address_id)
+        restaurant: Optional[SwiggyRestaurant] = None
+        categories_by_title: dict[str, list[SwiggyMenuItem]] = {}
+        seen_item_ids: set[str] = set()
+        order: list[str] = []
+
+        for page in range(1, max_pages + 1):
+            raw = await self.client.call_tool(
+                "get_restaurant_menu",
+                {"restaurantId": restaurant_id, "addressId": addr, "page": page, "pageSize": 8},
+            )
+            unwrapped = _unwrap_envelope(raw)
+            if not isinstance(unwrapped, dict):
+                break
+
+            if restaurant is None:
+                node = unwrapped.get("restaurant")
+                restaurant = normalize_restaurant(node) if isinstance(node, dict) else None
+                if restaurant is None:
+                    restaurant = normalize_restaurant(unwrapped)
+
+            raw_categories = unwrapped.get("categories")
+            if not isinstance(raw_categories, list) or not raw_categories:
+                break
+
+            added_this_page = 0
+            for cat in raw_categories:
+                if not isinstance(cat, dict):
+                    continue
+                title = str(cat.get("title") or "Menu")
+                raw_items = cat.get("items")
+                if not isinstance(raw_items, list):
+                    continue
+                bucket = categories_by_title.setdefault(title, [])
+                if title not in order:
+                    order.append(title)
+                for raw_item in raw_items:
+                    if not isinstance(raw_item, dict):
+                        continue
+                    item = normalize_menu_item(raw_item)
+                    if item is None or item.price is None or item.id in seen_item_ids:
+                        continue
+                    if item.restaurant_id is None:
+                        item.restaurant_id = restaurant_id
+                    seen_item_ids.add(item.id)
+                    bucket.append(item)
+                    added_this_page += 1
+
+            if added_this_page == 0:
+                break
+
+        categories = [
+            {"title": title, "items": categories_by_title[title]}
+            for title in order
+            if categories_by_title[title]
+        ]
+        logger.info(
+            "get_restaurant_menu_structured: restaurant=%s categories=%d items=%d",
+            restaurant_id, len(categories), len(seen_item_ids),
+        )
+        return addr, restaurant, categories
 
     async def enrich(
         self,

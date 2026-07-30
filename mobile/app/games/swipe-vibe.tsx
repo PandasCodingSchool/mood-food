@@ -10,6 +10,7 @@ import { playSwipeSound, playSuccessSound } from '../../src/utils/sounds';
 import { hapticSelect, hapticSuccess, hapticWarning } from '../../src/utils/haptics';
 import { trackEvent } from '../../src/utils/analytics';
 import { logSignals } from '../../src/services/signals';
+import { formatTag } from '../../src/utils/formatTag';
 import type { GameSwipe } from '../../src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -174,7 +175,7 @@ export default function SnackMatchScreen() {
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                   {card.tags.map((tag) => (
                     <View key={tag} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: colors.rose + '18' }}>
-                      <Text style={[fw(700), { fontSize: 11, color: colors.rose }]}>{tag}</Text>
+                      <Text style={[fw(700), { fontSize: 11, color: colors.rose }]}>{formatTag(tag)}</Text>
                     </View>
                   ))}
                 </View>

@@ -135,6 +135,8 @@ export interface Recommendation {
       calories?: number;
       health_score?: number;
     } | null;
+    /** Populated client-side after a successful /api/swiggy/enrich-alternatives match. */
+    swiggy?: import("../services/swiggy").EnrichedMatch | null;
   }>;
   pairing_suggestions?: Array<{
     type: "drink" | "dessert" | "side";

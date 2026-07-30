@@ -7,6 +7,7 @@ import {
   type SwiggyAddress,
 } from "../services/swiggy";
 import {
+  getCart,
   updateCart,
   fetchCoupons,
   applyCoupon,
@@ -22,12 +23,12 @@ const TRACK_POLL_MS = 10000;
 const SWIGGY_SUPPORT_NUMBER = "080-67466729";
 const ORDER_VALUE_CAP_INR = 1000;
 
-export interface CheckoutTarget {
-  restaurantId: string;
-  restaurantName?: string;
-  menuItemId: string;
-  dishName: string;
-}
+// Single-dish target ("Order now!" fast path) — writes the one item to the
+// cart. Cart target (from the restaurant menu browser) — the server-side
+// Swiggy cart is already populated; this just reads it back.
+export type CheckoutTarget =
+  | { mode?: "single"; restaurantId: string; restaurantName?: string; menuItemId: string; dishName: string }
+  | { mode: "cart"; restaurantId: string; restaurantName?: string; addressId?: string };
 
 interface CheckoutModalProps {
   target: CheckoutTarget;
@@ -49,28 +50,34 @@ function CheckoutModal({ target, onClose }: CheckoutModalProps) {
   const [trackEta, setTrackEta] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
+  const isCartMode = target.mode === "cart";
   const selectedAddress = addresses.find((a) => a.id === addressId) || null;
   const capExceeded = (cart?.total ?? 0) >= ORDER_VALUE_CAP_INR;
+  const cartItemCount = cart?.items?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
 
   const loadCart = useCallback(
     async (addrId: string) => {
       setCartLoading(true);
       setError(null);
-      const result = await updateCart(target.restaurantId, addrId, target.menuItemId, 1, target.restaurantName);
+      // Cart mode: the menu browser already populated the server-side cart —
+      // just read it back. Single-dish mode: write the one item, then read.
+      const result = target.mode === "cart"
+        ? await getCart(addrId, target.restaurantName)
+        : await updateCart(target.restaurantId, addrId, target.menuItemId, 1, target.restaurantName);
       setCart(result);
       if (result.availablePaymentMethods.length > 0) setPaymentMethod(result.availablePaymentMethods[0]);
       if (result.addressRequired) setError("We need a delivery address to continue.");
       else if (!result.success && result.error) setError(result.error);
       setCartLoading(false);
     },
-    [target.restaurantId, target.menuItemId, target.restaurantName],
+    [isCartMode, target.restaurantId, target.restaurantName, target.mode === "single" ? target.menuItemId : undefined],
   );
 
   useEffect(() => {
     (async () => {
       const list = await fetchAddresses();
       setAddresses(list);
-      let addrId = getSavedAddressId();
+      let addrId = (target.mode === "cart" && target.addressId) || getSavedAddressId();
       if (!addrId && list.length > 0) {
         addrId = list[0].id;
         saveAddressId(addrId);
@@ -133,7 +140,10 @@ function CheckoutModal({ target, onClose }: CheckoutModalProps) {
       setPlacing(false);
       return;
     }
-    trackEvent("in_app_order_placed", { dish: target.dishName, order_id: result.orderId });
+    trackEvent("in_app_order_placed", {
+      dish: target.mode === "cart" ? target.restaurantName : target.dishName,
+      order_id: result.orderId,
+    });
     setOrderId(result.orderId || null);
     setPlacing(false);
   };
@@ -145,7 +155,9 @@ function CheckoutModal({ target, onClose }: CheckoutModalProps) {
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4">
       <div className="w-full md:max-w-md bg-white rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white flex items-center justify-between p-4 border-b border-gray-100">
-          <h3 className="font-black text-gray-900">{orderId ? "Order status" : `Order ${target.dishName}`}</h3>
+          <h3 className="font-black text-gray-900">
+            {orderId ? "Order status" : target.mode === "cart" ? target.restaurantName || "Your cart" : `Order ${target.dishName}`}
+          </h3>
           <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -236,6 +248,26 @@ function CheckoutModal({ target, onClose }: CheckoutModalProps) {
                       >
                         {method}
                       </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!cartLoading && cart && cart.items.length > 0 && (
+                <div>
+                  <span className="text-xs font-bold text-gray-500">
+                    {cartItemCount} item{cartItemCount === 1 ? "" : "s"}
+                  </span>
+                  <div className="flex flex-col gap-1.5 mt-1.5">
+                    {cart.items.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span className="text-gray-700 truncate pr-2">{item.quantity}× {item.name}</span>
+                        {item.price != null && (
+                          <span className="text-gray-500 font-semibold shrink-0">
+                            ₹{(item.price * item.quantity).toFixed(0)}
+                          </span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

@@ -2,11 +2,13 @@ import { useState, useRef, useEffect, useMemo, type ComponentType } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Heart, ShoppingCart, Sparkles, Leaf, Wallet } from 'lucide-react-native';
+import { ChevronLeft, Heart, ShoppingCart, Sparkles, Leaf, Wallet, UtensilsCrossed } from 'lucide-react-native';
+import { getSavedAddressId } from '../src/services/aiRecommendations';
 import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
 import { dishIcon, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
-import { bounceIn } from '../src/utils/animations';
+import { bounceIn, floatLoop } from '../src/utils/animations';
+import { formatTag } from '../src/utils/formatTag';
 import type { Recommendation } from '../src/types';
 
 export default function MealDetailScreen() {
@@ -17,9 +19,11 @@ export default function MealDetailScreen() {
   const [imageFailed, setImageFailed] = useState(false);
   const [activeVariant, setActiveVariant] = useState<'original' | 'healthier_swap' | 'budget_swap'>('original');
   const iconScale = useRef(new Animated.Value(0.3)).current;
+  const dotBounce = useRef(new Animated.Value(0)).current;
 
   useEffect(() => { bounceIn(iconScale); }, []);
   useEffect(() => { setImageFailed(false); }, [activeVariant]);
+  useEffect(() => { floatLoop(dotBounce, 5, 450); }, []);
 
   if (!rawRec) return null;
   const rec: Recommendation = JSON.parse(rawRec);
@@ -39,7 +43,7 @@ export default function MealDetailScreen() {
         tags: alt.tags ?? rec.dish.tags,
       },
       image_url: alt.image_url ?? null,
-      swiggy: null,
+      swiggy: alt.swiggy ?? null,
       practical_details: alt.practical_details
         ? { ...rec.practical_details, ...alt.practical_details }
         : rec.practical_details,
@@ -60,10 +64,30 @@ export default function MealDetailScreen() {
       ? rec.ai_reasoning?.mood_match
       : rec.alternatives?.find((a) => a.type === activeVariant)?.reason;
 
-  const liveMatch = rec.swiggy?.matched ? rec.swiggy : null;
+  const liveMatch = currentRec.swiggy?.matched ? currentRec.swiggy : null;
   const liveRestaurantName = liveMatch?.item?.restaurant_name || liveMatch?.restaurant?.name;
   const liveEta = liveMatch?.item?.eta_min ?? liveMatch?.restaurant?.eta_min;
   const liveIsOpen = liveMatch?.restaurant?.is_open;
+  const liveRestaurantId = liveMatch?.item?.restaurant_id ?? liveMatch?.restaurant?.id;
+  const liveMenuItemId = liveMatch?.item?.id;
+
+  const handleBrowseMenu = async () => {
+    if (!liveRestaurantId) return;
+    const addressId = await getSavedAddressId();
+    if (!addressId) return;
+    router.push({
+      pathname: '/restaurant-menu',
+      params: {
+        restaurantId: liveRestaurantId,
+        addressId,
+        restaurantName: liveRestaurantName || '',
+        dishId: currentRec.dish.id || '',
+        dishName: currentRec.dish.name,
+        why: currentRec.ai_reasoning?.mood_match || '',
+        initialMenuItemId: liveMenuItemId || '',
+      },
+    });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -101,7 +125,7 @@ export default function MealDetailScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>{currentRec.dish.name}</Text>
             <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>
-              {currentRec.dish.cuisine}{currentRec.dish.category ? ` · ${currentRec.dish.category}` : ''}
+              {currentRec.dish.cuisine}{currentRec.dish.category ? ` · ${formatTag(currentRec.dish.category)}` : ''}
             </Text>
           </View>
           {currentRec.practical_details?.estimated_price != null && (
@@ -109,10 +133,10 @@ export default function MealDetailScreen() {
           )}
         </View>
 
-        {activeVariant === 'original' && liveRestaurantName && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: liveIsOpen === false ? theme.subtext : colors.green }} />
-            <Text style={[fw(700), { fontSize: 12, color: theme.subtext }]} numberOfLines={1}>
+        {liveRestaurantName && (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: liveIsOpen === false ? theme.subtext : colors.green, marginTop: 5 }} />
+            <Text style={[fw(700), { fontSize: 12, color: theme.subtext, flex: 1 }]}>
               Live on Swiggy · {liveRestaurantName}{liveEta != null ? ` · ${liveEta} min` : ''}
             </Text>
           </View>
@@ -122,7 +146,7 @@ export default function MealDetailScreen() {
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
             {currentRec.dish.tags.map((tag) => (
               <View key={tag} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, backgroundColor: colors.orange + '18' }}>
-                <Text style={[fw(700), { fontSize: 12, color: colors.orange }]}>{tag}</Text>
+                <Text style={[fw(700), { fontSize: 12, color: colors.orange }]}>{formatTag(tag)}</Text>
               </View>
             ))}
           </View>
@@ -170,7 +194,29 @@ export default function MealDetailScreen() {
           )}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+        {liveRestaurantId && (
+          <TouchableOpacity onPress={handleBrowseMenu} activeOpacity={0.8} style={{ marginTop: 16 }}>
+            <View
+              style={{
+                height: 46, borderRadius: 23, backgroundColor: theme.surface,
+                borderWidth: 1.5, borderColor: 'rgba(124,58,237,0.3)',
+                alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
+              }}
+            >
+              <UtensilsCrossed size={16} color={colors.purple} />
+              <Text style={[fw(800), { fontSize: 14, color: colors.purple }]}>Ask Captain · Browse the menu!</Text>
+              <Animated.View
+                style={{
+                  width: 9, height: 9, borderRadius: 5, backgroundColor: '#ef4444',
+                  borderWidth: 1.5, borderColor: theme.surface,
+                  transform: [{ translateY: dotBounce }],
+                }}
+              />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
           <TouchableOpacity
             onPress={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(currentRec), rank: rawRank } })}
             activeOpacity={0.85}

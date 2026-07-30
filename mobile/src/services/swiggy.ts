@@ -1,6 +1,12 @@
 import { Linking } from 'react-native';
 import { API_BASE_URL, getHeaders } from './apiBase';
-import type { Recommendation, EnrichResponse, EnrichedMatch } from '../types';
+import type {
+  Recommendation,
+  EnrichResponse,
+  EnrichedMatch,
+  AlternativeEnrichedMatch,
+  EnrichAlternativesResponse,
+} from '../types';
 
 /**
  * Enrich recommendations with real Swiggy matches (photo, price, ETA, live status).
@@ -42,6 +48,44 @@ export async function enrichRecommendations(
     if (m.matched) byDish[m.dish_id] = m;
   }
   return byDish;
+}
+
+/**
+ * Live-match healthier_swap/budget_swap alternatives on Swiggy, streamed in
+ * after the original recommendation's own match (see enrichRecommendations
+ * above / /api/ai-recommendations) so this never blocks the fast path.
+ * Fire-and-forget from the recommendations list right after initial load;
+ * failures resolve to [] so callers can no-op rather than crash the screen.
+ */
+export async function enrichAlternatives(
+  recommendations: Recommendation[],
+  addressId?: string,
+): Promise<AlternativeEnrichedMatch[]> {
+  const items = recommendations.flatMap((rec) =>
+    (rec.alternatives || [])
+      .filter((alt) => (alt.type === 'healthier_swap' || alt.type === 'budget_swap') && alt.name)
+      .map((alt) => ({
+        rec_id: rec.id,
+        dish_id: alt.dish_id,
+        type: alt.type,
+        name: alt.name,
+        cuisine: alt.cuisine,
+      })),
+  );
+
+  if (items.length === 0) return [];
+
+  const response = await fetch(`${API_BASE_URL}/swiggy/enrich-alternatives`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ items, address_id: addressId || undefined }),
+  });
+
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as EnrichAlternativesResponse;
+  if (!data.success) return [];
+  return data.matches;
 }
 
 export async function swiggyStatus(): Promise<{ configured: boolean }> {

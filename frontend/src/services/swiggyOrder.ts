@@ -56,6 +56,57 @@ export interface TrackOrderResult {
   error?: string;
 }
 
+export interface CartItemInput {
+  menuItemId: string;
+  quantity: number;
+}
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  price?: number | null;
+  imageUrl?: string | null;
+  isVeg?: boolean | null;
+  rating?: number | null;
+  description?: string | null;
+}
+
+export interface MenuCategory {
+  title: string;
+  items: MenuItem[];
+}
+
+export interface RestaurantSummary {
+  id: string;
+  name: string;
+  rating?: number | null;
+  etaMin?: number | null;
+  cuisines?: string[];
+  imageUrl?: string | null;
+  costForTwo?: number | null;
+}
+
+export interface RestaurantMenu {
+  success: boolean;
+  restaurant?: RestaurantSummary | null;
+  categories: MenuCategory[];
+  addressId?: string | null;
+  error?: string;
+  addressRequired?: boolean;
+}
+
+export interface MenuChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface MenuChatResult {
+  success: boolean;
+  reply?: string | null;
+  suggestedItemIds: string[];
+  error?: string;
+}
+
 function mapCart(data: Record<string, unknown>): CartState {
   return {
     success: !!data.success,
@@ -79,11 +130,15 @@ export async function getCart(addressId: string, restaurantName?: string): Promi
   return mapCart(data);
 }
 
-export async function updateCart(
+/**
+ * Replaces the cart's contents with exactly `items` (always the full desired
+ * state, never a delta) — the docs don't fully specify whether the tool is
+ * additive or a full replace, so callers always send the complete cart.
+ */
+export async function updateCartItems(
   restaurantId: string,
   addressId: string,
-  menuItemId: string,
-  quantity = 1,
+  items: CartItemInput[],
   restaurantName?: string,
 ): Promise<CartState> {
   const res = await fetch(`${API_BASE_URL}/swiggy/cart`, {
@@ -93,11 +148,93 @@ export async function updateCart(
       restaurant_id: restaurantId,
       restaurant_name: restaurantName,
       address_id: addressId,
-      items: [{ menu_item_id: menuItemId, quantity }],
+      items: items.map((i) => ({ menu_item_id: i.menuItemId, quantity: i.quantity })),
     }),
   });
   const data = await res.json();
   return mapCart(data);
+}
+
+/** Single-dish convenience wrapper — the "Order now!" fast path. */
+export async function updateCart(
+  restaurantId: string,
+  addressId: string,
+  menuItemId: string,
+  quantity = 1,
+  restaurantName?: string,
+): Promise<CartState> {
+  return updateCartItems(restaurantId, addressId, [{ menuItemId, quantity }], restaurantName);
+}
+
+export async function getRestaurantMenu(restaurantId: string, addressId: string): Promise<RestaurantMenu> {
+  const params = new URLSearchParams({ address_id: addressId });
+  const res = await fetch(
+    `${API_BASE_URL}/swiggy/restaurant/${encodeURIComponent(restaurantId)}/menu?${params.toString()}`,
+    { headers: headers() },
+  );
+  const data = await res.json();
+  const restaurant = data.restaurant
+    ? {
+        id: data.restaurant.id,
+        name: data.restaurant.name,
+        rating: data.restaurant.rating,
+        etaMin: data.restaurant.eta_min,
+        cuisines: data.restaurant.cuisines,
+        imageUrl: data.restaurant.image_url,
+        costForTwo: data.restaurant.cost_for_two,
+      }
+    : null;
+  const categories: MenuCategory[] = (data.categories || []).map((c: Record<string, unknown>) => ({
+    title: c.title,
+    items: ((c.items as Record<string, unknown>[]) || []).map((i) => ({
+      id: i.id,
+      name: i.name,
+      price: i.price,
+      imageUrl: i.image_url,
+      isVeg: i.is_veg,
+      rating: i.rating,
+      description: i.description,
+    })),
+  }));
+  return {
+    success: !!data.success,
+    restaurant,
+    categories,
+    addressId: data.address_id,
+    error: data.error,
+    addressRequired: !!data.address_required,
+  };
+}
+
+export async function sendMenuChat(
+  restaurantId: string,
+  addressId: string,
+  messages: MenuChatTurn[],
+  dishContext?: { dishId?: string; dishName?: string; why?: string },
+  userId?: string,
+  preferences?: { diets: string[]; allergies: string[]; cuisines: string[] },
+): Promise<MenuChatResult> {
+  const res = await fetch(`${API_BASE_URL}/swiggy/menu-chat`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      restaurant_id: restaurantId,
+      address_id: addressId,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      dish_context: dishContext
+        ? { dish_id: dishContext.dishId, dish_name: dishContext.dishName, why: dishContext.why }
+        : undefined,
+      user_id: userId,
+      preferences,
+    }),
+  });
+  const data = await res.json();
+  return {
+    success: !!data.success,
+    reply: data.reply,
+    suggestedItemIds: data.suggested_item_ids || [],
+    error: data.error,
+  };
 }
 
 export async function fetchCoupons(restaurantId: string, addressId: string): Promise<Coupon[]> {

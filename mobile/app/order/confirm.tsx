@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image, Modal, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fw, colors } from '../../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
-import type { DeliveryApp } from '../../src/constants/deliveryApps';
+import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import type { Recommendation } from '../../src/types';
 import { saveOrder } from '../../src/services/history';
 import { logSignal } from '../../src/services/signals';
@@ -17,6 +17,7 @@ import {
 } from '../../src/services/aiRecommendations';
 import { openSwiggyApp } from '../../src/services/swiggy';
 import {
+  getCart,
   updateCart,
   fetchCoupons,
   applyCoupon,
@@ -27,29 +28,54 @@ import {
 
 export default function OrderConfirmScreen() {
   const router = useRouter();
-  const { rec: rawRec, rank: rawRank, app: rawApp } = useLocalSearchParams<{
-    rec: string;
+  const params = useLocalSearchParams<{
+    // Single-dish mode (the "Order now!" fast path from a recommendation card)
+    rec?: string;
     rank?: string;
-    app: string;
+    appName?: string;
+    // Cart mode (from the restaurant menu browser — restaurant-scoped, already
+    // has whatever the user picked sitting in the server-side Swiggy cart)
+    restaurantId?: string;
+    restaurantName?: string;
+    addressId?: string;
   }>();
+
   const [imageFailed, setImageFailed] = useState(false);
   const [placing, setPlacing] = useState(false);
-  const rec: Recommendation = JSON.parse(rawRec);
-  const rank = Number(rawRank || 0);
-  const app: DeliveryApp = JSON.parse(rawApp);
-  const emoji = dishEmoji(rec);
-  const imageUrl = !imageFailed ? resolveDishImage(rec) : null;
+
+  const rec: Recommendation | null = params.rec ? JSON.parse(params.rec) : null;
+  const rank = Number(params.rank || 0);
+  const cartMode = !rec;
+
+  // Reconstruct the delivery-app choice from its name (app-select.tsx only
+  // passes appName, not the full object) the same way order/success.tsx does.
+  const app: DeliveryApp = useMemo(() => {
+    if (cartMode) {
+      return {
+        icon: DELIVERY_APPS[0].icon, name: 'Swiggy', bg: '#fff3e0', eta: '30-40 min',
+        fee: 'Live restaurant pricing', feeAmount: 0, isLive: true, restaurantName: params.restaurantName,
+      };
+    }
+    const liveOption = rec ? swiggyDeliveryOption(rec) : null;
+    if (liveOption && liveOption.name === params.appName) return liveOption;
+    return DELIVERY_APPS.find((a) => a.name === params.appName) ?? DELIVERY_APPS[0];
+  }, [cartMode, rec, params.appName, params.restaurantName]);
+
+  const emoji = rec ? dishEmoji(rec) : '🍽️';
+  const imageUrl = rec && !imageFailed ? resolveDishImage(rec) : null;
   const gradient = dishGradient(rank);
 
   // A "live" order goes through the real Swiggy MCP tools (cart/coupon/place).
-  // Anything else (demo delivery apps, or an unmatched dish) keeps the
+  // A single-dish rec without a live match, or a demo delivery app, keeps the
   // existing local-only "confirm" flow unchanged.
-  const restaurantId = rec.swiggy?.item?.restaurant_id ?? rec.swiggy?.restaurant?.id ?? null;
-  const menuItemId = rec.swiggy?.item?.id ?? null;
-  const isLiveOrder = !!(app.isLive && rec.swiggy?.matched && restaurantId && menuItemId);
+  const restaurantId = cartMode
+    ? params.restaurantId!
+    : (rec?.swiggy?.item?.restaurant_id ?? rec?.swiggy?.restaurant?.id ?? null);
+  const menuItemId = cartMode ? null : (rec?.swiggy?.item?.id ?? null);
+  const isLiveOrder = cartMode || !!(app.isLive && rec?.swiggy?.matched && restaurantId && menuItemId);
 
   const [addresses, setAddresses] = useState<SwiggyAddress[]>([]);
-  const [addressId, setAddressId] = useState<string | null>(null);
+  const [addressId, setAddressId] = useState<string | null>(cartMode ? params.addressId || null : null);
   const [addressPickerOpen, setAddressPickerOpen] = useState(false);
   const [cart, setCart] = useState<CartState | null>(null);
   const [cartLoading, setCartLoading] = useState(isLiveOrder);
@@ -63,10 +89,13 @@ export default function OrderConfirmScreen() {
 
   const loadCartFor = useCallback(
     async (addrId: string) => {
-      if (!restaurantId || !menuItemId) return;
       setCartLoading(true);
       setOrderError(null);
-      const result = await updateCart(restaurantId, addrId, menuItemId, 1, app.restaurantName);
+      // Cart mode: the menu browser already populated the server-side cart —
+      // just read it back. Single-dish mode: write the one item, then read.
+      const result = cartMode
+        ? await getCart(addrId, params.restaurantName)
+        : await updateCart(restaurantId!, addrId, menuItemId!, 1, app.restaurantName);
       setCart(result);
       setCapExceeded((result.total ?? 0) >= 1000);
       if (result.availablePaymentMethods.length > 0) setPaymentMethod(result.availablePaymentMethods[0]);
@@ -74,7 +103,7 @@ export default function OrderConfirmScreen() {
       else if (!result.success && result.error) setOrderError(result.error);
       setCartLoading(false);
     },
-    [restaurantId, menuItemId, app.restaurantName],
+    [cartMode, restaurantId, menuItemId, app.restaurantName, params.restaurantName],
   );
 
   useEffect(() => {
@@ -82,7 +111,7 @@ export default function OrderConfirmScreen() {
     (async () => {
       const list = await fetchAddresses();
       setAddresses(list);
-      let addrId = await getSavedAddressId();
+      let addrId = addressId || (await getSavedAddressId());
       if (!addrId && list.length > 0) {
         addrId = list[0].id;
         await saveAddressId(addrId);
@@ -123,8 +152,8 @@ export default function OrderConfirmScreen() {
     setCartLoading(false);
   };
 
-  // --- Fake / demo-app path (unchanged from before) ---
-  const priceNum = rec.practical_details?.estimated_price ?? 250;
+  // --- Fake / demo-app path (single-dish mode only, unchanged from before) ---
+  const priceNum = rec?.practical_details?.estimated_price ?? 250;
   const delivFee = app.feeAmount;
   const discount = priceNum * 0.15;
   const fakeTotal = priceNum + delivFee - discount;
@@ -136,9 +165,53 @@ export default function OrderConfirmScreen() {
   const liveTotal = cart?.total ?? liveSubtotal + liveDelivery - liveDiscount;
 
   const total = isLiveOrder ? liveTotal : fakeTotal;
+  const cartItemCount = cart?.items?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
 
   const handleOpenInSwiggyApp = async () => {
-    await openSwiggyApp(restaurantId || undefined, rec.dish.name);
+    await openSwiggyApp(restaurantId || undefined, rec?.dish.name);
+  };
+
+  const saveOrderHistory = async (orderId: string | null | undefined) => {
+    try {
+      if (cartMode) {
+        const summary = cart?.items?.length
+          ? cart.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')
+          : params.restaurantName || 'Order';
+        await saveOrder({
+          dishName: summary,
+          cuisine: undefined,
+          emoji: '🛒',
+          priceInr: Math.round(total),
+          platform: app.name,
+          gradientStart: gradient[0],
+          gradientEnd: gradient[1],
+          ordered: true,
+          saved: false,
+          swiggyOrderId: orderId || undefined,
+          restaurantId: restaurantId || undefined,
+          addressId: addressId || undefined,
+        });
+      } else if (rec) {
+        await saveOrder({
+          dishName: rec.dish.name,
+          cuisine: rec.dish.cuisine,
+          emoji,
+          priceInr: Math.round(total),
+          platform: app.name,
+          via: (rec as unknown as Record<string, string>).gameSource || undefined,
+          gradientStart: gradient[0],
+          gradientEnd: gradient[1],
+          ordered: true,
+          saved: false,
+          swiggyOrderId: orderId || undefined,
+          restaurantId: restaurantId || undefined,
+          menuItemId: menuItemId || undefined,
+          addressId: addressId || undefined,
+        });
+      }
+    } catch {
+      // silent — order nav proceeds regardless
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -163,66 +236,41 @@ export default function OrderConfirmScreen() {
         setPlacing(false);
         return;
       }
-      try {
-        await saveOrder({
-          dishName: rec.dish.name,
-          cuisine: rec.dish.cuisine,
-          emoji,
-          priceInr: Math.round(total),
-          platform: app.name,
-          via: (rec as unknown as Record<string, string>).gameSource || undefined,
-          gradientStart: gradient[0],
-          gradientEnd: gradient[1],
-          ordered: true,
-          saved: false,
-          swiggyOrderId: result.orderId || undefined,
-          restaurantId: restaurantId || undefined,
-          menuItemId: menuItemId || undefined,
-          addressId,
-        });
-      } catch {
-        // silent — order nav proceeds regardless
-      }
-      void logSignal('order', { dish_id: rec.dish.id, dish_name: rec.dish.name, price: Math.round(total) });
-      if (rec.is_wildcard) {
+      await saveOrderHistory(result.orderId);
+      void logSignal('order', {
+        dish_id: rec?.dish.id, dish_name: rec?.dish.name || params.restaurantName,
+        price: Math.round(total),
+      });
+      if (rec?.is_wildcard) {
         void logSignal('wildcard_verdict', { accepted: true });
         void bumpQuestProgress('adventure_score');
       }
       void bumpQuestProgress('try_3_cuisines');
       router.push({
         pathname: '/order/success',
-        params: { rec: rawRec, appName: app.name, total: total.toFixed(0), orderId: result.orderId || '' },
+        params: {
+          rec: params.rec || JSON.stringify({
+            dish: { id: '', name: cart?.items?.length ? `${cart.items.length} items` : 'Your order' },
+            swiggy: { matched: true, restaurant: { name: params.restaurantName } },
+          }),
+          appName: app.name, total: total.toFixed(0), orderId: result.orderId || '',
+        },
       });
       setPlacing(false);
       return;
     }
 
-    // Fake / demo-app path — unchanged.
-    try {
-      await saveOrder({
-        dishName: rec.dish.name,
-        cuisine: rec.dish.cuisine,
-        emoji,
-        priceInr: Math.round(total),
-        platform: app.name,
-        via: (rec as unknown as Record<string, string>).gameSource || undefined,
-        gradientStart: gradient[0],
-        gradientEnd: gradient[1],
-        ordered: true,
-        saved: false,
-      });
-    } catch {
-      // silent — order nav proceeds regardless
-    }
-    void logSignal('order', { dish_id: rec.dish.id, dish_name: rec.dish.name, price: Math.round(total) });
-    if (rec.is_wildcard) {
+    // Fake / demo-app path — unchanged (single-dish mode only).
+    await saveOrderHistory(null);
+    void logSignal('order', { dish_id: rec?.dish.id, dish_name: rec?.dish.name, price: Math.round(total) });
+    if (rec?.is_wildcard) {
       void logSignal('wildcard_verdict', { accepted: true });
       void bumpQuestProgress('adventure_score');
     }
     void bumpQuestProgress('try_3_cuisines');
     router.push({
       pathname: '/order/success',
-      params: { rec: rawRec, appName: app.name, total: total.toFixed(0) },
+      params: { rec: params.rec!, appName: app.name, total: total.toFixed(0) },
     });
     setPlacing(false);
   };
@@ -257,30 +305,56 @@ export default function OrderConfirmScreen() {
                 </View>
               )}
             </View>
-            {app.isLive && app.restaurantName && (
-              <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 1 }]} numberOfLines={1}>{app.restaurantName}</Text>
+            {app.isLive && (params.restaurantName || app.restaurantName) && (
+              <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 1 }]} numberOfLines={1}>
+                {params.restaurantName || app.restaurantName}
+              </Text>
             )}
           </View>
         </View>
 
-        <View style={{ borderRadius: 20, overflow: 'hidden' }}>
-          {imageUrl ? (
-            <Image
-              source={{ uri: imageUrl }}
-              style={{ width: '100%', height: 140 }}
-              resizeMode="cover"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <LinearGradient colors={dishGradient(rank)} style={{ height: 140, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 72 }}>{emoji}</Text>
-            </LinearGradient>
-          )}
-          <View style={{ padding: 16, paddingHorizontal: 20, backgroundColor: '#fff' }}>
-            <Text style={[fw(900), { fontSize: 20, color: colors.navy }]}>{rec.dish.name}</Text>
-            <Text style={[fw(600), { fontSize: 13, color: '#64748b', marginTop: 4 }]}>{rec.dish.cuisine}</Text>
+        {!cartMode && rec && (
+          <View style={{ borderRadius: 20, overflow: 'hidden' }}>
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={{ width: '100%', height: 140 }}
+                resizeMode="cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <LinearGradient colors={dishGradient(rank)} style={{ height: 140, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 72 }}>{emoji}</Text>
+              </LinearGradient>
+            )}
+            <View style={{ padding: 16, paddingHorizontal: 20, backgroundColor: '#fff' }}>
+              <Text style={[fw(900), { fontSize: 20, color: colors.navy }]}>{rec.dish.name}</Text>
+              <Text style={[fw(600), { fontSize: 13, color: '#64748b', marginTop: 4 }]}>{rec.dish.cuisine}</Text>
+            </View>
           </View>
-        </View>
+        )}
+
+        {/* Itemized cart — the single-dish path shows its one item here too, so
+            both modes render the actual cart contents, not just a total. */}
+        {!cartLoading && cart && cart.items.length > 0 && (
+          <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 10 }}>
+            <Text style={[fw(700), { fontSize: 13, color: colors.navy }]}>
+              🧾 {cartItemCount} item{cartItemCount === 1 ? '' : 's'}
+            </Text>
+            <View style={{ gap: 8 }}>
+              {cart.items.map((item) => (
+                <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={[fw(600), { fontSize: 13, color: colors.navy, flex: 1 }]} numberOfLines={1}>
+                    {item.quantity}× {item.name}
+                  </Text>
+                  {item.price != null && (
+                    <Text style={[fw(700), { fontSize: 13, color: '#64748b' }]}>₹{(item.price * item.quantity).toFixed(0)}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -358,20 +432,22 @@ export default function OrderConfirmScreen() {
           </View>
         )}
 
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(34,197,94,0.06)', alignItems: 'center' }}>
-            <Text style={{ fontSize: 24 }}>🕐</Text>
-            <Text style={[fw(900), { fontSize: 18, color: colors.navy, marginTop: 4 }]}>{app.eta}</Text>
-            <Text style={[fw(700), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>Estimated time</Text>
+        {!cartMode && (
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(34,197,94,0.06)', alignItems: 'center' }}>
+              <Text style={{ fontSize: 24 }}>🕐</Text>
+              <Text style={[fw(900), { fontSize: 18, color: colors.navy, marginTop: 4 }]}>{app.eta}</Text>
+              <Text style={[fw(700), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>Estimated time</Text>
+            </View>
+            <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.06)', alignItems: 'center' }}>
+              <Text style={{ fontSize: 24 }}>🚗</Text>
+              <Text style={[fw(900), { fontSize: 18, color: colors.navy, marginTop: 4 }]}>
+                {app.distanceKm != null ? `${app.distanceKm.toFixed(1)} km` : '1.2 mi'}
+              </Text>
+              <Text style={[fw(700), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>Distance</Text>
+            </View>
           </View>
-          <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.06)', alignItems: 'center' }}>
-            <Text style={{ fontSize: 24 }}>🚗</Text>
-            <Text style={[fw(900), { fontSize: 18, color: colors.navy, marginTop: 4 }]}>
-              {app.distanceKm != null ? `${app.distanceKm.toFixed(1)} km` : '1.2 mi'}
-            </Text>
-            <Text style={[fw(700), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>Distance</Text>
-          </View>
-        </View>
+        )}
 
         {cartLoading ? (
           <View style={{ padding: 24, alignItems: 'center' }}>

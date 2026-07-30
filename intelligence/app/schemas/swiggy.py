@@ -117,6 +117,50 @@ class EnrichResponse(BaseModel):
     address_required: bool = False
 
 
+class AlternativeEnrichItem(BaseModel):
+    """One healthier_swap/budget_swap alternative to live-match, tagged with
+    its parent recommendation so results can be fanned back out per-rec."""
+    rec_id: str
+    dish_id: str
+    type: str  # "healthier_swap" | "budget_swap"
+    name: str
+    cuisine: Optional[str] = None
+
+
+class EnrichAlternativesRequest(BaseModel):
+    items: list[AlternativeEnrichItem]
+    address_id: Optional[str] = None
+
+
+class AlternativeEnrichedMatch(BaseModel):
+    rec_id: str
+    dish_id: str
+    type: str
+    match: EnrichedMatch
+
+
+class EnrichAlternativesResponse(BaseModel):
+    success: bool
+    address_id: Optional[str] = None
+    matches: list[AlternativeEnrichedMatch] = Field(default_factory=list)
+    error: Optional[str] = None
+    address_required: bool = False
+
+
+class MenuCategory(BaseModel):
+    title: str
+    items: list[SwiggyMenuItem] = Field(default_factory=list)
+
+
+class RestaurantMenuResponse(BaseModel):
+    success: bool
+    restaurant: Optional[SwiggyRestaurant] = None
+    categories: list[MenuCategory] = Field(default_factory=list)
+    address_id: Optional[str] = None
+    error: Optional[str] = None
+    address_required: bool = False
+
+
 # --- Cart / Coupon / Order / Track (Phase 2 — ordering) ---
 
 # Swiggy's own beta restriction: place_food_order rejects carts >= this total.
@@ -237,4 +281,42 @@ class TrackOrderResponse(BaseModel):
     eta: Optional[str] = None
     progress: Optional[str] = None
     raw: Optional[dict] = None
+    error: Optional[str] = None
+
+
+# --- AI menu chat ---
+
+class MenuChatDishContext(BaseModel):
+    dish_id: Optional[str] = None
+    dish_name: Optional[str] = None
+    why: Optional[str] = None
+
+
+class MenuChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class MenuChatPreferences(BaseModel):
+    """Onboarding dietary/cuisine preferences, sent by the client from its own
+    saved preferences (see mobile's fetchPreferences()/preferences.tsx) since
+    the intelligence service has no direct access to the Node backend's DB."""
+    diets: list[str] = Field(default_factory=list)
+    allergies: list[str] = Field(default_factory=list)
+    cuisines: list[str] = Field(default_factory=list)
+
+
+class MenuChatRequest(BaseModel):
+    restaurant_id: str
+    address_id: str
+    dish_context: Optional[MenuChatDishContext] = None
+    messages: list[MenuChatMessage]
+    user_id: Optional[str] = None
+    preferences: Optional[MenuChatPreferences] = None
+
+
+class MenuChatResponse(BaseModel):
+    success: bool
+    reply: Optional[str] = None
+    suggested_item_ids: list[str] = Field(default_factory=list)
     error: Optional[str] = None
