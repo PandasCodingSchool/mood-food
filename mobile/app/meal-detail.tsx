@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, type ComponentType } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Heart, ShoppingCart, Sparkles, Leaf, Wallet, UtensilsCrossed } from 'lucide-react-native';
+import { ChevronLeft, Heart, ShoppingCart, Sparkles, Leaf, Wallet, UtensilsCrossed, MapPin } from 'lucide-react-native';
 import { getSavedAddressId } from '../src/services/aiRecommendations';
 import { useTheme } from '../src/context/ThemeContext';
 import { fw, colors } from '../src/constants/theme';
@@ -134,11 +134,23 @@ export default function MealDetailScreen() {
         </View>
 
         {liveRestaurantName && (
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: liveIsOpen === false ? theme.subtext : colors.green, marginTop: 5 }} />
-            <Text style={[fw(700), { fontSize: 12, color: theme.subtext, flex: 1 }]}>
-              Live on Swiggy · {liveRestaurantName}{liveEta != null ? ` · ${liveEta} min` : ''}
-            </Text>
+          <View
+            style={{
+              flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10,
+              paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14,
+              backgroundColor: colors.orange + '14',
+            }}
+          >
+            <MapPin size={16} color={colors.orange} style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[fw(800), { fontSize: 15, color: colors.orange }]}>{liveRestaurantName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: liveIsOpen === false ? theme.subtext : colors.green }} />
+                <Text style={[fw(700), { fontSize: 11, color: theme.subtext }]}>
+                  Live on Swiggy{liveEta != null ? ` · ${liveEta} min` : ''}
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
