@@ -41,6 +41,7 @@ export default function OrderConfirmScreen() {
     restaurantName?: string;
     addressId?: string;
   }>();
+  const { bottom: safeBottom, top: safeTop } = useSafeAreaInsets();
 
   const [imageFailed, setImageFailed] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -280,7 +281,7 @@ export default function OrderConfirmScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <StatusBar barStyle="dark-content" />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ paddingTop: safeTop + 12, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
@@ -503,7 +504,7 @@ export default function OrderConfirmScreen() {
       </ScrollView>
 
 
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, backgroundColor: '#fff' }}>
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: '#fff' }}>
         {capExceeded ? (
           <TouchableOpacity activeOpacity={0.85} onPress={handleOpenInSwiggyApp}>
             <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
