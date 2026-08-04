@@ -141,14 +141,16 @@ def _looks_retryable(text: str) -> bool:
 class SwiggyMCPClient:
     """Calls Swiggy Food MCP tools using a bearer token."""
 
-    def __init__(self, token: Optional[str] = None) -> None:
+    def __init__(self, token: Optional[str] = None, mcp_url: Optional[str] = None) -> None:
         # Read the freshest token from the runtime store (falls back to env), so
         # a re-auth heals the service without a restart. Each request builds a
         # fresh client, so it always picks up the latest stored token.
         from app.services.swiggy_token import load_token
 
         self._token = token or load_token()
-        self._url = settings.swiggy_mcp_url
+        # mcp_url lets callers target a different Swiggy MCP server (e.g.
+        # Instamart) with this same generic transport; defaults to Food.
+        self._url = mcp_url or settings.swiggy_mcp_url
         self._active: Optional["_BoundSession"] = None
 
     @property

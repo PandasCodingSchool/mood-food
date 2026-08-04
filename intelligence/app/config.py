@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # --- Swiggy MCP (Food server) ---
     # Streamable-HTTP MCP endpoint. See https://mcp.swiggy.com/builders
     swiggy_mcp_url: str = "https://mcp.swiggy.com/food"
+    # Instamart (grocery) MCP endpoint — same auth model, separate server.
+    swiggy_instamart_mcp_url: str = "https://mcp.swiggy.com/im"
     # Phase 1: a single service/bootstrap account token (OAuth'd once) used to
     # power discovery. Tokens last 5 days with no refresh in v1 — re-auth via ops.
     swiggy_bootstrap_token: str = ""

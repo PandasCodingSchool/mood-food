@@ -105,3 +105,54 @@ Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 | FastAPI routes (`/api/swiggy/*`) | `app/routes/swiggy.py` |
 | OAuth token minting | `scripts/swiggy_auth.py` |
 | Connectivity smoke test | `scripts/swiggy_smoke.py` |
+
+---
+
+# Swiggy MCP — Instamart (Grocery) Server Tool Reference
+
+Endpoint: `POST https://mcp.swiggy.com/im` (MCP over streamable HTTP).
+Auth: same bearer-token model as the Food server.
+Source: https://mcp.swiggy.com/builders/docs/reference/instamart/
+
+Status: ✅ wired (DIY cooking feature — ingredient search + grocery cart/checkout).
+
+### ✅ search_products
+- **In:** `addressId` (req), `query` (req), `offset` (opt, default 0)
+- **Out:** `{ success, data: { nextOffset, products: [{ name, brand, availability, variations: [{ spinId, quantity, price, stock }] }], similarProducts } }`
+- `skuId` is not in the documented example variation shape but is read defensively (present in real responses) — see `instamart_discovery._normalize_variation`.
+
+### ✅ update_cart
+- **In:** `selectedAddressId` (req), `items` (req — `[{ spinId, skuId, quantity }]`)
+- **REPLACES the entire cart** each call — not additive. Always follow with `get_cart` for authoritative totals (same pattern as `update_food_cart`).
+
+### ✅ get_cart
+- **In:** `addressId` (req)
+- **Out:** items, pricing breakdown, available payment methods.
+
+### ✅ clear_cart
+- **In:** _(none)_ — required before switching addresses to avoid SKU mismatches.
+
+### ✅ checkout
+- **In:** `addressId` (req), `paymentMethod` (opt — `"UPI"`/`"Cash"`, default Cash), `intentApp` (opt), `generateUPIQR` (opt)
+- **Out:** UPI → `{ status: "PENDING_PAYMENT", paasId, orderId }`, must poll `check_payment_status`. Cash/SwiggyPay confirms in one call.
+- Requires explicit user confirmation before calling (enforced server-side via `confirmed=true`, same rule as Food's `place_order`). Min cart ₹99; local safety cap ₹1000 mirrors Food's beta limit.
+
+### ✅ get_payment_options / check_payment_status
+- Payment method discovery and UPI polling, as above.
+
+### track_order / get_delivery_status / get_orders / get_order_details
+- Not yet wired beyond basic `track_order`; add as needed.
+
+### your_go_to_items / get_addresses / create_address / delete_address / apply_coupon / list_coupons / report_error
+- Not yet wired — DIY flow reuses the address already selected on the mobile/web client rather than managing Instamart addresses separately.
+
+## Our wiring (Instamart)
+
+| Layer | File |
+|---|---|
+| MCP client | `app/services/swiggy_mcp.py` (`SwiggyMCPClient(mcp_url=settings.swiggy_instamart_mcp_url)`) |
+| Ingredient search + matching | `app/services/instamart_discovery.py` |
+| Cart/checkout logic | `app/services/instamart_order.py` |
+| FastAPI routes (`/api/instamart/*`) | `app/routes/instamart.py` |
+| Recipe generation (`/api/recipe/*`) | `app/services/recipe_generator.py`, `app/routes/recipe.py` |
+| Food-photo moderation gate (`/api/moderation/*`) | `app/services/image_moderation.py`, `app/routes/moderation.py` |
