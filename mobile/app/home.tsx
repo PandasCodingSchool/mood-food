@@ -32,11 +32,11 @@ const GAMES: Array<{
   {
     id: 'character',
     route: '/games/character',
-    title: 'Character Match',
-    desc: "Find out which TV character you are tonight — and what they'd eat",
-    emoji: '🎭',
-    bgEmoji: '🍿',
-    meta: '2 min · Fun quiz',
+    title: "Tonight's Story",
+    desc: "Live one small moment. Three choices about how you're feeling, then we land on tonight's meal.",
+    emoji: '🌙',
+    bgEmoji: '✨',
+    meta: '30 sec · Popular',
     colors: ['#7c3aed', '#a78bfa'] as const,
   },
   {

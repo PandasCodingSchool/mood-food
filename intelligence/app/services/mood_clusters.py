@@ -38,9 +38,19 @@ def cluster_of_dish(dish: DishRecord) -> str:
     return "exhale"
 
 
+# Beverages and complimentary sides (breads, pickles, accompaniment salads) are
+# never a standalone "what should I eat" pick — see recommender._MAIN_CATEGORIES /
+# _course_group, which apply the same rule to swap candidates. Excluding them
+# here stops e.g. a ₹30 Masala Chai from being boosted as a cluster-preferred
+# headline recommendation.
+def _is_standalone_meal(dish: DishRecord) -> bool:
+    return dish.category != "beverage" and dish.tier != "complimentary"
+
+
 _DISHES_BY_CLUSTER: dict[str, list[DishRecord]] = {cid: [] for cid in CLUSTER_IDS}
 for _dish in DISHES:
-    _DISHES_BY_CLUSTER[cluster_of_dish(_dish)].append(_dish)
+    if _is_standalone_meal(_dish):
+        _DISHES_BY_CLUSTER[cluster_of_dish(_dish)].append(_dish)
 
 
 def dishes_for_cluster(cluster_id: str, limit: int = 10) -> list[DishRecord]:
