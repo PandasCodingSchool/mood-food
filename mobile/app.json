@@ -42,7 +42,8 @@
       "expo-font",
       "expo-secure-store",
       "expo-audio",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-sharing"
     ],
     "extra": {
       "router": {},

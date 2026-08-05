@@ -1,20 +1,35 @@
 import { useState, useRef, useEffect } from 'react';
-import type { ComponentType } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Utensils, Sparkles, Star } from 'lucide-react-native';
-import { CHAR_QUESTIONS, TOTAL_CHAR_QUESTIONS, type CharacterProfile } from '../../src/constants/characters';
-import { getCharacterMatch } from '../../src/utils/characterEngine';
+import {
+  OPENING_SCENES,
+  SCENE2_OPTION_BANK,
+  SCENE2_TEXT,
+  TWIST_OPTIONS,
+  TWIST_PROMPT,
+  TWIST_SUBTITLE,
+  type JourneyOption,
+  type MoodCluster,
+} from '../../src/constants/moodJourney';
+import { accumulateAxes, matchCluster, normalizeAxes } from '../../src/utils/moodJourneyEngine';
 import { fw, colors } from '../../src/constants/theme';
 import { trackEvent } from '../../src/utils/analytics';
 import { bounceIn, floatLoop } from '../../src/utils/animations';
 import { playPopSound, playWinSound } from '../../src/utils/sounds';
 import { hapticSelect, hapticSuccess } from '../../src/utils/haptics';
 
-type LucideIcon = ComponentType<{ size?: number; color?: string }>;
+type Phase = 'opening' | 'scene2' | 'twist' | 'reveal';
 
-function Sparkle({ style, Icon, size, color, duration }: { style: object; Icon: LucideIcon; size: number; color: string; duration: number }) {
+function pickOpeningScene() {
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000,
+  );
+  return OPENING_SCENES[dayOfYear % OPENING_SCENES.length];
+}
+
+function Sparkle({ style, size, color, duration }: { style: object; size: number; color: string; duration: number }) {
   const translateY = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = floatLoop(translateY, 10, duration);
@@ -22,52 +37,50 @@ function Sparkle({ style, Icon, size, color, duration }: { style: object; Icon: 
   }, []);
   return (
     <Animated.View style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>
-      <Icon size={size} color={color} />
+      <Sparkles size={size} color={color} />
     </Animated.View>
   );
 }
 
-function Reveal({ character, onContinue }: { character: CharacterProfile; onContinue: () => void }) {
+function Reveal({ cluster, onContinue }: { cluster: MoodCluster; onContinue: () => void }) {
   const iconScale = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
     bounceIn(iconScale);
   }, []);
 
-  const CharacterIcon = character.Icon;
-  const MealIcon = character.mealIcon;
-
   return (
-    <LinearGradient colors={character.bg} style={{ flex: 1 }}>
-      <Sparkle Icon={Sparkles} size={24} color="rgba(255,255,255,0.6)" duration={3000} style={{ top: 40, left: 30, opacity: 0.6 }} />
-      <Sparkle Icon={Star} size={20} color="rgba(255,255,255,0.4)" duration={2500} style={{ top: 80, right: 40 }} />
-      <Sparkle Icon={Sparkles} size={16} color="rgba(255,255,255,0.3)" duration={2000} style={{ top: 200, left: 20 }} />
+    <LinearGradient colors={cluster.gradient} style={{ flex: 1 }}>
+      <Sparkle size={24} color="rgba(255,255,255,0.6)" duration={3000} style={{ top: 40, left: 30, opacity: 0.6 }} />
+      <Sparkle size={20} color="rgba(255,255,255,0.4)" duration={2500} style={{ top: 80, right: 40 }} />
+      <Sparkle size={16} color="rgba(255,255,255,0.3)" duration={2000} style={{ top: 200, left: 20 }} />
 
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 }}>
         <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 3, textTransform: 'uppercase' }]}>
-          Tonight you are
+          Tonight's mood
         </Text>
         <Animated.View style={{ marginVertical: 8, transform: [{ scale: iconScale }] }}>
-          <CharacterIcon size={80} color="#fff" />
+          <Text style={{ fontSize: 64 }}>{cluster.emoji}</Text>
         </Animated.View>
-        <Text style={[fw(900), { fontSize: 32, color: '#fff', textAlign: 'center' }]}>{character.name}</Text>
-        <Text style={[fw(700), { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>{character.show}</Text>
+        <Text style={[fw(900), { fontSize: 32, color: '#fff', textAlign: 'center' }]}>{cluster.name}</Text>
+        <Text style={[fw(700), { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4, textAlign: 'center' }]}>
+          {cluster.tagline}
+        </Text>
 
         <View style={{ marginTop: 24, padding: 20, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', width: '100%' }}>
           <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }]}>
-            Their signature order
+            Tonight, something like
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            <MealIcon size={40} color="#fff" />
-            <View>
-              <Text style={[fw(800), { fontSize: 18, color: '#fff' }]}>{character.mealName}</Text>
-              <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }]}>{character.mealDesc}</Text>
+            <Utensils size={32} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={[fw(800), { fontSize: 18, color: '#fff' }]}>{cluster.sampleDish}</Text>
             </View>
           </View>
         </View>
 
         <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 12, maxWidth: 280, lineHeight: 20 }]}>
-          {character.quote}
+          {cluster.revealBody}
         </Text>
 
         <TouchableOpacity onPress={onContinue} activeOpacity={0.85} style={{ width: '100%', marginTop: 20 }}>
@@ -81,14 +94,21 @@ function Reveal({ character, onContinue }: { character: CharacterProfile; onCont
   );
 }
 
-export default function CharacterMatchScreen() {
+export default function MoodJourneyScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
-  const [match, setMatch] = useState<CharacterProfile | null>(null);
+  const [openingScene] = useState(pickOpeningScene);
+  const [phase, setPhase] = useState<Phase>('opening');
+  const [selections, setSelections] = useState<JourneyOption[]>([]);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const question = CHAR_QUESTIONS[step];
+  const scene2Options = openingScene.scene2OptionIds.map((id) => SCENE2_OPTION_BANK[id]);
+
+  const stepConfig =
+    phase === 'opening'
+      ? { prompt: openingScene.prompt, subtitle: openingScene.subtitle, options: openingScene.options, next: 'scene2' as Phase, stepIndex: 1 }
+      : phase === 'scene2'
+        ? { prompt: SCENE2_TEXT, subtitle: '', options: scene2Options, next: 'twist' as Phase, stepIndex: 2 }
+        : { prompt: TWIST_PROMPT, subtitle: TWIST_SUBTITLE, options: TWIST_OPTIONS, next: 'reveal' as Phase, stepIndex: 3 };
 
   const animateNext = (cb: () => void) => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
@@ -97,55 +117,54 @@ export default function CharacterMatchScreen() {
     });
   };
 
-  const handleSelect = (optionIndex: number) => {
+  const handleSelect = (option: JourneyOption) => {
     hapticSelect();
     playPopSound();
-    const newAnswers = [...answers, optionIndex];
-    setAnswers(newAnswers);
+    const nextSelections = [...selections, option];
+    setSelections(nextSelections);
 
     setTimeout(() => {
-      if (step < CHAR_QUESTIONS.length - 1) {
-        animateNext(() => setStep((s) => s + 1));
+      if (stepConfig.next !== 'reveal') {
+        animateNext(() => setPhase(stepConfig.next));
       } else {
-        const result = getCharacterMatch(newAnswers);
         hapticSuccess();
         playWinSound();
-        trackEvent('character_matched', { character: result.name });
-        setMatch(result);
+        animateNext(() => setPhase('reveal'));
       }
     }, 400);
   };
 
-  if (match) {
+  if (phase === 'reveal') {
+    const raw = accumulateAxes(selections);
+    const normalized = normalizeAxes(raw);
+    const twistHint = selections[2]?.clusterHint;
+    const result = matchCluster(raw, twistHint);
+    const cluster = result.cluster;
+
     return (
       <Reveal
-        character={match}
+        cluster={cluster}
         onContinue={() => {
+          trackEvent('mood_journey_complete', { game: 'character', clusterId: cluster.id });
           const results = {
-            mood: match.mood,
-            craving: match.craving,
-            budget: match.budget,
-            preference: match.preference,
+            mood: cluster.moodLabel,
+            craving: cluster.cravingLabel,
+            budget: cluster.budgetHint,
+            preference: 'both',
             gameData: {
-              type: 'character_match',
-              character: {
-                id: match.id,
-                name: match.name,
-                show: match.show,
-                emoji: match.emoji,
-                traits: match.traits || {},
-                matchPercentage: 100,
-              },
+              type: 'mood_journey',
+              cravings: [cluster.sampleDish],
+              moodAxes: normalized,
+              cluster: { id: cluster.id, name: cluster.name, secondaryId: result.secondaryCluster?.id },
             },
           };
-          trackEvent('game_completed', { game: 'character', results });
           router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
         }}
       />
     );
   }
 
-  const progress = ((step + 1) / TOTAL_CHAR_QUESTIONS) * 100;
+  const progress = (stepConfig.stepIndex / 3) * 100;
 
   return (
     <LinearGradient colors={['#1e1b4b', '#312e81']} style={{ flex: 1 }}>
@@ -166,31 +185,31 @@ export default function CharacterMatchScreen() {
           />
         </View>
         <Text style={[fw(800), { fontSize: 13, color: 'rgba(255,255,255,0.5)' }]}>
-          {step + 1}/{TOTAL_CHAR_QUESTIONS}
+          {stepConfig.stepIndex}/3
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 28 }} showsVerticalScrollIndicator={false}>
         <Animated.View style={{ opacity: fadeAnim, gap: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {(() => {
-              const QuestionIcon = question.Icon;
-              return <QuestionIcon size={36} color="#fff" />;
-            })()}
+            <Star size={30} color="#fff" />
             <View style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.2)' }}>
               <Text style={[fw(800), { fontSize: 11, color: '#c4b5fd', letterSpacing: 1, textTransform: 'uppercase' }]}>
-                Character Match
+                Tonight's Story
               </Text>
             </View>
           </View>
-          <Text style={[fw(900), { fontSize: 22, color: '#fff', lineHeight: 28 }]}>{question.question}</Text>
+          <Text style={[fw(900), { fontSize: 22, color: '#fff', lineHeight: 28 }]}>{stepConfig.prompt}</Text>
+          {stepConfig.subtitle ? (
+            <Text style={[fw(600), { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: -12 }]}>{stepConfig.subtitle}</Text>
+          ) : null}
 
           <View style={{ gap: 10, marginTop: 4 }}>
-            {question.options.map((opt, i) => (
+            {stepConfig.options.map((opt) => (
               <TouchableOpacity
-                key={i}
+                key={opt.id}
                 activeOpacity={0.8}
-                onPress={() => handleSelect(i)}
+                onPress={() => handleSelect(opt)}
                 style={{
                   padding: 14,
                   paddingHorizontal: 18,
@@ -203,17 +222,11 @@ export default function CharacterMatchScreen() {
                   gap: 14,
                 }}
               >
-                {(() => {
-                  const OptionIcon = opt.Icon;
-                  return (
-                    <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: opt.iconBg, alignItems: 'center', justifyContent: 'center' }}>
-                      <OptionIcon size={22} color="#fff" />
-                    </View>
-                  );
-                })()}
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.25)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[fw(800), { fontSize: 14, color: '#fff' }]}>{opt.label}</Text>
-                  <Text style={[fw(600), { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }]}>{opt.sub}</Text>
                 </View>
               </TouchableOpacity>
             ))}

@@ -195,6 +195,23 @@ export async function initDb() {
       )`);
       await db.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`);
 
+      // DIY cooking sessions: recipe + ingredient cart + step progress + wall photo
+      await db.query(`CREATE TABLE IF NOT EXISTS diy_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dish_name VARCHAR(255) NOT NULL,
+        recipe JSONB NOT NULL,
+        ingredient_cart JSONB NOT NULL DEFAULT '[]',
+        matched_products JSONB NOT NULL DEFAULT '[]',
+        completed_steps INTEGER[] NOT NULL DEFAULT '{}',
+        instamart_order_id VARCHAR(255),
+        status VARCHAR(50) NOT NULL DEFAULT 'cart',
+        wall_photo_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_diy_sessions_user ON diy_sessions(user_id)`);
+
       // Encrypted per-user Swiggy OAuth tokens
       await db.query(`CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -384,6 +401,23 @@ export async function initDb() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS diy_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dish_name TEXT NOT NULL,
+        recipe TEXT NOT NULL,
+        ingredient_cart TEXT DEFAULT '[]',
+        matched_products TEXT DEFAULT '[]',
+        completed_steps TEXT DEFAULT '[]',
+        instamart_order_id TEXT,
+        status TEXT DEFAULT 'cart',
+        wall_photo_url TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_diy_sessions_user ON diy_sessions(user_id);
 
       CREATE TABLE IF NOT EXISTS swiggy_user_tokens (
         id TEXT PRIMARY KEY,

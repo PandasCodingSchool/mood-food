@@ -6,7 +6,7 @@ import {
   Sandwich,
   CircleDotDashed,
   BookOpen,
-  Clapperboard,
+  Sparkles,
   Swords,
   Radar,
   Trophy,
@@ -31,15 +31,15 @@ interface Game {
 const GAMES: Game[] = [
   {
     id: "character",
-    title: "Character Match",
+    title: "Tonight's Story",
     description:
-      "Find out which TV character you are tonight, and what they'd eat.",
-    icon: Clapperboard,
-    color: "from-fuchsia-500 to-purple-500",
-    bgColor: "bg-fuchsia-50",
+      "Live one small moment. Three choices about how you're feeling, then we land on tonight's meal.",
+    icon: Sparkles,
+    color: "from-indigo-500 to-fuchsia-500",
+    bgColor: "bg-indigo-50",
     duration: "~30 sec",
     tag: "Popular",
-    emoji: "🎬",
+    emoji: "🌙",
   },
   {
     id: "story",

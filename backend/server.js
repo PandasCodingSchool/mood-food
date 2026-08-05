@@ -6,7 +6,6 @@ import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import { initDb, getDb, isPostgres } from "./db.js";
 import aiRecommendationsRouter from "./routes/aiRecommendations.js";
-import characterMatchRouter from "./routes/characterMatch.js";
 import gameAssistRouter from "./routes/gameAssist.js";
 import swiggyRouter from "./routes/swiggy.js";
 import swiggyAuthRouter from "./routes/swiggyAuth.js";
@@ -19,6 +18,9 @@ import predictionsRouter from "./routes/predictions.js";
 import weatherRouter from "./routes/weather.js";
 import questsRouter, { seedQuests } from "./routes/quests.js";
 import groupsRouter from "./routes/groups.js";
+import instamartRouter from "./routes/instamart.js";
+import recipeRouter from "./routes/recipe.js";
+import diyRouter from "./routes/diy.js";
 import {
   sessionMiddleware,
   getUserMe,
@@ -73,7 +75,6 @@ app.use("/api", generalLimiter);
 // AI Recommendations route
 app.use("/api/ai-recommendations", aiLimiter, aiRecommendationsRouter);
 // Character match route (AI-driven personality matching)
-app.use("/api/character-match", aiLimiter, characterMatchRouter);
 // Swiggy OAuth endpoints (handled locally, not proxied)
 app.use("/api/swiggy/oauth", swiggyAuthRouter);
 // Lightweight mid-game LLM assists (gpt-4o-mini — cheap, cached server-side,
@@ -81,6 +82,10 @@ app.use("/api/swiggy/oauth", swiggyAuthRouter);
 app.use("/api/game-assist", gameAssistRouter);
 // Swiggy discovery/ordering route (proxied to intelligence service)
 app.use("/api/swiggy", swiggyRouter);
+// Swiggy Instamart grocery route (proxied to intelligence service)
+app.use("/api/instamart", instamartRouter);
+// DIY recipe generation (proxied to intelligence service)
+app.use("/api/recipe", aiLimiter, recipeRouter);
 
 // Auth routes (login / signup)
 app.use("/api/auth", authRouter);
@@ -90,6 +95,9 @@ app.use("/api/user/preferences", preferencesRouter);
 
 // User order history
 app.use("/api/user/history", historyRouter);
+
+// DIY cooking sessions (recipe/cart/steps/wall photo)
+app.use("/api/diy", diyRouter);
 
 // User notifications
 app.use("/api/user/notifications", notificationsRouter);

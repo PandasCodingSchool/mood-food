@@ -57,20 +57,24 @@ class MoodVector(BaseModel):
     social: float = Field(default=0, ge=-1, le=1)
 
 
-class GameCharacter(BaseModel):
-    id: str
-    name: str
-    show: Optional[str] = None
-    emoji: Optional[str] = None
-    traits: Optional[dict] = None
-    match_percentage: Optional[int] = None
-    runner_ups: list[dict] = Field(default_factory=list)  # [{id, match_percent}]
+class MoodAxes(BaseModel):
+    """Accumulated -1..1 scores from the "Tonight's Story" mood-journey game."""
+
+    cozy_adventurous: float = Field(default=0, ge=-1, le=1)
+    solo_social: float = Field(default=0, ge=-1, le=1)
+    comfort_energy: float = Field(default=0, ge=-1, le=1)
+    nostalgic_novelty: float = Field(default=0, ge=-1, le=1)
+    indulgent_light: float = Field(default=0, ge=-1, le=1)
 
     model_config = {"extra": "ignore"}
 
 
-# Kept as an alias so existing imports keep working.
-CharacterContext = GameCharacter
+class MoodCluster(BaseModel):
+    id: str
+    name: str
+    secondary_id: Optional[str] = None
+
+    model_config = {"extra": "ignore"}
 
 
 class GameData(BaseModel):
@@ -86,7 +90,8 @@ class GameData(BaseModel):
     mood_vector: Optional[MoodVector] = None
     swipes: list[SwipeItem] = Field(default_factory=list)
     slider_values: Optional[SliderValues] = None
-    character: Optional[GameCharacter] = None  # populated for character_match games
+    mood_axes: Optional[MoodAxes] = None  # populated for mood_journey games
+    cluster: Optional[MoodCluster] = None  # nearest food-mood cluster, from mood_axes
     # Craving radar (2.2): sensory tags override baseline taste for the session.
     craving_tags: list[str] = Field(default_factory=list)
     # This-or-that duels (3.1): [{dimension_a, dimension_b, winner}].

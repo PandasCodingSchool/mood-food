@@ -31,12 +31,12 @@ router.post("/", async (req, res) => {
   const { mood, craving, budget, preference } = extractQuizData(body);
 
   // Build contract-compliant snake_case request for AI service
-  // Character context is included in gameData for AI to reason about
+  // Cluster context is included in gameData for AI to reason about
   const aiRequest = buildAiRequest(body, req.user?.id);
 
-  if (gameData.type === "character_match" && gameData.character?.id) {
+  if (gameData.type === "mood_journey" && gameData.cluster?.id) {
     console.log(
-      `Character Match detected: ${gameData.character.name} - AI will prioritize their favorite dishes`
+      `Mood journey resolved: ${gameData.cluster.name} - AI will prioritize cluster-preferred dishes`
     );
   }
   console.log(aiRequest);
@@ -291,17 +291,21 @@ function buildAiRequest(body, userId) {
             spicy: game.sliderValues.spicy,
           },
         }),
-        // Pass character context for character_match games
-        ...(game.character && {
-          character: {
-            id: game.character.id,
-            name: game.character.name,
-            show: game.character.show,
-            emoji: game.character.emoji,
-            match_percentage:
-              game.character.matchPercentage ?? game.matchPercentage,
-            traits: game.character.traits,
-            runner_ups: game.character.runnerUps || [],
+        ...(game.moodAxes && {
+          mood_axes: {
+            cozy_adventurous: game.moodAxes.cozyAdventurous,
+            solo_social: game.moodAxes.soloSocial,
+            comfort_energy: game.moodAxes.comfortEnergy,
+            nostalgic_novelty: game.moodAxes.nostalgicNovelty,
+            indulgent_light: game.moodAxes.indulgentLight,
+          },
+        }),
+        // Pass cluster context for mood_journey games
+        ...(game.cluster && {
+          cluster: {
+            id: game.cluster.id,
+            name: game.cluster.name,
+            secondary_id: game.cluster.secondaryId,
           },
         }),
         ...(game.raw && { raw: game.raw }),

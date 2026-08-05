@@ -45,6 +45,7 @@ import { formatTag } from "../utils/formatTag";
 import { bumpQuestProgress } from "../services/quests";
 import CheckoutModal, { type CheckoutTarget } from "./CheckoutModal";
 import RestaurantMenuModal, { type MenuBrowseTarget } from "./RestaurantMenuModal";
+import DiyModal, { type DiyTarget } from "./diy/DiyModal";
 import type { LearnedProfile } from "../types";
 
 // 4.2 — Veto + why: turns a useless "no" into a precise model update.
@@ -84,6 +85,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
   const [showVetoReasonsFor, setShowVetoReasonsFor] = useState<string | null>(null);
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null);
   const [menuBrowseTarget, setMenuBrowseTarget] = useState<MenuBrowseTarget | null>(null);
+  const [diyTarget, setDiyTarget] = useState<DiyTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [loaderStep, setLoaderStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -1149,6 +1151,12 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
                                     Order now!
                                   </span>
                                 </button>
+                                <button
+                                  onClick={() => setDiyTarget({ dishName: d.name })}
+                                  className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] bg-gradient-to-r from-green-600 to-green-400 shadow-md"
+                                >
+                                  <span className="flex items-center justify-center gap-2">👨‍🍳 DIY it!</span>
+                                </button>
                                 {addressId && (
                                   <button
                                     onClick={() =>
@@ -1566,6 +1574,7 @@ function Recommendations({ results, onBack }: RecommendationsProps) {
       {menuBrowseTarget && (
         <RestaurantMenuModal target={menuBrowseTarget} onClose={() => setMenuBrowseTarget(null)} />
       )}
+      <DiyModal target={diyTarget} onClose={() => setDiyTarget(null)} />
     </div>
   );
 }

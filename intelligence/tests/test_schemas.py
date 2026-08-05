@@ -96,10 +96,17 @@ class TestGameData:
         mv = MoodVector(energy=-1, valence=1, social=0)
         assert mv.energy == -1
 
-    def test_character_runner_ups(self):
-        from app.schemas.request import GameCharacter
-        c = GameCharacter(id="joey", name="Joey", runner_ups=[{"id": "chandler", "match_percent": 71}])
-        assert c.runner_ups[0]["id"] == "chandler"
+    def test_mood_cluster(self):
+        from app.schemas.request import MoodCluster
+        c = MoodCluster(id="rewind", name="The Rewind", secondary_id="exhale")
+        assert c.secondary_id == "exhale"
+
+    def test_mood_axes_bounds(self):
+        from app.schemas.request import MoodAxes
+        with pytest.raises(ValidationError):
+            MoodAxes(cozy_adventurous=1.5)
+        ax = MoodAxes(cozy_adventurous=-1, nostalgic_novelty=1)
+        assert ax.cozy_adventurous == -1
 
 
 class TestRecommendationConfig:

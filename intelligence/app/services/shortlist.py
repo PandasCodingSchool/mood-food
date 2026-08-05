@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_character_dish_ids
+from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord
+from app.services.mood_clusters import dish_ids_for_cluster
 from app.schemas.request import RecommendationConfig, UserContext
 
 # Target shortlist size before live verification / GPT ranking.
@@ -161,8 +162,8 @@ def score_dish(dish: DishRecord, ctx: UserContext) -> float:
             if game.slider_values.health_conscious is not None:
                 target = game.slider_values.health_conscious
                 score += max(0.0, 3.0 - abs(dish.health_score - target) * 0.35)
-        if game.character:
-            preferred = set(get_character_dish_ids(game.character.id))
+        if game.cluster:
+            preferred = set(dish_ids_for_cluster(game.cluster.id))
             if dish.id in preferred:
                 score += 10.0
 

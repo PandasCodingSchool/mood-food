@@ -240,6 +240,15 @@ export default function MealDetailScreen() {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={() => router.push({ pathname: '/diy/recipe', params: { rec: JSON.stringify(currentRec), rank: rawRank } })}
+            activeOpacity={0.85}
+            style={{ flex: 1 }}
+          >
+            <View style={{ height: 52, borderRadius: 26, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+              <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>👨‍🍳 DIY it!</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => setSaved((s) => !s)}
             style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
           >

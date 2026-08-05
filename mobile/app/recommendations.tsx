@@ -68,6 +68,7 @@ function MealCard({
   liked,
   onToggleLike,
   onOrderNow,
+  onDiyIt,
 }: {
   rec: Recommendation;
   index: number;
@@ -77,6 +78,7 @@ function MealCard({
   liked: boolean;
   onToggleLike: () => void;
   onOrderNow: () => void;
+  onDiyIt: () => void;
 }) {
   const { theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -303,15 +305,25 @@ function MealCard({
             <Text style={[fw(800), { fontSize: 12.5, color: colors.purple }]}>Healthier & budget swaps · Ask Captain →</Text>
           </View>
 
-          <GradientButton
-            label="Order now!"
-            colors={gradients.orange}
-            height={44}
-            fontSize={14}
-            icon={<MapPin size={16} color="#fff" />}
-            onPress={onOrderNow}
-            style={{ marginTop: 14 }}
-          />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+            <GradientButton
+              label="Order now!"
+              colors={gradients.orange}
+              height={44}
+              fontSize={14}
+              icon={<MapPin size={16} color="#fff" />}
+              onPress={onOrderNow}
+              style={{ flex: 1 }}
+            />
+            <GradientButton
+              label="👨‍🍳 DIY it!"
+              colors={gradients.green}
+              height={44}
+              fontSize={14}
+              onPress={onDiyIt}
+              style={{ flex: 1 }}
+            />
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -513,6 +525,7 @@ export default function RecommendationsScreen() {
               liked={likedIds.has(rec.id)}
               onToggleLike={() => toggleLike(rec)}
               onOrderNow={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(rec), rank: String(i) } })}
+              onDiyIt={() => router.push({ pathname: '/diy/recipe', params: { rec: JSON.stringify(rec), rank: String(i) } })}
             />
           ))}
 
