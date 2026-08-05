@@ -1,8 +1,9 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Home, List, Target, User, Zap } from 'lucide-react-native';
+import { Home, List, Target, User, Zap, Sparkles } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { colors, fw } from '../constants/theme';
+import { getLastRecommendation, getSavedAddressId } from '../services/aiRecommendations';
 import { logSignal } from '../services/signals';
 
 type Tab = 'games' | 'history' | 'results' | 'quests' | 'profile';
@@ -21,6 +22,36 @@ export default function BottomNav({ active }: { active: Tab }) {
   const handleSos = () => {
     void logSignal('sos', {});
     router.push('/mind-reader');
+  };
+
+  const handleAskCaptain = async () => {
+    const rec = await getLastRecommendation();
+    if (!rec) {
+      router.push('/mind-reader');
+      return;
+    }
+    const restaurantId = rec.swiggy?.item?.restaurant_id ?? rec.swiggy?.restaurant?.id;
+    if (!restaurantId) {
+      router.push('/mind-reader');
+      return;
+    }
+    const addressId = await getSavedAddressId();
+    if (!addressId) {
+      router.push('/mind-reader');
+      return;
+    }
+    router.push({
+      pathname: '/restaurant-menu',
+      params: {
+        restaurantId,
+        addressId,
+        restaurantName: rec.swiggy?.item?.restaurant_name || rec.swiggy?.restaurant?.name || '',
+        dishId: rec.dish.id || '',
+        dishName: rec.dish.name,
+        why: rec.ai_reasoning?.mood_match || '',
+        initialMenuItemId: rec.swiggy?.item?.id || '',
+      },
+    });
   };
 
   return (
@@ -65,12 +96,39 @@ export default function BottomNav({ active }: { active: Tab }) {
         );
       })}
 
+      {active === 'games' && (
+        <TouchableOpacity
+          onPress={handleAskCaptain}
+          activeOpacity={0.85}
+          style={{
+            position: 'absolute',
+            top: -72,
+            right: 20,
+            height: 44,
+            borderRadius: 22,
+            paddingHorizontal: 16,
+            backgroundColor: colors.purple,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: 8,
+          }}
+        >
+          <Sparkles size={18} color="#fff" />
+          <Text style={[fw(800), { fontSize: 13, color: '#fff' }]}>Ask Captain</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity
         onPress={handleSos}
         activeOpacity={0.85}
         style={{
           position: 'absolute',
-          top: -72,
+          top: -136,
           right: 20,
           marginLeft: 0,
           width: 56,

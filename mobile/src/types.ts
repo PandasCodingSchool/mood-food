@@ -77,6 +77,20 @@ export interface PendingPrediction {
   createdAt: string;
 }
 
+export interface RecipeIngredient {
+  name: string;
+  quantity: string;
+  unit: string;
+  notes?: string | null;
+}
+
+export interface Recipe {
+  dish: string;
+  servings: number;
+  items: RecipeIngredient[];
+  steps: string[];
+}
+
 export interface Recommendation {
   id: string;
   rank?: number;
@@ -239,6 +253,7 @@ export interface UserContext {
   preferences: {
     cuisineTypes: string[];
     dietaryRestrictions: string[];
+    allergies: string[];
     spiceTolerance: string;
   };
   situational: {

@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, Tag } from 'lucide-react-native';
@@ -46,8 +46,13 @@ export default function OrderAppSelectScreen() {
         </View>
       </View>
 
-      <LinearGradient
-        colors={[theme.surface, theme.card]}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient
+          colors={[theme.surface, theme.card]}
         style={{ margin: 24, marginBottom: 0, padding: 16, borderRadius: 18, flexDirection: 'row', alignItems: 'center', gap: 14 }}
       >
         <DishThumbnail rec={rec} size={52} />
@@ -132,6 +137,8 @@ export default function OrderAppSelectScreen() {
           </View>
         </View>
       </View>
+
+      </ScrollView>
     </View>
   );
 }
