@@ -53,7 +53,7 @@ export const ONBOARD_STEPS: OnboardStep[] = [
     accent: '#7c3aed',
     btnColors: ['#7c3aed', '#a78bfa'],
     features: [
-      { Icon: Theater, text: 'Character Match — which TV character eats like you?' },
+      { Icon: Theater, text: "Tonight's Story — three choices about your mood, one perfect meal" },
       { Icon: Dices, text: 'Meal Roulette — spin & let fate decide' },
       { Icon: Hand, text: 'Snack Match — swipe your way to dinner' },
     ],
