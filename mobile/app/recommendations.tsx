@@ -13,10 +13,11 @@ import {
   isSwiggyLive,
   fetchAddresses,
   saveAddressId,
+  saveLastRecommendation,
 } from '../src/services/aiRecommendations';
 import { enrichRecommendations, enrichAlternatives } from '../src/services/swiggy';
 import { trackEvent } from '../src/utils/analytics';
-import { fw, colors, gradients } from '../src/constants/theme';
+import { fw, colors } from '../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
 import { pressScale } from '../src/utils/animations';
 import { formatTag } from '../src/utils/formatTag';
@@ -24,7 +25,6 @@ import BottomNav from '../src/components/BottomNav';
 import LoadingScreen from '../src/components/LoadingScreen';
 import ChipSelector from '../src/components/inputs/ChipSelector';
 import BlindBetStars from '../src/components/BlindBetStars';
-import GradientButton from '../src/components/GradientButton';
 import { logSignal } from '../src/services/signals';
 import { bumpQuestProgress } from '../src/services/quests';
 import type { Recommendation, RecommendationResponse } from '../src/types';
@@ -78,6 +78,7 @@ function MealCard({
   onToggleLike: () => void;
   onOrderNow: () => void;
 }) {
+  const router = useRouter();
   const { theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
@@ -113,6 +114,25 @@ function MealCard({
     }
   };
 
+  const handleAskCaptain = async () => {
+    const restaurantId = liveMatch?.item?.restaurant_id ?? liveMatch?.restaurant?.id;
+    if (!restaurantId) return;
+    const addressId = await getSavedAddressId();
+    if (!addressId) return;
+    router.push({
+      pathname: '/restaurant-menu',
+      params: {
+        restaurantId,
+        addressId,
+        restaurantName: liveRestaurantName || '',
+        dishId: rec.dish.id || '',
+        dishName: rec.dish.name,
+        why: rec.ai_reasoning?.mood_match || '',
+        initialMenuItemId: liveMatch?.item?.id || '',
+      },
+    });
+  };
+
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
       <TouchableOpacity
@@ -120,7 +140,7 @@ function MealCard({
         onPressIn={() => pressScale(scale, 0.97)}
         onPressOut={() => pressScale(scale, 1)}
         onPress={onTap}
-        style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: theme.card, marginBottom: 16, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
+        style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: theme.card, width: 300, marginRight: 16, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
       >
         <View style={{ height: 170 }}>
           {imageUrl ? (
@@ -292,7 +312,9 @@ function MealCard({
             </TouchableOpacity>
           )}
 
-          <View
+          <TouchableOpacity
+            onPress={handleAskCaptain}
+            activeOpacity={0.8}
             style={{
               flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
               marginTop: 12, height: 40, borderRadius: 20,
@@ -300,18 +322,26 @@ function MealCard({
             }}
           >
             <Sparkles size={15} color={colors.purple} />
-            <Text style={[fw(800), { fontSize: 12.5, color: colors.purple }]}>Healthier & budget swaps · Ask Captain →</Text>
-          </View>
+            <Text style={[fw(800), { fontSize: 12.5, color: colors.purple }]}>Ask Captain →</Text>
+          </TouchableOpacity>
 
-          <GradientButton
-            label="Order now!"
-            colors={gradients.orange}
-            height={44}
-            fontSize={14}
-            icon={<MapPin size={16} color="#fff" />}
+          <TouchableOpacity
             onPress={onOrderNow}
-            style={{ marginTop: 14 }}
-          />
+            activeOpacity={0.85}
+            style={{
+              marginTop: 14,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: colors.orange,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            <MapPin size={16} color="#fff" />
+            <Text style={[fw(800), { fontSize: 14, color: '#fff' }]}>Order now!</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -430,6 +460,12 @@ export default function RecommendationsScreen() {
     load(false);
   }, []);
 
+  useEffect(() => {
+    if (data?.recommendations && data.recommendations.length > 0) {
+      void saveLastRecommendation(data.recommendations[0]);
+    }
+  }, [data]);
+
   const handleVeto = (rec: Recommendation, reason: string) => {
     setVetoedIds((prev) => ({ ...prev, [rec.id]: reason }));
     void logSignal('veto', { dish_id: rec.dish.id, dish_name: rec.dish.name, reason });
@@ -502,19 +538,28 @@ export default function RecommendationsScreen() {
 
       {!error && data && (
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
-          {data.recommendations.map((rec, i) => (
-            <MealCard
-              key={rec.id}
-              rec={rec}
-              index={i}
-              vetoed={vetoedIds[rec.id] || null}
-              onVeto={(reason) => handleVeto(rec, reason)}
-              onTap={() => router.push({ pathname: '/meal-detail', params: { rec: JSON.stringify(rec), rank: String(i) } })}
-              liked={likedIds.has(rec.id)}
-              onToggleLike={() => toggleLike(rec)}
-              onOrderNow={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(rec), rank: String(i) } })}
-            />
-          ))}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={316}
+            style={{ height: 650 }}
+            contentContainerStyle={{ paddingRight: 24 }}
+          >
+            {data.recommendations.map((rec, i) => (
+              <MealCard
+                key={rec.id}
+                rec={rec}
+                index={i}
+                vetoed={vetoedIds[rec.id] || null}
+                onVeto={(reason) => handleVeto(rec, reason)}
+                onTap={() => router.push({ pathname: '/meal-detail', params: { rec: JSON.stringify(rec), rank: String(i) } })}
+                liked={likedIds.has(rec.id)}
+                onToggleLike={() => toggleLike(rec)}
+                onOrderNow={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(rec), rank: String(i) } })}
+              />
+            ))}
+          </ScrollView>
 
           <TouchableOpacity
             onPress={() => load(true)}

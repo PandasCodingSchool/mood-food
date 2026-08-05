@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image, Modal, Acti
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../src/context/ThemeContext';
 import { fw, colors } from '../../src/constants/theme';
 import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
 import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
@@ -42,6 +43,7 @@ export default function OrderConfirmScreen() {
     addressId?: string;
   }>();
   const { bottom: safeBottom, top: safeTop } = useSafeAreaInsets();
+  const { theme } = useTheme();
 
   const [imageFailed, setImageFailed] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -279,16 +281,16 @@ export default function OrderConfirmScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <StatusBar barStyle="dark-content" />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ paddingTop: safeTop + 12, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
         >
           <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
         </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 18, color: colors.navy, flex: 1, textAlign: 'center', marginRight: 40 }]}>
+        <Text style={[fw(900), { fontSize: 18, color: theme.text, flex: 1, textAlign: 'center', marginRight: 40 }]}>
           Confirm Order
         </Text>
       </View>
@@ -297,12 +299,12 @@ export default function OrderConfirmScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
 
-            <app.icon size={20} color={colors.navy} />
+            <app.icon size={20} color={theme.text} />
 
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[fw(700), { fontSize: 14, color: '#64748b' }]}>Ordering via {app.name}</Text>
+              <Text style={[fw(700), { fontSize: 14, color: theme.subtext }]}>Ordering via {app.name}</Text>
               {app.isLive && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(34,197,94,0.12)' }}>
                   <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.green }} />
@@ -311,7 +313,7 @@ export default function OrderConfirmScreen() {
               )}
             </View>
             {app.isLive && (params.restaurantName || app.restaurantName) && (
-              <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 1 }]} numberOfLines={1}>
+              <Text style={[fw(600), { fontSize: 12, color: theme.muted, marginTop: 1 }]} numberOfLines={1}>
                 {params.restaurantName || app.restaurantName}
               </Text>
             )}
@@ -332,9 +334,9 @@ export default function OrderConfirmScreen() {
                 <Text style={{ fontSize: 72 }}>{emoji}</Text>
               </LinearGradient>
             )}
-            <View style={{ padding: 16, paddingHorizontal: 20, backgroundColor: '#fff' }}>
-              <Text style={[fw(900), { fontSize: 20, color: colors.navy }]}>{rec.dish.name}</Text>
-              <Text style={[fw(600), { fontSize: 13, color: '#64748b', marginTop: 4 }]}>{rec.dish.cuisine}</Text>
+            <View style={{ padding: 16, paddingHorizontal: 20, backgroundColor: theme.card }}>
+              <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>{rec.dish.name}</Text>
+              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4 }]}>{rec.dish.cuisine}</Text>
             </View>
           </View>
         )}
@@ -342,18 +344,18 @@ export default function OrderConfirmScreen() {
         {/* Itemized cart — the single-dish path shows its one item here too, so
             both modes render the actual cart contents, not just a total. */}
         {!cartLoading && cart && cart.items.length > 0 && (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 10 }}>
-            <Text style={[fw(700), { fontSize: 13, color: colors.navy }]}>
+          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
+            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>
               🧾 {cartItemCount} item{cartItemCount === 1 ? '' : 's'}
             </Text>
             <View style={{ gap: 8 }}>
               {cart.items.map((item) => (
                 <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={[fw(600), { fontSize: 13, color: colors.navy, flex: 1 }]} numberOfLines={1}>
+                  <Text style={[fw(600), { fontSize: 13, color: theme.text, flex: 1 }]} numberOfLines={1}>
                     {item.quantity}× {item.name}
                   </Text>
                   {item.price != null && (
-                    <Text style={[fw(700), { fontSize: 13, color: '#64748b' }]}>₹{(item.price * item.quantity).toFixed(0)}</Text>
+                    <Text style={[fw(700), { fontSize: 13, color: theme.subtext }]}>₹{(item.price * item.quantity).toFixed(0)}</Text>
                   )}
                 </View>
               ))}
@@ -361,11 +363,11 @@ export default function OrderConfirmScreen() {
           </View>
         )}
 
-        <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 14 }}>
+        <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Text style={{ fontSize: 18 }}>📍</Text>
-              <Text style={[fw(700), { fontSize: 13, color: colors.navy }]}>Delivery to</Text>
+              <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>Delivery to</Text>
             </View>
             {isLiveOrder && addresses.length > 0 && (
               <TouchableOpacity onPress={() => setAddressPickerOpen(true)}>
@@ -373,8 +375,8 @@ export default function OrderConfirmScreen() {
               </TouchableOpacity>
             )}
           </View>
-          <View style={{ padding: 12, borderRadius: 12, backgroundColor: '#fff' }}>
-            <Text style={[fw(600), { fontSize: 13, color: '#64748b', lineHeight: 18 }]}>
+          <View style={{ padding: 12, borderRadius: 12, backgroundColor: theme.card }}>
+            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, lineHeight: 18 }]}>
               {isLiveOrder
                 ? selectedAddress
                   ? `${selectedAddress.label}\n${selectedAddress.line}`
@@ -385,10 +387,10 @@ export default function OrderConfirmScreen() {
         </View>
 
         {isLiveOrder && (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 10 }}>
-            <Text style={[fw(700), { fontSize: 13, color: colors.navy }]}>🎟️ Coupons</Text>
+          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
+            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>🎟️ Coupons</Text>
             {coupons.length === 0 ? (
-              <Text style={[fw(600), { fontSize: 12, color: '#94a3b8' }]}>No coupons available right now.</Text>
+              <Text style={[fw(600), { fontSize: 12, color: theme.muted }]}>No coupons available right now.</Text>
             ) : (
               <View style={{ gap: 8 }}>
                 {coupons.map((c) => (
@@ -399,13 +401,13 @@ export default function OrderConfirmScreen() {
                     style={{
                       padding: 12,
                       borderRadius: 12,
-                      backgroundColor: appliedCoupon === c.couponCode ? 'rgba(34,197,94,0.08)' : '#fff',
+                      backgroundColor: appliedCoupon === c.couponCode ? 'rgba(34,197,94,0.08)' : theme.card,
                       borderWidth: 2,
-                      borderColor: appliedCoupon === c.couponCode ? colors.green : 'rgba(0,0,0,0.06)',
+                      borderColor: appliedCoupon === c.couponCode ? colors.green : theme.border,
                     }}
                   >
-                    <Text style={[fw(800), { fontSize: 13, color: colors.navy }]}>{c.couponCode}</Text>
-                    <Text style={[fw(600), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>{c.description}</Text>
+                    <Text style={[fw(800), { fontSize: 13, color: theme.text }]}>{c.couponCode}</Text>
+                    <Text style={[fw(600), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>{c.description}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -414,8 +416,8 @@ export default function OrderConfirmScreen() {
         )}
 
         {isLiveOrder && cart && cart.availablePaymentMethods.length > 0 && (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 10 }}>
-            <Text style={[fw(700), { fontSize: 13, color: colors.navy }]}>💳 Payment method</Text>
+          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
+            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>💳 Payment method</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {cart.availablePaymentMethods.map((method) => (
                 <TouchableOpacity
@@ -425,12 +427,12 @@ export default function OrderConfirmScreen() {
                     paddingHorizontal: 14,
                     paddingVertical: 8,
                     borderRadius: 14,
-                    backgroundColor: paymentMethod === method ? colors.navy : '#fff',
+                    backgroundColor: paymentMethod === method ? theme.text : theme.card,
                     borderWidth: 2,
-                    borderColor: paymentMethod === method ? colors.navy : 'rgba(0,0,0,0.08)',
+                    borderColor: paymentMethod === method ? theme.text : theme.border,
                   }}
                 >
-                  <Text style={[fw(700), { fontSize: 12, color: paymentMethod === method ? '#fff' : colors.navy }]}>{method}</Text>
+                  <Text style={[fw(700), { fontSize: 12, color: paymentMethod === method ? theme.bg : theme.text }]}>{method}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -441,15 +443,15 @@ export default function OrderConfirmScreen() {
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(34,197,94,0.06)', alignItems: 'center' }}>
               <Text style={{ fontSize: 24 }}>🕐</Text>
-              <Text style={[fw(900), { fontSize: 18, color: colors.navy, marginTop: 4 }]}>{app.eta}</Text>
-              <Text style={[fw(700), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>Estimated time</Text>
+              <Text style={[fw(900), { fontSize: 18, color: theme.text, marginTop: 4 }]}>{app.eta}</Text>
+              <Text style={[fw(700), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>Estimated time</Text>
             </View>
             <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.06)', alignItems: 'center' }}>
               <Text style={{ fontSize: 24 }}>🚗</Text>
-              <Text style={[fw(900), { fontSize: 18, color: colors.navy, marginTop: 4 }]}>
+              <Text style={[fw(900), { fontSize: 18, color: theme.text, marginTop: 4 }]}>
                 {app.distanceKm != null ? `${app.distanceKm.toFixed(1)} km` : '1.2 mi'}
               </Text>
-              <Text style={[fw(700), { fontSize: 11, color: '#64748b', marginTop: 2 }]}>Distance</Text>
+              <Text style={[fw(700), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>Distance</Text>
             </View>
           </View>
         )}
@@ -459,7 +461,7 @@ export default function OrderConfirmScreen() {
             <ActivityIndicator color={colors.orange} />
           </View>
         ) : (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.02)', gap: 10 }}>
+          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
             <Row label="Subtotal" value={`₹${liveSubtotal.toFixed(0)}`} />
             <Row
               label="Delivery fee"
@@ -480,10 +482,10 @@ export default function OrderConfirmScreen() {
             ) : (
               <Row label="Promo (MOODFOOD15)" value={`-₹${discount.toFixed(0)}`} valueColor={colors.green} />
             )}
-            <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
+            <View style={{ height: 1, backgroundColor: theme.border }} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={[fw(900), { fontSize: 18, color: colors.navy }]}>Total</Text>
-              <Text style={[fw(900), { fontSize: 18, color: colors.navy }]}>₹{total.toFixed(0)}</Text>
+              <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>Total</Text>
+              <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>₹{total.toFixed(0)}</Text>
             </View>
           </View>
         )}
@@ -504,7 +506,7 @@ export default function OrderConfirmScreen() {
       </ScrollView>
 
 
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: '#fff' }}>
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: theme.navBg }}>
         {capExceeded ? (
           <TouchableOpacity activeOpacity={0.85} onPress={handleOpenInSwiggyApp}>
             <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
@@ -527,20 +529,20 @@ export default function OrderConfirmScreen() {
 
       <Modal visible={addressPickerOpen} transparent animationType="slide" onRequestClose={() => setAddressPickerOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 12 }}>
-            <Text style={[fw(900), { fontSize: 18, color: colors.navy }]}>Choose delivery address</Text>
+          <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 12 }}>
+            <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>Choose delivery address</Text>
             {addresses.map((a) => (
               <TouchableOpacity
                 key={a.id}
                 onPress={() => handleSelectAddress(a.id)}
-                style={{ padding: 14, borderRadius: 14, backgroundColor: a.id === addressId ? 'rgba(249,115,22,0.08)' : 'rgba(0,0,0,0.03)' }}
+                style={{ padding: 14, borderRadius: 14, backgroundColor: a.id === addressId ? 'rgba(249,115,22,0.08)' : theme.overlay }}
               >
-                <Text style={[fw(800), { fontSize: 14, color: colors.navy }]}>{a.label}</Text>
-                <Text style={[fw(600), { fontSize: 12, color: '#64748b', marginTop: 2 }]}>{a.line}</Text>
+                <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>{a.label}</Text>
+                <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 2 }]}>{a.line}</Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity onPress={() => setAddressPickerOpen(false)} style={{ alignItems: 'center', paddingTop: 8 }}>
-              <Text style={[fw(700), { fontSize: 13, color: '#94a3b8' }]}>Cancel</Text>
+              <Text style={[fw(700), { fontSize: 13, color: theme.muted }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -550,10 +552,11 @@ export default function OrderConfirmScreen() {
 }
 
 function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  const { theme } = useTheme();
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-      <Text style={[fw(600), { fontSize: 14, color: '#64748b' }]}>{label}</Text>
-      <Text style={[fw(600), { fontSize: 14, color: valueColor || '#64748b' }]}>{value}</Text>
+      <Text style={[fw(600), { fontSize: 14, color: theme.subtext }]}>{label}</Text>
+      <Text style={[fw(600), { fontSize: 14, color: valueColor || theme.subtext }]}>{value}</Text>
     </View>
   );
 }

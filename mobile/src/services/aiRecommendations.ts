@@ -5,11 +5,14 @@ import type {
   RecommendationResponse,
   GameData,
   EnrichedMatch,
+  Recommendation,
 } from "../types";
 import { API_BASE_URL, getHeaders } from "./apiBase";
 import { getTodayCheckin } from "./moodState";
+import { fetchPreferences, type UserPreferences } from "./preferences";
 
 const ADDRESS_STORAGE_KEY = "moodfood.swiggy.addressId";
+const LAST_RECOMMENDATION_KEY = "moodfood.lastRecommendation";
 
 export interface SwiggyAddress {
   id: string;
@@ -31,6 +34,24 @@ export async function saveAddressId(id: string): Promise<void> {
     else await AsyncStorage.removeItem(ADDRESS_STORAGE_KEY);
   } catch {
     // best-effort
+  }
+}
+
+export async function saveLastRecommendation(rec: Recommendation): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LAST_RECOMMENDATION_KEY, JSON.stringify(rec));
+  } catch {
+    // best-effort
+  }
+}
+
+export async function getLastRecommendation(): Promise<Recommendation | null> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_RECOMMENDATION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Recommendation;
+  } catch {
+    return null;
   }
 }
 
@@ -67,7 +88,8 @@ export async function fetchRecommendations(
       | GameData
       | undefined) ||
     null;
-  const context = await buildRequestContext(quizResults, finalGameData, refresh);
+  const userPrefs = await fetchPreferences().catch(() => null);
+  const context = await buildRequestContext(quizResults, finalGameData, refresh, userPrefs);
   const body: Record<string, unknown> = {
     ...context,
     request_id: newRequestId(),
@@ -110,6 +132,7 @@ async function buildRequestContext(
   quizResults: QuizResults,
   gameData: GameData | null,
   refresh = false,
+  userPrefs?: UserPreferences | null,
 ): Promise<AIRequestContext> {
   const { mood, craving, budget, preference } = quizResults;
   const checkin = await getTodayCheckin();
@@ -156,13 +179,17 @@ async function buildRequestContext(
         ...(checkin?.stress != null && { stressLevel: checkin.stress }),
       },
       preferences: {
-        cuisineTypes: [craving],
-        dietaryRestrictions:
-          preference === "veg"
+        cuisineTypes: userPrefs?.cuisines?.length
+          ? [...userPrefs.cuisines, craving]
+          : [craving],
+        dietaryRestrictions: userPrefs?.diets?.length
+          ? userPrefs.diets
+          : preference === "veg"
             ? ["vegetarian"]
             : preference === "non-veg"
               ? ["non_veg"]
               : [],
+        allergies: userPrefs?.allergies ?? [],
         spiceTolerance: "medium",
       },
       situational: {
