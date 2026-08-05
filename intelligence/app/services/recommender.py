@@ -10,7 +10,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import settings
-from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt, get_character_dish_ids
+from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt
+from app.services.mood_clusters import dishes_for_cluster
 from app.services.shortlist import build_shortlist, dishes_for_prompt as shortlist_prompt
 
 # (drink, reason) keyed by cuisine
@@ -52,7 +53,7 @@ RANKING RULES (in priority order):
 2. IF dietary_restrictions contains "vegetarian" or "vegan": HARD EXCLUDE non_veg dishes
    IF dietary_restrictions contains "non_veg": STRONGLY PREFER dishes with non_veg dietary_tag; exclude purely vegetarian/vegan dishes unless nothing else fits
 3. HARD EXCLUDE dishes priced above budget.max (if provided)
-4. IF CHARACTER CONTEXT PROVIDED: Strongly boost char_* prefixed dishes (they're personality-aligned favorites)
+4. IF CLUSTER CONTEXT PROVIDED: Strongly boost the listed cluster-preferred dishes (they match the user's mood-journey outcome)
 5. NEGATIVE SIGNALS: strongly demote dishes whose category, cuisine, or name matches \
 any keyword in the AVOID/disliked lists — never rank them in the top results unless \
 nothing else satisfies the hard constraints.
@@ -94,39 +95,24 @@ def _build_user_message(
         budget_max = {"budget": 300, "moderate": 800, "splurge": 2000}[game.budget_tier]
     budget_str = f"₹{budget_max}" if budget_max else "not specified"
 
-    # Character context: look up dish IDs from the mapping and inject into prompt
-    character_context = ""
-    if game and hasattr(game, "character") and game.character:
-        char = game.character
-        char_id = char.get("id", "") if isinstance(char, dict) else getattr(char, "id", "")
-        char_name = char.get("name", "unknown") if isinstance(char, dict) else getattr(char, "name", "unknown")
-
-        preferred_ids = get_character_dish_ids(char_id)
+    # Cluster context: look up dish IDs for the mood-journey's resolved cluster
+    cluster_context = ""
+    if game and game.cluster:
+        cluster = game.cluster
         preferred_lines = []
-        for dish_id in preferred_ids:
-            dish = DISHES_BY_ID.get(dish_id)
-            if dish:
-                preferred_lines.append(f"  - {dish_id}: {dish.name} ({dish.cuisine})")
+        for dish in dishes_for_cluster(cluster.id):
+            preferred_lines.append(f"  - {dish.id}: {dish.name} ({dish.cuisine})")
 
         if preferred_lines:
-            character_context = (
-                f"\nCHARACTER CONTEXT:\n"
-                f"  User matched as: {char_name}\n"
-                f"  This character's preferred dishes (STRONGLY PREFER these dish IDs):\n"
+            cluster_context = (
+                f"\nCLUSTER CONTEXT:\n"
+                f"  User's mood-journey resolved to: {cluster.name} ({cluster.id})\n"
+                f"  This cluster's preferred dishes (STRONGLY PREFER these dish IDs):\n"
                 + "\n".join(preferred_lines) + "\n"
                 f"  Rank these dishes above others when they satisfy hard constraints.\n"
             )
-
-    # Runner-up characters as a soft hint
-    if game and game.character and game.character.runner_ups:
-        echo_names = [
-            str(r.get("id") or r.get("name", ""))
-            for r in game.character.runner_ups
-            if isinstance(r, dict)
-        ]
-        echo_names = [n for n in echo_names if n]
-        if echo_names and character_context:
-            character_context += f"  Secondary personality echoes (soft hint): {echo_names}\n"
+            if cluster.secondary_id:
+                cluster_context += f"  Secondary mood echo (soft hint): {cluster.secondary_id}\n"
 
     # Unified game-signal context lines
     game_context = ""
@@ -148,6 +134,15 @@ def _build_user_message(
             game_context += (
                 f"  mood_vector: energy={mv.energy:+.2f} valence={mv.valence:+.2f} "
                 f"social={mv.social:+.2f} (each -1..1)\n"
+            )
+        if game.mood_axes:
+            ax = game.mood_axes
+            game_context += (
+                f"  mood_axes: cozy<->adventurous={ax.cozy_adventurous:+.2f} "
+                f"solo<->social={ax.solo_social:+.2f} "
+                f"comfort<->energy={ax.comfort_energy:+.2f} "
+                f"nostalgic<->novelty={ax.nostalgic_novelty:+.2f} "
+                f"indulgent<->light={ax.indulgent_light:+.2f} (each -1..1)\n"
             )
         if game.swipes:
             liked = [s.item for s in game.swipes if s.liked]
@@ -236,7 +231,7 @@ def _build_user_message(
   cuisines={prefs.cuisine_types if prefs else []} | restrictions={prefs.dietary_restrictions if prefs else []} | allergies={prefs.allergies if prefs else []} | spice_tolerance={prefs.spice_tolerance if prefs else None}
   adventurous_slider={sliders.adventurous if sliders else None}/10 | health_slider={sliders.health_conscious if sliders else None}/10 | spicy_slider={sliders.spicy if sliders else None}/10
   avoid={hist.avoid_these if hist else []}
-{state_context}{game_context}{character_context}{unavailable_block}{live_block}
+{state_context}{game_context}{cluster_context}{unavailable_block}{live_block}
 DISH LIST (id: name | mood_tags | spice | diet | allergens | energy_req | price | weather | meal_time | delivery | adventurousness):
 {dish_block}
 

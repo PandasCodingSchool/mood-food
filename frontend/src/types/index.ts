@@ -9,7 +9,7 @@ export interface QuizResults {
 
 export type GameType =
   | "quiz"
-  | "character_match"
+  | "mood_journey"
   | "day_story"
   | "swipe_vibe"
   | "spin_wheel"
@@ -18,15 +18,18 @@ export type GameType =
   | "mood_checkin"
   | "mind_reader";
 
-export interface GameCharacterSignal {
+export interface GameMoodAxesSignal {
+  cozyAdventurous: number;
+  soloSocial: number;
+  comfortEnergy: number;
+  nostalgicNovelty: number;
+  indulgentLight: number;
+}
+
+export interface GameClusterSignal {
   id: string;
   name: string;
-  show?: string;
-  emoji?: string;
-  matchPercentage?: number;
-  traits?: Record<string, number>;
-  runnerUps?: Array<{ id: string; matchPercent: number }>;
-  [key: string]: unknown; // games may attach extra display fields (tagline, vibe…)
+  secondaryId?: string;
 }
 
 // Unified signal payload every game emits on completion.
@@ -44,7 +47,8 @@ export interface GameSignals {
     healthConscious: number;
     spicy: number;
   }; // 1..10
-  character?: GameCharacterSignal;
+  moodAxes?: GameMoodAxesSignal;
+  cluster?: GameClusterSignal;
   cravingTags?: string[]; // sensation-level tags (craving radar)
   duelResults?: Array<{ dimensionA: string; dimensionB: string; winner: string }>;
   pantryItems?: string[];

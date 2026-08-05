@@ -14,7 +14,7 @@ import {
   SwipeVibe,
   SpinWheel,
   DayStory,
-  CharacterMatch,
+  MoodJourney,
   ThisOrThat,
   CravingRadar,
   Bracket,
@@ -200,7 +200,7 @@ function App() {
       ) : activeGame === "story" ? (
         <DayStory onComplete={handleGameComplete} onBack={handleBackToGames} />
       ) : activeGame === "character" ? (
-        <CharacterMatch
+        <MoodJourney
           onComplete={handleGameComplete}
           onBack={handleBackToGames}
         />

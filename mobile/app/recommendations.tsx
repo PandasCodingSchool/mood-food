@@ -68,6 +68,7 @@ function MealCard({
   liked,
   onToggleLike,
   onOrderNow,
+  onDiyIt,
 }: {
   rec: Recommendation;
   index: number;
@@ -77,6 +78,7 @@ function MealCard({
   liked: boolean;
   onToggleLike: () => void;
   onOrderNow: () => void;
+  onDiyIt: () => void;
 }) {
   const router = useRouter();
   const { theme } = useTheme();
