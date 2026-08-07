@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Minus, Plus, Sparkles, ShoppingCart } from 'lucide-react-native';
 import { fw, colors } from '../src/constants/theme';
+import { useTheme } from '../src/context/ThemeContext';
 import {
   getRestaurantMenu,
   updateCartItems,
@@ -16,6 +16,7 @@ const SYNC_DEBOUNCE_MS = 400;
 
 export default function RestaurantMenuScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const params = useLocalSearchParams<{
     restaurantId: string;
     addressId: string;
@@ -107,28 +108,28 @@ export default function RestaurantMenuScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={colors.orange} size="large" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <StatusBar barStyle="dark-content" />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
         >
-          <ChevronLeft size={22} color={colors.navy} />
+          <ChevronLeft size={22} color={theme.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[fw(900), { fontSize: 18, color: colors.navy }]} numberOfLines={1}>
+          <Text style={[fw(900), { fontSize: 18, color: theme.text }]} numberOfLines={1}>
             {menu?.restaurant?.name || params.restaurantName || 'Menu'}
           </Text>
           {menu?.restaurant?.etaMin != null && (
-            <Text style={[fw(600), { fontSize: 12, color: '#94a3b8', marginTop: 1 }]}>{menu.restaurant.etaMin} min delivery</Text>
+            <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 1 }]}>{menu.restaurant.etaMin} min delivery</Text>
           )}
         </View>
         {view === 'menu' && (
@@ -153,7 +154,7 @@ export default function RestaurantMenuScreen() {
         />
       ) : !menu?.success ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Text style={[fw(700), { fontSize: 14, color: '#64748b', textAlign: 'center' }]}>
+          <Text style={[fw(700), { fontSize: 14, color: theme.subtext, textAlign: 'center' }]}>
             {menu?.error || "Couldn't load this menu right now."}
           </Text>
         </View>
@@ -168,7 +169,7 @@ export default function RestaurantMenuScreen() {
           <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140, gap: 24 }} showsVerticalScrollIndicator={false}>
             {menu.categories.map((cat) => (
               <View key={cat.title} style={{ gap: 12 }}>
-                <Text style={[fw(800), { fontSize: 15, color: colors.navy }]}>{cat.title}</Text>
+                <Text style={[fw(800), { fontSize: 15, color: theme.text }]}>{cat.title}</Text>
                 {cat.items.map((item) => (
                   <MenuItemRow
                     key={item.id}
@@ -184,17 +185,16 @@ export default function RestaurantMenuScreen() {
       )}
 
       {cartCount > 0 && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, backgroundColor: '#fff' }}>
-          <TouchableOpacity activeOpacity={0.85} onPress={handleViewCart}>
-            <LinearGradient
-              colors={['#f97316', '#fbbf24']}
-              style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
-            >
-              <ShoppingCart size={18} color="#fff" />
-              <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>
-                View Cart · {cartCount} item{cartCount === 1 ? '' : 's'} · ₹{cartTotal.toFixed(0)}
-              </Text>
-            </LinearGradient>
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, backgroundColor: theme.navBg }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleViewCart}
+            style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, backgroundColor: colors.orange }}
+          >
+            <ShoppingCart size={18} color="#fff" />
+            <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>
+              View Cart · {cartCount} item{cartCount === 1 ? '' : 's'} · ₹{cartTotal.toFixed(0)}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -211,8 +211,9 @@ function MenuItemRow({
   quantity: number;
   onChange: (delta: number) => void;
 }) {
+  const { theme } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.02)' }}>
+    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 14, backgroundColor: theme.overlay }}>
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={{ width: 64, height: 64, borderRadius: 10 }} resizeMode="cover" />
       ) : (
@@ -227,11 +228,11 @@ function MenuItemRow({
               <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: item.isVeg ? colors.green : colors.rose }} />
             </View>
           )}
-          <Text style={[fw(800), { fontSize: 14, color: colors.navy, flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+          <Text style={[fw(800), { fontSize: 14, color: theme.text, flex: 1 }]} numberOfLines={1}>{item.name}</Text>
         </View>
         {item.price != null && <Text style={[fw(700), { fontSize: 13, color: colors.orange, marginTop: 2 }]}>₹{item.price.toFixed(0)}</Text>}
         {item.description && (
-          <Text style={[fw(400), { fontSize: 11, color: '#94a3b8', marginTop: 2 }]} numberOfLines={2}>{item.description}</Text>
+          <Text style={[fw(400), { fontSize: 11, color: theme.muted, marginTop: 2 }]} numberOfLines={2}>{item.description}</Text>
         )}
       </View>
       {quantity === 0 ? (
@@ -242,11 +243,11 @@ function MenuItemRow({
           <Text style={[fw(800), { fontSize: 12, color: '#fff' }]}>Add</Text>
         </TouchableOpacity>
       ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1.5, borderColor: colors.orange, paddingHorizontal: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1.5, borderColor: colors.orange, paddingHorizontal: 4 }}>
           <TouchableOpacity onPress={() => onChange(-1)} style={{ padding: 6 }}>
             <Minus size={14} color={colors.orange} />
           </TouchableOpacity>
-          <Text style={[fw(800), { fontSize: 13, color: colors.navy, minWidth: 16, textAlign: 'center' }]}>{quantity}</Text>
+          <Text style={[fw(800), { fontSize: 13, color: theme.text, minWidth: 16, textAlign: 'center' }]}>{quantity}</Text>
           <TouchableOpacity onPress={() => onChange(1)} style={{ padding: 6 }}>
             <Plus size={14} color={colors.orange} />
           </TouchableOpacity>
