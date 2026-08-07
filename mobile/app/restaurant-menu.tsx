@@ -48,9 +48,6 @@ export default function RestaurantMenuScreen() {
     (async () => {
       const result = await getRestaurantMenu(params.restaurantId, params.addressId);
       setMenu(result);
-      if (params.initialMenuItemId) {
-        setCart({ [params.initialMenuItemId]: 1 });
-      }
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

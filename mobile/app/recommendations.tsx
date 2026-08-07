@@ -68,7 +68,6 @@ function MealCard({
   liked,
   onToggleLike,
   onOrderNow,
-  onDiyIt,
 }: {
   rec: Recommendation;
   index: number;
@@ -78,7 +77,6 @@ function MealCard({
   liked: boolean;
   onToggleLike: () => void;
   onOrderNow: () => void;
-  onDiyIt: () => void;
 }) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -495,7 +493,7 @@ export default function RecommendationsScreen() {
           <View style={{ width: 40 }} />
         </View>
         {quizResults?.mood && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
             <Text style={{ fontSize: 14 }}>{MOOD_EMOJIS[quizResults.mood] ?? '🍽️'}</Text>
             <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center' }]}>
               Based on your mood: {quizResults.mood}
@@ -545,7 +543,7 @@ export default function RecommendationsScreen() {
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
             snapToInterval={316}
-            style={{ height: 650 }}
+            style={{ height: 700 }}
             contentContainerStyle={{ paddingRight: 24 }}
           >
             {data.recommendations.map((rec, i) => (
@@ -561,31 +559,29 @@ export default function RecommendationsScreen() {
                 onOrderNow={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(rec), rank: String(i) } })}
               />
             ))}
-          </ScrollView>
 
-          <TouchableOpacity
-            onPress={() => load(true)}
-            disabled={refreshing}
-            activeOpacity={0.8}
-            style={{
-              marginTop: 4,
-              padding: 16,
-              borderRadius: 16,
-              borderWidth: 2,
-              borderStyle: 'dashed',
-              borderColor: colors.orange + '30',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              opacity: refreshing ? 0.5 : 1,
-            }}
-          >
-            <RefreshCw size={20} color={colors.orange} />
-            <Text style={[fw(800), { fontSize: 14, color: colors.orange }]}>
-              {refreshing ? 'Refreshing…' : 'Get new picks'}
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => load(true)}
+              disabled={refreshing}
+              activeOpacity={0.8}
+              style={{
+                width: 300,
+                borderRadius: 20,
+                borderWidth: 2,
+                borderStyle: 'dashed',
+                borderColor: colors.orange + '30',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                opacity: refreshing ? 0.5 : 1,
+              }}
+            >
+              <RefreshCw size={22} color={colors.orange} />
+              <Text style={[fw(800), { fontSize: 14, color: colors.orange }]}>
+                {refreshing ? 'Refreshing…' : 'Get new picks'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </ScrollView>
       )}
 

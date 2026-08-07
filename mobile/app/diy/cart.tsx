@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft } from 'lucide-react-native';
+import { useTheme } from '../../src/context/ThemeContext';
 import { fw, colors } from '../../src/constants/theme';
 import { getSavedAddressId, saveAddressId, fetchAddresses, type SwiggyAddress } from '../../src/services/aiRecommendations';
 import {
@@ -18,6 +19,7 @@ import ProductSearchModal from '../../src/components/ProductSearchModal';
 
 export default function DiyCartScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsets();
   const params = useLocalSearchParams<{ recipe: string; rank?: string }>();
   const recipe: Recipe = JSON.parse(params.recipe);
@@ -139,24 +141,24 @@ export default function DiyCartScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <StatusBar barStyle="dark-content" />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ paddingTop: safeTop + 12, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
+          <ChevronLeft size={22} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 18, color: colors.navy, flex: 1, textAlign: 'center', marginRight: 40 }]}>
+        <Text style={[fw(900), { fontSize: 18, color: theme.text, flex: 1, textAlign: 'center', marginRight: 40 }]}>
           Ingredients — {recipe.dish}
         </Text>
       </View>
 
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={colors.green} />
-          <Text style={[fw(700), { fontSize: 13, color: '#64748b', marginTop: 12 }]}>Matching ingredients on Instamart…</Text>
+          <ActivityIndicator color={colors.orange} />
+          <Text style={[fw(700), { fontSize: 13, color: theme.subtext, marginTop: 12 }]}>Matching ingredients on Instamart…</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 160 + safeBottom, gap: 12 }} showsVerticalScrollIndicator={false}>
@@ -180,12 +182,12 @@ export default function DiyCartScreen() {
                   key={m.ingredient.name}
                   style={{
                     width: '48.5%', borderRadius: 16, overflow: 'hidden',
-                    backgroundColor: isRemoved ? 'rgba(0,0,0,0.02)' : '#fff',
-                    borderWidth: 1.5, borderColor: isRemoved ? 'rgba(0,0,0,0.06)' : 'rgba(22,163,74,0.15)',
+                    backgroundColor: isRemoved ? theme.surface : theme.card,
+                    borderWidth: 1.5, borderColor: isRemoved ? theme.border : 'rgba(22,163,74,0.15)',
                     opacity: isRemoved ? 0.5 : 1,
                   }}
                 >
-                  <View style={{ height: 90, backgroundColor: 'rgba(22,163,74,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ height: 90, backgroundColor: theme.overlay, alignItems: 'center', justifyContent: 'center' }}>
                     {m.variation?.imageUrl ? (
                       <Image source={{ uri: m.variation.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     ) : (
@@ -196,19 +198,19 @@ export default function DiyCartScreen() {
                       style={{
                         position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 13,
                         alignItems: 'center', justifyContent: 'center',
-                        backgroundColor: isRemoved ? colors.green : 'rgba(255,255,255,0.92)',
+                        backgroundColor: isRemoved ? colors.green : theme.card,
                       }}
                     >
                       <Text style={{ fontSize: 13, color: isRemoved ? '#fff' : '#dc2626' }}>{isRemoved ? '↺' : '✕'}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={{ padding: 10, gap: 3 }}>
-                    <Text style={[fw(800), { fontSize: 12.5, color: colors.navy }]} numberOfLines={2}>{m.product?.name}</Text>
-                    <Text style={[fw(600), { fontSize: 10.5, color: '#94a3b8' }]} numberOfLines={1}>
+                    <Text style={[fw(800), { fontSize: 12.5, color: theme.text }]} numberOfLines={2}>{m.product?.name}</Text>
+                    <Text style={[fw(600), { fontSize: 10.5, color: theme.muted }]} numberOfLines={1}>
                       for {m.ingredient.quantity} {m.ingredient.unit} {m.ingredient.name}
                     </Text>
                     {m.variation?.price != null && (
-                      <Text style={[fw(800), { fontSize: 13, color: colors.navy, marginTop: 2 }]}>₹{m.variation.price.toFixed(0)}</Text>
+                      <Text style={[fw(800), { fontSize: 13, color: theme.text, marginTop: 2 }]}>₹{m.variation.price.toFixed(0)}</Text>
                     )}
                   </View>
                 </View>
@@ -218,9 +220,9 @@ export default function DiyCartScreen() {
             {manualItems.map((m) => (
               <View
                 key={m.variation!.spinId}
-                style={{ width: '48.5%', borderRadius: 16, overflow: 'hidden', backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.2)' }}
+                style={{ width: '48.5%', borderRadius: 16, overflow: 'hidden', backgroundColor: theme.card, borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.2)' }}
               >
-                <View style={{ height: 90, backgroundColor: 'rgba(249,115,22,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ height: 90, backgroundColor: theme.overlay, alignItems: 'center', justifyContent: 'center' }}>
                   {m.variation?.imageUrl ? (
                     <Image source={{ uri: m.variation.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                   ) : (
@@ -228,16 +230,16 @@ export default function DiyCartScreen() {
                   )}
                   <TouchableOpacity
                     onPress={() => removeManualItem(m.variation!.spinId)}
-                    style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)' }}
+                    style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card }}
                   >
                     <Text style={{ fontSize: 13, color: '#dc2626' }}>✕</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={{ padding: 10, gap: 3 }}>
-                  <Text style={[fw(800), { fontSize: 12.5, color: colors.navy }]} numberOfLines={2}>{m.product?.name}</Text>
+                  <Text style={[fw(800), { fontSize: 12.5, color: theme.text }]} numberOfLines={2}>{m.product?.name}</Text>
                   <Text style={[fw(600), { fontSize: 10.5, color: colors.orange }]} numberOfLines={1}>Added by you</Text>
                   {m.variation?.price != null && (
-                    <Text style={[fw(800), { fontSize: 13, color: colors.navy, marginTop: 2 }]}>₹{m.variation.price.toFixed(0)}</Text>
+                    <Text style={[fw(800), { fontSize: 13, color: theme.text, marginTop: 2 }]}>₹{m.variation.price.toFixed(0)}</Text>
                   )}
                 </View>
               </View>
@@ -247,14 +249,14 @@ export default function DiyCartScreen() {
               onPress={() => setSearchOpen(true)}
               disabled={!addressId}
               style={{
-                width: '48.5%', height: 148, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(0,0,0,0.15)',
+                width: '48.5%', height: 148, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: theme.border,
                 alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ color: '#fff', fontSize: 22, lineHeight: 24 }}>+</Text>
               </View>
-              <Text style={[fw(700), { fontSize: 12, color: '#64748b' }]}>Add an item</Text>
+              <Text style={[fw(700), { fontSize: 12, color: theme.subtext }]}>Add an item</Text>
             </TouchableOpacity>
           </View>
 
@@ -263,7 +265,7 @@ export default function DiyCartScreen() {
               <Text style={[fw(700), { fontSize: 12, color: colors.orange }]}>
                 Couldn't find a confident match for: {unmatched.map((m) => m.ingredient.name).join(', ')}
               </Text>
-              <Text style={[fw(600), { fontSize: 11, color: '#94a3b8' }]}>You may need to pick these up separately.</Text>
+              <Text style={[fw(600), { fontSize: 11, color: theme.muted }]}>You may need to pick these up separately.</Text>
             </View>
           )}
 
@@ -276,26 +278,22 @@ export default function DiyCartScreen() {
       )}
 
       {!loading && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: '#fff', gap: 12 }}>
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: theme.navBg, gap: 12 }}>
           {hasItems && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={[fw(700), { fontSize: 14, color: '#64748b' }]}>Total</Text>
-              <Text style={[fw(900), { fontSize: 18, color: colors.navy }]}>₹{total.toFixed(0)}</Text>
+              <Text style={[fw(700), { fontSize: 14, color: theme.subtext }]}>Total</Text>
+              <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>₹{total.toFixed(0)}</Text>
             </View>
           )}
           <TouchableOpacity
             activeOpacity={0.85}
             disabled={checkingOut}
             onPress={hasItems ? handleCheckout : handleLetsCook}
+            style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.orange, opacity: checkingOut ? 0.7 : 1 }}
           >
-            <LinearGradient
-              colors={hasItems ? ['#f97316', '#fbbf24'] : ['#16a34a', '#4ade80']}
-              style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', opacity: checkingOut ? 0.7 : 1 }}
-            >
-              <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>
-                {checkingOut ? 'Placing order…' : hasItems ? `🛒 Checkout · ₹${total.toFixed(0)}` : "👨‍🍳 Let's cook"}
-              </Text>
-            </LinearGradient>
+            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>
+              {checkingOut ? 'Placing order…' : hasItems ? `🛒 Checkout · ₹${total.toFixed(0)}` : "👨‍🍳 Let's cook"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
