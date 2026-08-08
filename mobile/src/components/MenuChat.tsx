@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Send, Sparkles, Plus, Check, Mic, UtensilsCrossed } from 'lucide-react-native';
 import { fw, colors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { sendMenuChat, type MenuChatTurn, type MenuItem } from '../services/swiggyOrder';
 import { fetchCurrentUser } from '../services/auth';
 import { fetchPreferences, type UserPreferences } from '../services/preferences';
@@ -40,6 +41,7 @@ interface MenuChatProps {
 // restaurant-menu.tsx) — the item list is a secondary "explore yourself"
 // view reached via onExploreMenu, not the other way around.
 export default function MenuChat({ restaurantId, addressId, dishContext, getItem, onSuggestedItemAdd, onExploreMenu, bottomInset = 0 }: MenuChatProps) {
+  const { theme } = useTheme();
   const [messages, setMessages] = useState<DisplayMessage[]>([
     {
       role: 'assistant',
@@ -117,14 +119,14 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', marginBottom: bottomInset }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg, marginBottom: bottomInset }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' }}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
           <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}>
             <Sparkles size={22} color="#fff" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[fw(900), { fontSize: 19, color: colors.navy }]}>Captain</Text>
+            <Text style={[fw(900), { fontSize: 19, color: theme.text }]}>Captain</Text>
             <Text style={[fw(700), { fontSize: 12, color: colors.purple }]}>Your personal food expert</Text>
           </View>
         </View>
@@ -147,7 +149,7 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
                   borderBottomLeftRadius: m.role === 'user' ? 16 : 4,
                 }}
               >
-                <Text style={[fw(600), { fontSize: 14, color: m.role === 'user' ? '#fff' : colors.navy, lineHeight: 20 }]}>
+                <Text style={[fw(600), { fontSize: 14, color: m.role === 'user' ? '#fff' : theme.text, lineHeight: 20 }]}>
                   {m.content}
                 </Text>
               </View>
@@ -162,8 +164,8 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
                         key={id}
                         style={{
                           flexDirection: 'row', alignItems: 'center', gap: 10,
-                          padding: 8, borderRadius: 14, backgroundColor: '#fff',
-                          borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
+                          padding: 8, borderRadius: 14, backgroundColor: theme.card,
+                          borderWidth: 1, borderColor: theme.border,
                         }}
                       >
                         {item.imageUrl ? (
@@ -174,7 +176,7 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
                           </View>
                         )}
                         <View style={{ flex: 1 }}>
-                          <Text style={[fw(800), { fontSize: 13, color: colors.navy }]} numberOfLines={1}>{item.name}</Text>
+                          <Text style={[fw(800), { fontSize: 13, color: theme.text }]} numberOfLines={1}>{item.name}</Text>
                           {item.price != null && (
                             <Text style={[fw(700), { fontSize: 12, color: colors.orange, marginTop: 1 }]}>₹{item.price.toFixed(0)}</Text>
                           )}
@@ -207,20 +209,20 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
 
         <View style={{ paddingHorizontal: 16 }}>{exploreMenuButton}</View>
 
-        <View style={{ flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 24, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)', alignItems: 'flex-end' }}>
+        <View style={{ flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 24, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'flex-end' }}>
           <TouchableOpacity
             onPress={() => Alert.alert('Voice input coming soon')}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}
           >
-            <Mic size={18} color={colors.navy} />
+            <Mic size={18} color={theme.text} />
           </TouchableOpacity>
           <TextInput
             value={input}
             onChangeText={setInput}
             placeholder="Ask about the menu…"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={theme.muted}
             multiline
-            style={{ flex: 1, maxHeight: 100, padding: 12, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.04)', fontSize: 14, color: colors.navy }}
+            style={{ flex: 1, maxHeight: 100, padding: 12, borderRadius: 16, backgroundColor: theme.overlay, fontSize: 14, color: theme.text }}
           />
           <TouchableOpacity
             onPress={handleSend}

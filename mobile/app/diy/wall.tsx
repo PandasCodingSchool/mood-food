@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, StatusBar, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { fw, colors } from '../../src/constants/theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { uploadWallPhoto } from '../../src/services/diy';
 
 export default function DiyWallScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsets();
   const params = useLocalSearchParams<{ sessionId: string; dishName: string }>();
 
@@ -58,16 +60,16 @@ export default function DiyWallScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <StatusBar barStyle="dark-content" />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
       <View style={{ paddingTop: safeTop + 12, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.push('/home')}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
+          <ChevronLeft size={22} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 18, color: colors.navy, flex: 1, textAlign: 'center', marginRight: 40 }]}>
+        <Text style={[fw(900), { fontSize: 18, color: theme.text, flex: 1, textAlign: 'center', marginRight: 40 }]}>
           Your wall
         </Text>
       </View>
@@ -77,16 +79,16 @@ export default function DiyWallScreen() {
           <View style={{ borderRadius: 20, overflow: 'hidden' }}>
             <Image source={{ uri: photoUri }} style={{ width: '100%', height: 260 }} resizeMode="cover" />
             {status === 'locked' && (
-              <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ position: 'absolute', inset: 0, backgroundColor: theme.dark ? 'rgba(11,16,33,0.82)' : 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 32 }}>🔒</Text>
-                <Text style={[fw(800), { fontSize: 15, color: colors.navy, marginTop: 8 }]}>Wall — coming soon</Text>
-                <Text style={[fw(600), { fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }]}>
+                <Text style={[fw(800), { fontSize: 15, color: theme.text, marginTop: 8 }]}>Wall — coming soon</Text>
+                <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }]}>
                   Your photo passed the food check ✓ — saving to a public wall is launching soon.
                 </Text>
               </View>
             )}
             {status === 'uploading' && (
-              <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ position: 'absolute', inset: 0, backgroundColor: theme.dark ? 'rgba(11,16,33,0.75)' : 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator color={colors.orange} />
               </View>
             )}
@@ -95,12 +97,12 @@ export default function DiyWallScreen() {
           <TouchableOpacity
             onPress={pickPhoto}
             style={{
-              height: 260, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(0,0,0,0.15)',
+              height: 260, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', borderColor: theme.border,
               alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
             <Text style={{ fontSize: 40 }}>📷</Text>
-            <Text style={[fw(700), { fontSize: 14, color: '#64748b' }]}>Take a photo of {params.dishName}</Text>
+            <Text style={[fw(700), { fontSize: 14, color: theme.subtext }]}>Take a photo of {params.dishName}</Text>
           </TouchableOpacity>
         )}
 
@@ -118,11 +120,13 @@ export default function DiyWallScreen() {
       </View>
 
       {photoUri && (status === 'locked' || status === 'idle') && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: '#fff' }}>
-          <TouchableOpacity activeOpacity={0.85} onPress={sharePhoto}>
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>📤 Share your dish</Text>
-            </LinearGradient>
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: theme.navBg }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={sharePhoto}
+            style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.orange }}
+          >
+            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>📤 Share your dish</Text>
           </TouchableOpacity>
         </View>
       )}

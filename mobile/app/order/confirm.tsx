@@ -518,10 +518,9 @@ export default function OrderConfirmScreen() {
             activeOpacity={0.85}
             disabled={placing || cartLoading || (isLiveOrder && !addressId)}
             onPress={handlePlaceOrder}
+            style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.orange, opacity: placing || cartLoading ? 0.7 : 1 }}
           >
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', opacity: placing || cartLoading ? 0.7 : 1 }}>
-              <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>{placing ? 'Placing…' : `🛒 Place Order · ₹${total.toFixed(0)}`}</Text>
-            </LinearGradient>
+            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>{placing ? 'Placing…' : `🛒 Place Order · ₹${total.toFixed(0)}`}</Text>
           </TouchableOpacity>
         )}
 

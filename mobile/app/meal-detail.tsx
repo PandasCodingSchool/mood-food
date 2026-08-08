@@ -9,6 +9,7 @@ import { fw, colors } from '../src/constants/theme';
 import { dishIcon, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
 import { bounceIn, floatLoop } from '../src/utils/animations';
 import { formatTag } from '../src/utils/formatTag';
+import { saveOrder, toggleSaved } from '../src/services/history';
 import type { Recommendation } from '../src/types';
 
 export default function MealDetailScreen() {
@@ -16,6 +17,8 @@ export default function MealDetailScreen() {
   const { theme } = useTheme();
   const { rec: rawRec, rank: rawRank } = useLocalSearchParams<{ rec: string; rank: string }>();
   const [saved, setSaved] = useState(false);
+  const [savedHistoryId, setSavedHistoryId] = useState<string | null>(null);
+  const [savingDish, setSavingDish] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [activeVariant, setActiveVariant] = useState<'original' | 'healthier_swap' | 'budget_swap'>('original');
   const iconScale = useRef(new Animated.Value(0.3)).current;
@@ -70,6 +73,31 @@ export default function MealDetailScreen() {
   const liveIsOpen = liveMatch?.restaurant?.is_open;
   const liveRestaurantId = liveMatch?.item?.restaurant_id ?? liveMatch?.restaurant?.id;
   const liveMenuItemId = liveMatch?.item?.id;
+
+  const handleToggleSave = async () => {
+    if (savingDish) return;
+    const nextSaved = !saved;
+    setSaved(nextSaved);
+    setSavingDish(true);
+    try {
+      if (savedHistoryId) {
+        await toggleSaved(savedHistoryId, nextSaved);
+      } else {
+        const id = await saveOrder({
+          dishName: currentRec.dish.name,
+          cuisine: currentRec.dish.cuisine,
+          priceInr: currentRec.practical_details?.estimated_price ?? undefined,
+          ordered: false,
+          saved: nextSaved,
+        });
+        setSavedHistoryId(id);
+      }
+    } catch {
+      setSaved(!nextSaved);
+    } finally {
+      setSavingDish(false);
+    }
+  };
 
   const handleBrowseMenu = async () => {
     if (!liveRestaurantId) return;
@@ -249,12 +277,16 @@ export default function MealDetailScreen() {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => setSaved((s) => !s)}
-            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
+            onPress={handleToggleSave}
+            disabled={savingDish}
+            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', opacity: savingDish ? 0.6 : 1 }}
           >
             <Heart size={22} color={saved ? colors.rose : theme.subtext} fill={saved ? colors.rose : 'transparent'} />
           </TouchableOpacity>
         </View>
+        <Text style={[fw(600), { fontSize: 11, color: theme.subtext, textAlign: 'center', marginTop: 8 }]}>
+          {saved ? 'Saved — find it under History › Saved to order again later' : 'Tap the heart to save this dish and order it again later'}
+        </Text>
       </ScrollView>
     </View>
   );
