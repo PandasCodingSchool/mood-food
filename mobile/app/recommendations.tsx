@@ -23,9 +23,12 @@ import { pressScale } from '../src/utils/animations';
 import { formatTag } from '../src/utils/formatTag';
 import BottomNav from '../src/components/BottomNav';
 import LoadingScreen from '../src/components/LoadingScreen';
+import NostalgiaPrompt from '../src/components/NostalgiaPrompt';
+import TwinTasteSection from '../src/components/TwinTasteSection';
 import ChipSelector from '../src/components/inputs/ChipSelector';
 import BlindBetStars from '../src/components/BlindBetStars';
 import { logSignal } from '../src/services/signals';
+import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from '../src/services/nostalgiaGate';
 import { bumpQuestProgress } from '../src/services/quests';
 import type { Recommendation, RecommendationResponse } from '../src/types';
 
@@ -358,6 +361,18 @@ export default function RecommendationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [showNostalgia, setShowNostalgia] = useState(false);
+
+  useEffect(() => {
+    shouldShowNostalgiaPrompt().then((result) => {
+      console.log('[Recommendations] shouldShowNostalgiaPrompt ->', result);
+      setShowNostalgia(result);
+    });
+  }, []);
+
+  useEffect(() => {
+    console.log('[Recommendations] render state -> loading:', loading, 'showNostalgia:', showNostalgia);
+  }, [loading, showNostalgia]);
 
   const toggleLike = (rec: Recommendation) => {
     setLikedIds((prev) => {
@@ -381,6 +396,7 @@ export default function RecommendationsScreen() {
 
   const load = async (isRefresh = false) => {
     if (!quizResults) return;
+    console.log('[Recommendations] load() start, isRefresh:', isRefresh, 'at', Date.now());
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
@@ -473,8 +489,6 @@ export default function RecommendationsScreen() {
     trackEvent('recommendation_vetoed', { dish: rec.dish.name, reason });
   };
 
-  if (loading) return <LoadingScreen />;
-
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
@@ -500,19 +514,35 @@ export default function RecommendationsScreen() {
             </Text>
           </View>
         )}
-        {data?.live_status === 'partial' && (
+        {!loading && data?.live_status === 'partial' && (
           <Text style={[fw(600), { fontSize: 12, color: colors.orange, textAlign: 'center', marginTop: 8 }]}>
             Some picks are live on Swiggy; others are curated estimates.
           </Text>
         )}
-        {data?.live_status === 'offline' && isSwiggyLive() && (
+        {!loading && data?.live_status === 'offline' && isSwiggyLive() && (
           <Text style={[fw(600), { fontSize: 12, color: theme.subtext, textAlign: 'center', marginTop: 8 }]}>
             Showing curated picks — live data temporarily unavailable.
           </Text>
         )}
       </View>
 
-      {error && (
+      {showNostalgia && (
+        <NostalgiaPrompt
+          onDismiss={() => {
+            setShowNostalgia(false);
+            void markNostalgiaPromptShown();
+          }}
+        />
+      )}
+      <TwinTasteSection />
+
+      {loading && (
+        <View style={{ flex: 1 }}>
+          <LoadingScreen />
+        </View>
+      )}
+
+      {!loading && error && (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
           <Frown size={56} color={theme.subtext} />
           <Text style={[fw(800), { fontSize: 20, color: theme.text, marginTop: 16, textAlign: 'center' }]}>Something went wrong</Text>

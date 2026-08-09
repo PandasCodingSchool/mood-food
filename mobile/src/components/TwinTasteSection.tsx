@@ -12,10 +12,16 @@ export default function TwinTasteSection() {
   const [dishes, setDishes] = useState<Array<{ dishId: string; dishName: string; lovedBy: number }>>([]);
 
   useEffect(() => {
-    fetchTwinTaste().then((res) => setDishes(res.dishes));
+    fetchTwinTaste().then((res) => {
+      console.log('[TwinTasteSection] fetchTwinTaste ->', res);
+      setDishes(res.dishes);
+    });
   }, []);
 
-  if (dishes.length === 0) return null;
+  if (dishes.length === 0) {
+    console.log('[TwinTasteSection] no dishes, rendering null');
+    return null;
+  }
 
   return (
     <View style={{ marginTop: 20, paddingHorizontal: 24 }}>
