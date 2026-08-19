@@ -25,12 +25,13 @@ import BottomNav from '../src/components/BottomNav';
 import LoadingScreen from '../src/components/LoadingScreen';
 import NostalgiaPrompt from '../src/components/NostalgiaPrompt';
 import TwinTasteSection from '../src/components/TwinTasteSection';
+import UnderstandMePrompt from '../src/components/UnderstandMePrompt';
 import ChipSelector from '../src/components/inputs/ChipSelector';
 import BlindBetStars from '../src/components/BlindBetStars';
-import { logSignal } from '../src/services/signals';
+import { logSignal, fetchUnderstandMeQuestions } from '../src/services/signals';
 import { shouldShowNostalgiaPrompt, markNostalgiaPromptShown } from '../src/services/nostalgiaGate';
 import { bumpQuestProgress } from '../src/services/quests';
-import type { Recommendation, RecommendationResponse } from '../src/types';
+import type { Recommendation, RecommendationResponse, UnderstandMeQuestion } from '../src/types';
 
 function healthColor(score: number | undefined): string {
   if (score == null) return colors.slate300;
@@ -362,13 +363,21 @@ export default function RecommendationsScreen() {
   const [vetoedIds, setVetoedIds] = useState<Record<string, string>>({});
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [showNostalgia, setShowNostalgia] = useState(false);
+  const [understandQuestions, setUnderstandQuestions] = useState<UnderstandMeQuestion[]>([]);
+  const [answeringUnderstandMe, setAnsweringUnderstandMe] = useState(false);
+  const [understandMeDone, setUnderstandMeDone] = useState(false);
 
   useEffect(() => {
     shouldShowNostalgiaPrompt().then((result) => {
       console.log('[Recommendations] shouldShowNostalgiaPrompt ->', result);
       setShowNostalgia(result);
     });
+    fetchUnderstandMeQuestions().then(setUnderstandQuestions);
   }, []);
+
+  // Blocks the transition to results only while the user is mid-answer —
+  // an untouched prompt never delays showing recommendations once loaded.
+  const waitingOnLoad = loading || answeringUnderstandMe;
 
   useEffect(() => {
     console.log('[Recommendations] render state -> loading:', loading, 'showNostalgia:', showNostalgia);
@@ -536,13 +545,23 @@ export default function RecommendationsScreen() {
       )}
       <TwinTasteSection />
 
-      {loading && (
+      {waitingOnLoad && (
         <View style={{ flex: 1 }}>
+          {understandQuestions.length > 0 && !understandMeDone && (
+            <UnderstandMePrompt
+              questions={understandQuestions}
+              onStart={() => setAnsweringUnderstandMe(true)}
+              onDone={() => {
+                setAnsweringUnderstandMe(false);
+                setUnderstandMeDone(true);
+              }}
+            />
+          )}
           <LoadingScreen />
         </View>
       )}
 
-      {!loading && error && (
+      {!waitingOnLoad && error && (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
           <Frown size={56} color={theme.subtext} />
           <Text style={[fw(800), { fontSize: 20, color: theme.text, marginTop: 16, textAlign: 'center' }]}>Something went wrong</Text>
@@ -566,7 +585,7 @@ export default function RecommendationsScreen() {
         </View>
       )}
 
-      {!error && data && (
+      {!waitingOnLoad && !error && data && (
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
           <ScrollView
             horizontal

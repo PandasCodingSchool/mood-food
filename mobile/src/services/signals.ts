@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, getHeaders } from './apiBase';
-import type { LearnedProfile, PendingPrediction, SignalEvent } from '../types';
+import type { LearnedProfile, PendingPrediction, SignalEvent, UnderstandMeQuestion } from '../types';
 
 // Offline-tolerant transport for the personalization signals spine.
 // Signals queue locally and flush in batches; a failed flush re-queues, and
@@ -87,6 +87,19 @@ export async function fetchLearnedProfile(): Promise<LearnedProfile | null> {
     return data?.profile ?? null;
   } catch {
     return null;
+  }
+}
+
+/** Quick-tap "understand me better" questions for the recommendations loading screen (5.6). */
+export async function fetchUnderstandMeQuestions(): Promise<UnderstandMeQuestion[]> {
+  try {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE_URL}/signals/understand-me`, { headers });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data?.questions ?? [];
+  } catch {
+    return [];
   }
 }
 

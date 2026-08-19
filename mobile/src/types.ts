@@ -68,6 +68,13 @@ export interface LearnedProfile {
   n_signals?: number;
 }
 
+export interface UnderstandMeQuestion {
+  id: string;
+  prompt: string;
+  signal_type: string;
+  options: Array<{ id: string; label: string; emoji?: string; payload: Record<string, unknown> }>;
+}
+
 export interface PendingPrediction {
   id: string;
   recId: string;
