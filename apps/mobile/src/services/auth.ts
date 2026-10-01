@@ -6,6 +6,7 @@ export interface AuthUser {
   sessionId: string;
   name: string | null;
   phone: string | null;
+  isGuest?: boolean;
   swiggyLinked?: boolean;
   swiggyUserId?: string | null;
 }
@@ -31,9 +32,10 @@ export async function signup(
   phone: string,
   password: string,
 ): Promise<AuthUser> {
+  // Sends the current session so a guest account is upgraded in place (keeps its data).
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await getHeaders(),
     body: JSON.stringify({ name, phone, password }),
   });
 
@@ -86,7 +88,7 @@ export async function verifyOtp(
 ): Promise<VerifyOtpResult> {
   const res = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await getHeaders(),
     body: JSON.stringify({ phone, otp, name }),
   });
   const data = await res.json();
@@ -103,6 +105,26 @@ export async function verifyOtp(
   return data;
 }
 
+/** Anonymous account so personalised features work before sign-up. */
+export async function continueAsGuest(): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE_URL}/auth/guest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Could not start a guest session");
+  }
+  await setSessionId(data.user.sessionId);
+  return data.user;
+}
+
 export async function logout(): Promise<void> {
+  // Revoke the session server-side too; the local clear must happen regardless.
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", headers: await getHeaders() });
+  } catch {
+    // offline: the token expires on its own
+  }
   await clearSessionId();
 }

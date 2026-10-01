@@ -1,0 +1,107 @@
+# Local development stack for MoodFood 2.0.
+#
+#   docker compose up -d                      # Postgres + Redis (what `pnpm api:dev` needs)
+#   docker compose --profile tools up -d      # + Adminer (http://localhost:8081) and Redis Insight (http://localhost:5540)
+#   docker compose --profile app up -d --build  # + the API and intelligence service in containers
+#   docker compose down                       # stop (data kept)    | docker compose down -v  # stop and wipe data
+#
+# Ports can be moved with POSTGRES_PORT / REDIS_PORT / API_PORT if they clash locally.
+name: moodfood
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: moodfood
+      POSTGRES_PASSWORD: moodfood
+      POSTGRES_DB: moodfood
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moodfood -d moodfood"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # AOF so OTPs, OAuth state and rate-limit windows survive a restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Optional GUIs ──────────────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    profiles: ["tools"]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    profiles: ["tools"]
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis-insight-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Optional: run the services in containers too ──────────────────────────
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgres://moodfood:moodfood@postgres:5432/moodfood
+      REDIS_URL: redis://redis:6379
+      AI_SERVICE_URL: http://intelligence:8000
+      INTELLIGENCE_SYNC_KEY: ${INTELLIGENCE_SYNC_KEY:-local-dev-sync-key}
+      SWIGGY_TOKEN_ENCRYPTION_KEY: ${SWIGGY_TOKEN_ENCRYPTION_KEY:-local-dev-only-not-secret}
+      SMS_PROVIDER: console
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-local-admin}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  intelligence:
+    profiles: ["app"]
+    build: ./apps/intelligence
+    restart: unless-stopped
+    env_file: ./apps/intelligence/.env
+    environment:
+      NODE_BASE_URL: http://api:3001
+      SYNC_KEY: ${INTELLIGENCE_SYNC_KEY:-local-dev-sync-key}
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres-data:
+  redis-data:
+  redis-insight-data:

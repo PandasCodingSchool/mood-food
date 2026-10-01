@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { fontFamily, palette, space } from '@moodfood/tokens';
 import { Button, Icon, OtpBox, Screen, Surface, Text, useTheme } from '@moodfood/ui';
 import { LogoTile, TopBar } from '../src/components/v2';
-import { login as loginWithPassword, requestOtp, verifyOtp, type AuthUser } from '../src/services/auth';
+import { continueAsGuest, login as loginWithPassword, requestOtp, verifyOtp, type AuthUser } from '../src/services/auth';
 import { trackEvent } from '../src/utils/analytics';
 
 const PHONE_RE = /^\+?[0-9\s-]{7,15}$/;
@@ -95,7 +95,15 @@ export default function LoginScreen() {
 
   const guest = () => {
     trackEvent('guest_continue');
-    router.replace('/home');
+    // A guest session lets signals, history and quests work; if the server is
+    // unreachable the app still opens (as in v1), just unpersonalised.
+    setBusy(true);
+    continueAsGuest()
+      .catch(() => null)
+      .finally(() => {
+        setBusy(false);
+        router.replace('/home');
+      });
   };
 
   const back = () => {

@@ -1,0 +1,44 @@
+{
+  "name": "@moodfood/api",
+  "version": "2.0.0",
+  "private": true,
+  "description": "MoodFood 2.0 API (NestJS + Fastify, Postgres via Drizzle, Redis).",
+  "type": "module",
+  "files": [
+    "dist",
+    "drizzle",
+    "public"
+  ],
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "test:e2e": "tsx --test test/*.e2e.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node dist/db/migrate.js",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.2",
+    "@nestjs/core": "^12.1.2",
+    "@nestjs/platform-fastify": "^12.1.2",
+    "drizzle-orm": "^0.45.3",
+    "expo-server-sdk": "^7.2.0",
+    "ioredis": "^6.0.0",
+    "libphonenumber-js": "^1.13.14",
+    "pg": "^8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.8",
+    "@types/node": "^22.20.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.20.0",
+    "typescript": "~6.0.3"
+  }
+}

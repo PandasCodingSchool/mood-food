@@ -40,7 +40,8 @@ export default function ProfileScreen() {
     }, []),
   );
 
-  const name = user?.name || (user ? 'MoodFood member' : 'Guest');
+  const signedIn = !!user && !user.isGuest;
+  const name = user?.name || (signedIn ? 'MoodFood member' : 'Guest');
   const stats = [
     { v: orders != null ? String(orders) : '–', l: 'Orders', go: () => router.push({ pathname: '/history', params: { tab: 'ordered' } }) },
     { v: String(streak), l: 'Day streak', go: () => router.push('/quests') },
@@ -115,7 +116,7 @@ export default function ProfileScreen() {
         </Surface>
 
         <View style={{ paddingHorizontal: space.gutter, paddingTop: 18 }}>
-          {user ? (
+          {signedIn ? (
             <Button
               block
               variant="outline"

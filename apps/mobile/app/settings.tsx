@@ -101,7 +101,7 @@ export default function SettingsScreen() {
               'Account',
               <Surface style={{ marginHorizontal: space.gutter, paddingHorizontal: 6, paddingVertical: 2 }}>
                 <ListRow title="Swiggy account" meta={user?.swiggyLinked ? 'Connected' : 'Not linked'} onPress={() => router.push('/swiggy-connect')} divider />
-                {user ? (
+                {user && !user.isGuest ? (
                   <ListRow
                     title="Log out"
                     chevron={false}
