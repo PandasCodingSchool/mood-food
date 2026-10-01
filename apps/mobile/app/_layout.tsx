@@ -14,7 +14,7 @@ import {
   Nunito_800ExtraBold,
   Nunito_900Black,
 } from "@expo-google-fonts/nunito";
-import { moodfoodFonts } from "@moodfood/ui";
+import { moodfoodFonts, WebAppFrame } from "@moodfood/ui";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -71,13 +71,16 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         {/* MoodFood 2.0 living theme (clock, weather, check-in) for @moodfood/ui screens */}
         <LiveMoodProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: "transparent" },
-              animation: "slide_from_right",
-            }}
-          />
+          {/* Wide web windows: centred app column instead of edge-to-edge stretch */}
+          <WebAppFrame>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: "transparent" },
+                animation: "slide_from_right",
+              }}
+            />
+          </WebAppFrame>
         </LiveMoodProvider>
       </GestureHandlerRootView>
       </ThemeProvider>

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { Appearance } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../services/secureStorage';
 
 const THEME_KEY = 'moodfood_dark_mode';
 
@@ -63,13 +63,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(Appearance.getColorScheme() === 'dark');
 
   useEffect(() => {
-    SecureStore.getItemAsync(THEME_KEY).then((val: string | null) => {
+    SecureStore.getItem(THEME_KEY).then((val: string | null) => {
       if (val === 'true') setDark(true);
       if (val === 'false') setDark(false);
     });
     const sub = Appearance.addChangeListener(({ colorScheme }) => {
       if (colorScheme) {
-        SecureStore.getItemAsync(THEME_KEY).then((val) => {
+        SecureStore.getItem(THEME_KEY).then((val) => {
           if (!val) setDark(colorScheme === 'dark');
         });
       }
@@ -80,7 +80,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleDark = () => {
     setDark((prev) => {
       const next = !prev;
-      SecureStore.setItemAsync(THEME_KEY, String(next));
+      SecureStore.setItem(THEME_KEY, String(next));
       return next;
     });
   };

@@ -16,23 +16,33 @@ export function HeroPick({ v, height, eyebrow, topFor, why, onOpen, actions, top
   actions?: ReactNode;
   topRight?: ReactNode;
 }) {
+  // The open-details target is a full-bleed sibling *behind* the content, not a
+  // wrapper: a pressable wrapping the action buttons renders <button> inside
+  // <button> on web (invalid HTML). Non-interactive content ignores touches so
+  // taps anywhere except an action still open the dish. (box-none must be the
+  // prop: react-native-web ignores it as a style.)
   return (
-    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${v.name}. Open details`} style={{ marginHorizontal: space.gutter, borderRadius: 30, boxShadow: shadow.hero }}>
+    <View style={{ marginHorizontal: space.gutter, borderRadius: 30, boxShadow: shadow.hero }}>
       <DishImage uri={v.imageUrl} caption={`photo · ${imageCaption(v)}`} height={height} radius={30} scrim shimmer>
-        <View style={{ position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-          {v.match != null ? <MatchBadge percent={v.match} icon="auto_awesome" /> : <Chip variant="accent" icon="auto_awesome" label="Top pick" />}
-          {topFor ? <Chip variant="photo" label={topFor} /> : null}
+        <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${v.name}. Open details`} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+        <View pointerEvents="box-none" style={{ position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <View style={{ pointerEvents: 'none', flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {v.match != null ? <MatchBadge percent={v.match} icon="auto_awesome" /> : <Chip variant="accent" icon="auto_awesome" label="Top pick" />}
+            {topFor ? <Chip variant="photo" label={topFor} /> : null}
+          </View>
           {topRight ? <View style={{ marginLeft: 'auto' }}>{topRight}</View> : null}
         </View>
-        <View style={{ position: 'absolute', left: 20, right: 20, bottom: 20, gap: 6 }}>
-          {eyebrow ? <Text variant="label" color="rgba(255,255,255,0.7)">{eyebrow}</Text> : null}
-          <Text variant="display28" tone="white" numberOfLines={2}>{v.name}</Text>
-          <Text variant="caption13" tone="photo2" numberOfLines={1}>{metaLine(v)}</Text>
-          {why ? <Text variant="body13" color="rgba(255,255,255,0.9)" numberOfLines={3} style={{ marginTop: 2 }}>{why}</Text> : null}
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 20, right: 20, bottom: 20, gap: 6 }}>
+          <View style={{ pointerEvents: 'none', gap: 6 }}>
+            {eyebrow ? <Text variant="label" color="rgba(255,255,255,0.7)">{eyebrow}</Text> : null}
+            <Text variant="display28" tone="white" numberOfLines={2}>{v.name}</Text>
+            <Text variant="caption13" tone="photo2" numberOfLines={1}>{metaLine(v)}</Text>
+            {why ? <Text variant="body13" color="rgba(255,255,255,0.9)" numberOfLines={3} style={{ marginTop: 2 }}>{why}</Text> : null}
+          </View>
           {actions ? <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>{actions}</View> : null}
         </View>
       </DishImage>
-    </Pressable>
+    </View>
   );
 }
 

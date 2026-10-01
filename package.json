@@ -4,7 +4,7 @@
   "private": true,
   "description": "Mood-based food recommendation platform",
   "scripts": {
-    "dev": "turbo run dev --filter=@moodfood/api",
+    "dev": "turbo run dev --filter=@moodfood/api --filter=@moodfood/site",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -17,7 +17,8 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d",
-    "db:migrate": "pnpm --filter @moodfood/api build && pnpm --filter @moodfood/api db:migrate"
+    "db:migrate": "pnpm --filter @moodfood/api build && pnpm --filter @moodfood/api db:migrate",
+    "site": "pnpm --filter @moodfood/site dev"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

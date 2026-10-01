@@ -65,8 +65,9 @@ export class RateLimitGuard implements CanActivate {
         max: env.RATE_LIMIT_AI,
         windowSec: WINDOW,
         message: 'Too many recommendation requests. Please wait a few minutes before trying again.',
+        key: sessionOrIp,
       },
-      signals: { max: env.RATE_LIMIT_SIGNALS, windowSec: WINDOW, message: TOO_MANY },
+      signals: { max: env.RATE_LIMIT_SIGNALS, windowSec: WINDOW, message: TOO_MANY, key: sessionOrIp },
       otpSend: { max: 5, windowSec: WINDOW, message: 'Too many OTP requests. Please try again later.', key: bodyPhone },
       otpVerify: {
         max: 10,

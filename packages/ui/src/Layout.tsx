@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View, type ScrollViewProps, type ViewStyle } from 'react-native';
+import { Platform, Pressable, ScrollView, useWindowDimensions, View, type ScrollViewProps, type ViewStyle } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { duration, hueTile, palette, shadow, space } from '@moodfood/tokens';
@@ -42,6 +42,43 @@ export function Screen({ children, withTabBar, ambient = true, overlay, edgeToEd
         {children}
       </ScrollView>
       {overlay}
+    </View>
+  );
+}
+
+/* ─────────────────────── Web app frame ─────────────────────── */
+
+/** Width of the app column on wide web screens. */
+export const APP_COLUMN_WIDTH = 480;
+
+/**
+ * The app is designed for phone widths. On web, at tablet/desktop widths it
+ * renders as a centred column over the living ambient background instead of
+ * stretching edge to edge. Native and narrow web windows pass straight through.
+ */
+export function WebAppFrame({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  if (Platform.OS !== 'web' || width < 600) return <>{children}</>;
+  return (
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: colors.solid }}>
+      <AmbientBackground animate={false} />
+      <View
+        style={{
+          flex: 1,
+          width: '100%',
+          maxWidth: APP_COLUMN_WIDTH,
+          overflow: 'hidden',
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: colors.line,
+          boxShadow: shadow.hero,
+          // New containing block, so absolutely positioned bars/toasts stay in the column.
+          transform: [{ translateX: 0 }],
+        }}
+      >
+        {children}
+      </View>
     </View>
   );
 }

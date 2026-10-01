@@ -32,6 +32,8 @@ export {
   ListRow,
   TabBar,
   ToastProvider,
+  WebAppFrame,
+  APP_COLUMN_WIDTH,
   useToast,
   type ScreenProps,
   type ListRowProps,
