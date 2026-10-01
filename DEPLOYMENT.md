@@ -15,17 +15,16 @@ MoodFood has **three deployable services**:
 ## Local Development
 
 ```bash
-# Install all dependencies
-npm install
-cd frontend && npm install && cd ..
-cd backend && npm install && cd ..
+# Install all dependencies (pnpm workspaces, via corepack)
+corepack enable
+pnpm install
 
 # Configure backend
-cp backend/.env.example backend/.env
-# Edit backend/.env (see Environment Variables section below)
+cp apps/backend/.env.example apps/backend/.env
+# Edit apps/backend/.env (see Environment Variables section below)
 
 # Start both frontend + backend together
-npm run dev
+pnpm dev
 # Frontend → http://localhost:5173
 # Backend  → http://localhost:3001
 # Admin    → http://localhost:3001/admin
@@ -38,7 +37,7 @@ npm run dev
 ### 1. Deploy Backend to Railway
 
 ```bash
-cd backend
+cd apps/backend
 
 # Login (install CLI first: npm i -g @railway/cli)
 railway login
@@ -59,7 +58,7 @@ railway domain
 
 ### 2. Configure Frontend API URL
 
-Create (or update) `frontend/.env.production`:
+Create (or update) `apps/frontend/.env.production`:
 
 ```
 VITE_API_URL=https://your-railway-app.up.railway.app
@@ -82,7 +81,7 @@ Or connect your GitHub repo in the Vercel dashboard — it auto-detects Vite.
 ## Alternative: Deploy Backend to Render
 
 1. Go to [render.com](https://render.com) → New Web Service
-2. Connect GitHub repo, set root directory to `backend`
+2. Connect GitHub repo, set root directory to `apps/backend`
 3. Settings:
    - **Build Command:** `npm install`
    - **Start Command:** `node server.js`
@@ -93,7 +92,7 @@ Or connect your GitHub repo in the Vercel dashboard — it auto-detects Vite.
 
 ## Environment Variables
 
-### Backend (`backend/.env`)
+### Backend (`apps/backend/.env`)
 
 ```env
 # Server
@@ -119,7 +118,7 @@ RATE_LIMIT_AI=10
 CORS_ORIGIN=https://your-frontend.vercel.app
 ```
 
-### Frontend (`frontend/.env.production`)
+### Frontend (`apps/frontend/.env.production`)
 
 ```env
 VITE_API_URL=https://your-backend-url.up.railway.app
@@ -131,7 +130,7 @@ VITE_API_URL=https://your-backend-url.up.railway.app
 
 The AI recommendations endpoint (`POST /api/ai-recommendations`) proxies to a separate Python FastAPI service. To deploy it:
 
-1. Navigate to the `intelligence/` directory
+1. Navigate to the `apps/intelligence/` directory
 2. Follow its own deployment instructions
 3. Set `AI_SERVICE_URL` and `AI_SERVICE_API_KEY` in your backend `.env`
 

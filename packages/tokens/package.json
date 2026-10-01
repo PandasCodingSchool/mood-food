@@ -1,0 +1,17 @@
+{
+  "name": "@moodfood/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MoodFood 2.0 design tokens: context-driven themes (time × weather × mood), type scale, radii, motion.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "tsx": "^4.20.0",
+    "typescript": "~6.0.3"
+  }
+}

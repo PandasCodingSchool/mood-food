@@ -1,4 +1,19 @@
 node_modules
 .env
 .env.local
+.env.*.local
 .gitnexus
+.turbo
+
+# OS / editor
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local artifacts that must not be committed
+*.zip
+*.ipynb
+apps/intelligence/model_store.db

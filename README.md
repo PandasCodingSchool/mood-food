@@ -28,31 +28,16 @@ Users pick a game, share their mood & cravings, and receive 3 AI-curated meal re
 ## Project Structure
 
 ```
-windsurf-project/
-├── frontend/                  # React + Vite frontend
-│   ├── src/
-│   │   ├── components/        # UI components
-│   │   │   ├── games/         # SwipeVibe, SpinWheel game components
-│   │   │   ├── Hero.jsx       # Landing hero with animated headline
-│   │   │   ├── HowItWorks.jsx # 3-step explainer section
-│   │   │   ├── Benefits.jsx   # Benefits + coming soon section
-│   │   │   ├── Navbar.tsx     # Scroll-aware nav with mobile drawer
-│   │   │   ├── Recommendations.tsx  # AI results + alternatives strip
-│   │   │   ├── GameSelector.tsx     # Game picker screen
-│   │   │   └── Waitlist.jsx   # Waitlist signup form
-│   │   ├── services/
-│   │   │   └── aiRecommendations.ts  # AI service client
-│   │   ├── utils/
-│   │   │   └── analytics.ts   # Event tracking
-│   │   └── App.tsx            # Root app with view routing
-│   └── index.html             # Favicon, OG/Twitter meta tags
-├── backend/                   # Node.js API server
-│   ├── server.js              # Express app, rate limiting, routes
-│   ├── db.js                  # SQLite connection
-│   ├── database.sql           # DB schema
-│   ├── admin/                 # Admin panel (static HTML, Basic Auth)
-│   └── .env.example           # Environment variable template
-└── package.json               # Root scripts (dev, build, deploy)
+mood-food/
+├── apps/
+│   ├── backend/        # Express API (v1). Being replaced by apps/api (NestJS)
+│   ├── frontend/       # Vite + React web app (v1). Replaced by Expo web + apps/site
+│   ├── mobile/         # Expo app (iOS, Android, product web)
+│   └── intelligence/   # Python FastAPI: recommender, learning, Swiggy MCP
+├── packages/           # Shared packages (tokens, ui, contracts, api-client), added in 2.0
+├── docs/               # Architecture, gaps, redesign reference
+├── pnpm-workspace.yaml
+└── turbo.json          # Pipeline: pnpm build | typecheck | test
 ```
 
 ---
@@ -104,22 +89,21 @@ windsurf-project/
 ### 1. Install dependencies
 
 ```bash
-npm install          # root
-cd frontend && npm install
-cd backend && npm install
+corepack enable
+pnpm install         # installs every app in apps/*
 ```
 
 ### 2. Configure environment
 
 ```bash
-cp backend/.env.example backend/.env
+cp apps/backend/.env.example apps/backend/.env
 # Fill in AI service URL, admin credentials, etc.
 ```
 
 ### 3. Run dev servers
 
 ```bash
-npm run dev          # starts frontend (5173) + backend (3001) concurrently
+pnpm dev             # starts frontend (5173) + backend (3001) concurrently
 ```
 
 ### 4. Admin panel
@@ -127,7 +111,7 @@ npm run dev          # starts frontend (5173) + backend (3001) concurrently
 ```
 http://localhost:3001/admin
 Username: admin
-Password: set in backend/.env (ADMIN_PASSWORD)
+Password: set in apps/backend/.env (ADMIN_PASSWORD)
 ```
 
 ---
