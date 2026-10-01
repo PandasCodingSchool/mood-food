@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@400..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block" rel="stylesheet">
+<style>
+body{margin:0;background:#E8E4DE;-webkit-font-smoothing:antialiased}
+a{color:#C2560A}a:hover{color:#8F3E05}
+button{font-family:inherit}
+*::-webkit-scrollbar{display:none}
+@keyframes mf-drift{from{transform:translate(0,0) scale(1)}to{transform:translate(-40px,60px) scale(1.15)}}
+@keyframes mf-rain{from{transform:translateY(-140px)}to{transform:translateY(920px)}}
+@keyframes mf-flash{0%,90%,100%{opacity:0}91%{opacity:.45}93%{opacity:0}94.5%{opacity:.3}96%{opacity:0}}
+@keyframes mf-fog{from{transform:translateX(-25%)}to{transform:translateX(20%)}}
+@keyframes mf-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes mf-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes mf-pulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.1);opacity:1}}
+@keyframes mf-shimmer{0%{transform:translateX(-160%)}60%,100%{transform:translateX(320%)}}
+@keyframes mf-pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:center;gap:48px;padding:32px;box-sizing:border-box;font-family:Geist,system-ui,sans-serif">
+<div data-screen-label="Phone" style="width:390px;height:844px;flex:none;border-radius:56px;padding:10px;background:#0B0B10;box-shadow:0 40px 80px -30px rgba(20,15,10,.5),inset 0 0 0 1.5px #2a2a33;box-sizing:content-box">
+<div style="position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:#15121c">
+<div style="{{ vars }}">
+{{ ambient }}
+
+<sc-if value="{{ s.launch }}">
+<div onClick="{{ skipLaunch }}" data-screen-label="Launch" style="position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 32px;cursor:pointer">
+{{ launchFloat }}
+<div style="width:200px;height:200px;border-radius:50px;background:#FFFFFF;box-shadow:0 30px 60px -20px rgba(0,0,0,.5);display:grid;place-items:center;overflow:hidden;animation:mf-pop .8s cubic-bezier(.2,.9,.3,1.2) both"><img src="assets/moodfood-logo.png" alt="MoodFood" style="width:196px;height:196px;object-fit:contain"></div>
+<div style="margin-top:44px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:34px;line-height:1.05;letter-spacing:-.025em;text-align:center;text-wrap:balance">{{ tagline }}</div>
+<div style="margin-top:12px;font-size:15px;color:var(--ink2);text-align:center">{{ launchSub }}</div>
+<div style="position:absolute;left:40px;right:40px;bottom:64px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)"><span>Reading the room</span><span>{{ ctxShort }}</span></div>
+<div style="height:4px;border-radius:4px;background:var(--track);overflow:hidden"><div style="{{ launchBar }}"></div></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.mood }}">
+<div data-screen-label="Mood check-in" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 40px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:8px 20px 0;display:flex;justify-content:space-between;align-items:center">
+<span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);white-space:nowrap">Check-in · 20 sec</span>
+<button onClick="{{ goHome }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap">Skip</button>
+</div>
+<div style="padding:16px 20px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:36px;line-height:1;letter-spacing:-.03em">How are you, really?</div>
+<div style="padding:10px 20px 0;color:var(--ink2);font-size:15px">Four taps. We'll handle the rest.</div>
+<div style="margin:20px 16px 0;padding:4px 18px;border-radius:26px;background:var(--surf);backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--line);display:flex;flex-direction:column">
+<sc-for list="{{ moodRows }}" as="r" hint-placeholder-count="4">
+<div style="padding:15px 0;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;color:var(--accText)">{{ r.icon }}</span>
+<span style="font-weight:600;font-size:15px">{{ r.label }}</span>
+<span style="margin-left:auto;font-size:13px;color:var(--ink2)">{{ r.word }}</span>
+</div>
+<div style="display:flex;align-items:flex-end;gap:6px;height:34px">
+<sc-for list="{{ r.segs }}" as="g" hint-placeholder-count="5"><button onClick="{{ g.tap }}" style="{{ g.style }}"></button></sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:24px 20px 12px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">What's this meal for?</div>
+<div style="padding:0 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+<sc-for list="{{ occasions }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.tap }}" style="{{ o.style }}"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">{{ o.icon }}</span><span>{{ o.label }}</span></button></sc-for>
+</div>
+<div style="margin:22px 16px 0;padding:18px;border-radius:26px;background:var(--solid);display:flex;gap:16px;align-items:center;box-shadow:0 20px 40px -24px rgba(0,0,0,.4)">
+{{ moodOrb }}
+<div style="flex:1;min-width:0">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Reading you as</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em;margin-top:2px">{{ M.label }}</div>
+<div style="font-size:13px;color:var(--ink2);margin-top:2px;text-wrap:pretty">We'll lean {{ M.lean }}.</div>
+</div>
+</div>
+<div style="padding:14px 16px 0"><button onClick="{{ submitMood }}" style="width:100%;height:58px;border-radius:20px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">Show my matches<span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1">arrow_forward</span></button></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.home }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="Home" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:6px 16px 0;display:flex;align-items:center;gap:8px">
+<div style="width:70px;height:40px;border-radius:20px;background:#FFFFFF;display:grid;place-items:center;box-shadow:0 8px 18px -10px rgba(0,0,0,.4)"><div style="width:56px;height:32px;background-image:url(assets/moodfood-logo.png);background-repeat:no-repeat;background-size:160px 160px;background-position:-56px -34px"></div></div>
+<div style="height:40px;padding:0 14px 0 10px;border-radius:20px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;white-space:nowrap"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;color:var(--accText)">{{ W.icon }}</span>{{ tempTxt }}</div>
+<button onClick="{{ soonBell }}" style="margin-left:auto;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;position:relative"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1">notifications</span><span style="position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--acc)"></span></button>
+<button onClick="{{ soonProfile }}" style="width:40px;height:40px;border-radius:50%;border:0;background:var(--acc);color:#0B1422;font:700 15px 'Bricolage Grotesque',sans-serif;cursor:pointer;padding:0">A</button>
+</div>
+<div style="padding:24px 20px 0">
+<div style="font-size:15px;color:var(--ink2)">{{ greeting }}</div>
+<div style="margin-top:6px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:40px;line-height:.98;letter-spacing:-.035em;text-wrap:balance">{{ heroLine }}</div>
+<button onClick="{{ goMood }}" style="margin-top:16px;display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px 0 8px;border-radius:18px;background:var(--surf);border:1px solid var(--line);backdrop-filter:blur(16px);color:var(--ink);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap"><span style="width:20px;height:20px;border-radius:50%;background:var(--acc)"></span><span>{{ feelingTxt }}</span><span style="color:var(--accText);font-weight:600">· Re-check</span></button>
+</div>
+<div style="margin:20px 16px 0;padding:12px 14px;border-radius:18px;background:var(--surf);backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--line);display:flex;gap:12px;align-items:center">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--accText)">{{ W.icon }}</span>
+<span style="font-size:13.5px;line-height:1.35;text-wrap:pretty">{{ W.insight }}</span>
+</div>
+<div onClick="{{ top.open }}" style="margin:14px 16px 0;border-radius:30px;overflow:hidden;position:relative;height:410px;cursor:pointer;box-shadow:0 30px 60px -28px rgba(0,0,0,.6)">
+<div style="position:absolute;inset:0;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:flex;justify-content:center;padding-top:120px"><span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);height:22px;padding:0 8px;border-radius:6px;background:var(--tint);display:flex;align-items:center">photo · {{ top.img }}</span></div>
+<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,14,0) 32%,rgba(8,8,14,.88) 100%)"></div>
+<div style="position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.14),transparent);animation:mf-shimmer 4.5s ease-in-out infinite"></div>
+<div style="position:absolute;top:16px;left:16px;display:flex;gap:6px">
+<span style="height:28px;padding:0 10px;border-radius:14px;background:var(--acc);color:#0B1422;font:700 12px Geist,sans-serif;display:flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">auto_awesome</span>{{ top.m }} match</span>
+<span style="height:28px;padding:0 10px;border-radius:14px;background:rgba(10,10,16,.45);backdrop-filter:blur(12px);color:#FFFFFF;font:600 12px Geist,sans-serif;display:flex;align-items:center">{{ top.topFor }}</span>
+</div>
+<div style="position:absolute;left:20px;right:20px;bottom:20px;color:#FFFFFF;display:flex;flex-direction:column;gap:6px">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.7)">{{ pickLabel }}</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:28px;line-height:1.02;letter-spacing:-.025em;text-wrap:balance">{{ top.name }}</div>
+<div style="font-size:13px;color:rgba(255,255,255,.78)">{{ top.rest }} · {{ top.eta }} min · {{ top.priceTxt }}</div>
+<div style="font-size:13.5px;line-height:1.38;color:rgba(255,255,255,.9);text-wrap:pretty;margin-top:2px">{{ top.whyFull }}</div>
+<div style="display:flex;gap:8px;margin-top:10px">
+<button onClick="{{ top.order }}" style="flex:1;height:50px;border-radius:16px;border:0;background:var(--acc);color:#0B1422;font:600 15px Geist,sans-serif;cursor:pointer">Order now</button>
+<button onClick="{{ top.open }}" style="height:50px;padding:0 18px;border-radius:16px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);backdrop-filter:blur(12px);color:#FFFFFF;font:600 15px Geist,sans-serif;cursor:pointer">See why</button>
+</div>
+</div>
+</div>
+<div style="padding:10px 20px 0;font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:6px"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">tune</span>Based on your mood, the weather and your last 12 orders</div>
+<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:18px 16px 2px">
+<sc-for list="{{ quick }}" as="q" hint-placeholder-count="4"><button onClick="{{ q.tap }}" style="flex:none;height:42px;padding:0 16px 0 12px;border-radius:21px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;gap:7px;align-items:center;color:var(--ink);font:500 14px Geist,sans-serif;cursor:pointer"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--accText)">{{ q.icon }}</span>{{ q.label }}</button></sc-for>
+</div>
+<div style="padding:28px 20px 12px;display:flex;align-items:baseline;justify-content:space-between">
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">More for your mood</div>
+<button onClick="{{ goFeed }}" style="border:0;background:none;color:var(--accText);font:600 13px Geist,sans-serif;cursor:pointer;padding:0">See all</button>
+</div>
+<div style="display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding:0 16px">
+<sc-for list="{{ forYou }}" as="d" hint-placeholder-count="3">
+<div onClick="{{ d.open }}" style="flex:none;width:196px;border-radius:24px;overflow:hidden;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);cursor:pointer">
+<div style="height:146px;position:relative;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:grid;place-items:center">
+<span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ d.img }}</span>
+<span style="position:absolute;top:10px;left:10px;height:24px;padding:0 8px;border-radius:12px;background:var(--acc);color:#0B1422;font:700 11px Geist,sans-serif;display:flex;align-items:center">{{ d.m }}</span>
+</div>
+<div style="padding:12px 14px 14px">
+<div style="font-weight:600;font-size:15px;line-height:1.25;min-height:38px">{{ d.name }}</div>
+<div style="font-size:12.5px;color:var(--ink2);margin-top:6px">{{ d.rest }} · {{ d.eta }} min</div>
+<div style="font-weight:600;font-size:15px;margin-top:8px">{{ d.priceTxt }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:28px 20px 12px;display:flex;align-items:baseline;justify-content:space-between">
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">Can't decide? Play it out</div>
+<button onClick="{{ goGames }}" style="border:0;background:none;color:var(--accText);font:600 13px Geist,sans-serif;cursor:pointer;padding:0">All games</button>
+</div>
+<div style="padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<sc-for list="{{ gamesHome }}" as="g" hint-placeholder-count="4">
+<button onClick="{{ g.open }}" style="text-align:left;padding:16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);min-height:156px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;color:var(--ink);cursor:pointer">
+<div style="{{ g.iconStyle }}"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">{{ g.icon }}</span></div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px;letter-spacing:-.015em;margin-top:4px">{{ g.t }}</div>
+<div style="font-size:12.5px;line-height:1.35;color:var(--ink2)">{{ g.d }}</div>
+<div style="margin-top:auto;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ g.time }}</div>
+</button>
+</sc-for>
+</div>
+<div onClick="{{ goQuests }}" style="margin:14px 16px 0;padding:18px;border-radius:26px;background:var(--solid);display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 40px -26px rgba(0,0,0,.4);cursor:pointer">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+<div>
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Mood streak</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:28px;letter-spacing:-.02em;margin-top:2px">5 days</div>
+</div>
+<span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;color:var(--accText)">local_fire_department</span>
+</div>
+<div style="display:flex;justify-content:space-between">
+<sc-for list="{{ streak }}" as="d" hint-placeholder-count="7"><div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div style="{{ d.style }}"></div><span style="font-size:11px;color:var(--ink2)">{{ d.l }}</span></div></sc-for>
+</div>
+<div style="font-size:13px;color:var(--ink2);line-height:1.35">Check in tomorrow to unlock <span style="color:var(--ink);font-weight:600">Rainy Day Regular</span>.</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.feed }}">
+<div data-screen-label="Recommendations" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:10px 20px 0;display:flex;justify-content:space-between;align-items:flex-end">
+<div>
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ ctxLine }}</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:36px;letter-spacing:-.03em;margin-top:4px">Your matches</div>
+</div>
+<button onClick="{{ refresh }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">refresh</span></button>
+</div>
+<div onClick="{{ top.open }}" style="margin:18px 16px 0;border-radius:30px;overflow:hidden;position:relative;height:330px;cursor:pointer;box-shadow:0 30px 60px -28px rgba(0,0,0,.6)">
+<div style="position:absolute;inset:0;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:flex;justify-content:center;padding-top:96px"><span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">photo · {{ top.img }}</span></div>
+<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,14,0) 30%,rgba(8,8,14,.88) 100%)"></div>
+<div style="position:absolute;top:16px;left:16px;right:16px;display:flex;gap:6px;align-items:center">
+<span style="height:28px;padding:0 10px;border-radius:14px;background:var(--acc);color:#0B1422;font:700 12px Geist,sans-serif;display:flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">workspace_premium</span>Top pick · {{ top.m }}</span>
+<button onClick="{{ top.save }}" style="margin-left:auto;width:38px;height:38px;border-radius:50%;border:0;background:rgba(10,10,16,.45);backdrop-filter:blur(12px);color:#FFFFFF;display:grid;place-items:center;cursor:pointer;padding:0"><span style="{{ top.saveStyleLight }}">bookmark</span></button>
+</div>
+<div style="position:absolute;left:20px;right:20px;bottom:20px;color:#FFFFFF;display:flex;flex-direction:column;gap:6px">
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:27px;line-height:1.02;letter-spacing:-.025em">{{ top.name }}</div>
+<div style="font-size:13.5px;line-height:1.38;color:rgba(255,255,255,.88);text-wrap:pretty">{{ top.whyFull }}</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+<span style="font-size:13px;color:rgba(255,255,255,.78)">{{ top.rest }} · {{ top.eta }} min</span>
+<span style="height:40px;padding:0 16px;border-radius:14px;background:var(--acc);color:#0B1422;font:600 14px Geist,sans-serif;display:flex;align-items:center;gap:6px">{{ top.priceTxt }}<span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1">arrow_forward</span></span>
+</div>
+</div>
+</div>
+<div style="padding:28px 20px 12px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">Also fits right now</div>
+<div style="display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding:0 16px;scroll-snap-type:x mandatory">
+<sc-for list="{{ feedRest }}" as="d" hint-placeholder-count="3">
+<div style="flex:none;width:280px;scroll-snap-align:start;border-radius:26px;overflow:hidden;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;flex-direction:column">
+<div onClick="{{ d.open }}" style="height:160px;position:relative;cursor:pointer;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:grid;place-items:center">
+<span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ d.img }}</span>
+<div style="position:absolute;top:12px;left:12px;display:flex;gap:6px"><span style="height:26px;padding:0 9px;border-radius:13px;background:var(--acc);color:#0B1422;font:700 11.5px Geist,sans-serif;display:flex;align-items:center">{{ d.m }} match</span><span style="height:26px;padding:0 9px;border-radius:13px;background:var(--solid);color:var(--ink);font:600 11.5px Geist,sans-serif;display:flex;align-items:center">{{ d.chip }}</span></div>
+</div>
+<div onClick="{{ d.open }}" style="padding:14px 16px 0;cursor:pointer">
+<div style="font-weight:600;font-size:16px;line-height:1.25">{{ d.name }}</div>
+<div style="font-size:12.5px;color:var(--ink2);margin-top:4px">{{ d.cuisine }} · {{ d.eta }} min · {{ d.priceTxt }}</div>
+<div style="font-size:13px;line-height:1.4;margin-top:10px;text-wrap:pretty">{{ d.whyShort }}</div>
+</div>
+<div style="display:flex;gap:6px;padding:14px 12px 12px;margin-top:auto">
+<button onClick="{{ d.veto }}" style="width:40px;height:40px;border-radius:14px;border:1px solid var(--line);background:var(--tint);color:var(--ink2);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1">close</span></button>
+<button onClick="{{ d.like }}" style="width:40px;height:40px;border-radius:14px;border:1px solid var(--line);background:var(--tint);display:grid;place-items:center;cursor:pointer;padding:0"><span style="{{ d.likeStyle }}">favorite</span></button>
+<button onClick="{{ d.save }}" style="width:40px;height:40px;border-radius:14px;border:1px solid var(--line);background:var(--tint);display:grid;place-items:center;cursor:pointer;padding:0"><span style="{{ d.saveStyle }}">bookmark</span></button>
+<button onClick="{{ d.share }}" style="width:40px;height:40px;border-radius:14px;border:1px solid var(--line);background:var(--tint);color:var(--ink2);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1">ios_share</span></button>
+<button onClick="{{ d.open }}" style="margin-left:auto;height:40px;padding:0 14px;border-radius:14px;border:0;background:var(--ink);color:var(--solid);font:600 13px Geist,sans-serif;cursor:pointer">View</button>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:28px 20px 12px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">Smart swaps</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ swaps }}" as="w" hint-placeholder-count="2">
+<div onClick="{{ w.d.open }}" style="padding:12px;border-radius:22px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;gap:14px;align-items:center;cursor:pointer">
+<div style="width:64px;height:64px;flex:none;border-radius:16px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<div style="flex:1;min-width:0">
+<div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accText)">{{ w.label }}</div>
+<div style="font-weight:600;font-size:15px;margin-top:3px">{{ w.d.name }}</div>
+<div style="font-size:12.5px;color:var(--ink2);margin-top:2px">{{ w.delta }}</div>
+</div>
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--ink2)">chevron_right</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.detail }}">
+<div data-screen-label="Meal detail" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:0 0 120px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="position:relative;height:370px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:grid;place-items:center">
+<span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">hero photo · {{ dd.img }}</span>
+<div style="position:absolute;top:56px;left:16px;right:16px;display:flex;justify-content:space-between">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,16,.42);backdrop-filter:blur(16px);color:#FFFFFF;display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<button onClick="{{ dd.share }}" style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,16,.42);backdrop-filter:blur(16px);color:#FFFFFF;display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1">ios_share</span></button>
+</div>
+</div>
+<div style="margin:-52px 12px 0;position:relative;padding:22px 18px 20px;border-radius:30px;background:var(--solid);box-shadow:0 -10px 40px -20px rgba(0,0,0,.45)">
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<span style="height:28px;padding:0 10px;border-radius:14px;background:var(--acc);color:#0B1422;font:700 12px Geist,sans-serif;display:flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">auto_awesome</span>{{ dd.m }} match</span>
+<sc-for list="{{ dd.chips }}" as="c" hint-placeholder-count="2"><span style="height:28px;padding:0 10px;border-radius:14px;background:var(--accSoft);color:var(--accText);font:600 12px Geist,sans-serif;display:flex;align-items:center">{{ c }}</span></sc-for>
+</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:30px;line-height:1.02;letter-spacing:-.03em;margin-top:14px;text-wrap:balance">{{ dd.name }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:13.5px;color:var(--ink2);white-space:nowrap">
+<span>{{ dd.cuisine }}</span>
+<span style="display:flex;align-items:center;gap:3px"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;color:var(--accText)">star</span>{{ dd.rating }}</span>
+<span style="display:flex;align-items:center;gap:3px"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1">schedule</span>{{ dd.eta }} min</span>
+<span style="color:var(--ink);font-weight:600">{{ dd.priceTxt }}</span>
+</div>
+<div style="margin-top:20px;padding:16px;border-radius:22px;background:var(--tint);display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;color:var(--accText)">auto_awesome</span>Why this fits you</div>
+<sc-for list="{{ dd.reasons }}" as="r" hint-placeholder-count="3"><div style="display:flex;gap:10px;align-items:flex-start"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1.2;color:var(--ink2)">{{ r.icon }}</span><span style="font-size:13.5px;line-height:1.42;text-wrap:pretty">{{ r.t }}</span></div></sc-for>
+</div>
+<div style="margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+<div style="padding:14px 10px;border-radius:20px;background:var(--tint);display:flex;flex-direction:column;align-items:center;gap:8px">
+<div style="{{ dd.ring }}"><div style="width:46px;height:46px;border-radius:50%;background:var(--solid);display:grid;place-items:center;font:700 16px 'Bricolage Grotesque',sans-serif">{{ dd.health }}</div></div>
+<span style="font-size:11.5px;color:var(--ink2)">Health score</span>
+</div>
+<div style="padding:14px 10px;border-radius:20px;background:var(--tint);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 24px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em">{{ dd.kcal }}</span><span style="font-size:11.5px;color:var(--ink2)">kcal</span></div>
+<div style="padding:14px 10px;border-radius:20px;background:var(--tint);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 24px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em">{{ dd.proteinTxt }}</span><span style="font-size:11.5px;color:var(--ink2)">protein</span></div>
+</div>
+<div style="margin-top:20px;font-weight:600;font-size:15px">What's in it</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+<sc-for list="{{ dd.ing }}" as="i" hint-placeholder-count="4"><span style="height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--line);font-size:13px;display:flex;align-items:center">{{ i }}</span></sc-for>
+</div>
+<div style="margin-top:20px;padding:14px;border-radius:22px;background:var(--tint);display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;gap:12px;align-items:center">
+<div style="width:52px;height:52px;flex:none;border-radius:16px;background:repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:15px">{{ dd.rest }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:2px">{{ dd.rating }} ★ · 2.1 km · Open till 1 AM</div></div>
+<button onClick="{{ goMenu }}" style="height:36px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--solid);color:var(--ink);font:600 13px Geist,sans-serif;cursor:pointer">Menu</button>
+</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2)"><span style="width:8px;height:8px;border-radius:50%;background:#2BB673"></span>Live · kitchen is quiet, orders leaving on time</div>
+</div>
+<div onClick="{{ goRecipe }}" style="margin-top:12px;padding:14px;border-radius:22px;background:var(--accSoft);display:flex;gap:12px;align-items:center;cursor:pointer">
+<div style="width:44px;height:44px;flex:none;border-radius:14px;background:var(--solid);color:var(--accText);display:grid;place-items:center"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">skillet</span></div>
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:15px">Cook it yourself</div><div style="font-size:12.5px;color:var(--ink2);margin-top:2px">{{ diyLine }}</div></div>
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--accText)">chevron_right</span>
+</div>
+<div style="margin-top:20px;font-weight:600;font-size:15px">Explore alternatives</div>
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+<sc-for list="{{ swaps }}" as="w" hint-placeholder-count="2">
+<div onClick="{{ w.d.open }}" style="padding:10px;border-radius:18px;border:1px solid var(--line);display:flex;gap:12px;align-items:center;cursor:pointer">
+<div style="width:48px;height:48px;flex:none;border-radius:14px;background:repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<div style="flex:1;min-width:0"><div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accText)">{{ w.label }}</div><div style="font-weight:600;font-size:14px;margin-top:2px">{{ w.d.name }}</div></div>
+<span style="font-size:12.5px;color:var(--ink2)">{{ w.delta }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;z-index:12;padding:24px 16px 30px;background:linear-gradient(180deg,transparent,var(--solid) 38%);display:flex;gap:10px">
+<button onClick="{{ dd.save }}" style="width:56px;height:56px;flex:none;border-radius:18px;border:1px solid var(--line);background:var(--solid);display:grid;place-items:center;cursor:pointer;padding:0"><span style="{{ dd.saveStyle }}">bookmark</span></button>
+<button onClick="{{ orderNow }}" style="flex:1;height:56px;border-radius:18px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">Order now · {{ dd.priceTxt }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.menu }}">
+<div data-screen-label="Restaurant menu" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:0 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="position:relative;height:220px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:grid;place-items:center">
+<span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">restaurant interior</span>
+<button onClick="{{ back }}" style="position:absolute;top:56px;left:16px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,16,.42);backdrop-filter:blur(16px);color:#FFFFFF;display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+</div>
+<div style="margin:-60px 12px 0;position:relative;padding:18px;border-radius:28px;background:var(--solid);box-shadow:0 -10px 40px -20px rgba(0,0,0,.45)">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+<div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.025em">{{ dd.rest }}</div><div style="font-size:13px;color:var(--ink2);margin-top:3px">{{ dd.cuisine }} · 2.1 km · Bandra West</div></div>
+<span style="height:30px;padding:0 10px;border-radius:10px;background:#1E8E4E;color:#FFFFFF;font:700 13px Geist,sans-serif;display:flex;align-items:center;gap:3px">{{ dd.rating }}<span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">star</span></span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px">
+<div style="padding:10px;border-radius:14px;background:var(--tint)"><div style="font-size:11px;color:var(--ink2)">Delivery</div><div style="font-weight:600;font-size:14px;margin-top:2px">{{ dd.eta }} min</div></div>
+<div style="padding:10px;border-radius:14px;background:var(--tint)"><div style="font-size:11px;color:var(--ink2)">Status</div><div style="font-weight:600;font-size:14px;margin-top:2px;color:#2BB673">Open</div></div>
+<div style="padding:10px;border-radius:14px;background:var(--tint)"><div style="font-size:11px;color:var(--ink2)">For two</div><div style="font-weight:600;font-size:14px;margin-top:2px">₹700</div></div>
+</div>
+</div>
+<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:18px 16px 4px">
+<sc-for list="{{ menuTabs }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.tap }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+</div>
+<sc-for list="{{ menuSecs }}" as="sec" hint-placeholder-count="2">
+<div style="padding:22px 20px 10px;display:flex;align-items:baseline;justify-content:space-between"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:19px;letter-spacing:-.02em">{{ sec.title }}</span><span style="font-size:12px;color:var(--ink2)">{{ sec.note }}</span></div>
+<sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="2">
+<div style="margin:0 16px 10px;padding:14px;border-radius:22px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;gap:14px">
+<div style="flex:1;min-width:0">
+<div style="display:flex;gap:8px;align-items:center"><span style="{{ it.vegStyle }}"></span><span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accText)">{{ it.flag }}</span></div>
+<div style="font-weight:600;font-size:15.5px;line-height:1.25;margin-top:6px">{{ it.name }}</div>
+<div style="font-size:14px;margin-top:4px">{{ it.priceTxt }}</div>
+<div style="font-size:12.5px;color:var(--ink2);margin-top:6px;line-height:1.35">{{ it.desc }}</div>
+</div>
+<div style="width:104px;flex:none;position:relative;padding-bottom:14px">
+<div style="height:96px;border-radius:16px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<sc-if value="{{ it.none }}"><button onClick="{{ it.add }}" style="position:absolute;left:10px;right:10px;bottom:0;height:34px;border-radius:12px;border:1px solid var(--line);background:var(--solid);color:var(--accText);font:700 13px Geist,sans-serif;cursor:pointer;box-shadow:0 8px 16px -8px rgba(0,0,0,.35)">ADD</button></sc-if>
+<sc-if value="{{ it.has }}"><div style="position:absolute;left:6px;right:6px;bottom:0;height:34px;border-radius:12px;background:var(--acc);color:#0B1422;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 16px -8px rgba(0,0,0,.35)"><button onClick="{{ it.dec }}" style="width:32px;height:34px;border:0;background:none;color:#0B1422;cursor:pointer;font:700 18px Geist,sans-serif;padding:0">−</button><span style="font:700 14px Geist,sans-serif">{{ it.qty }}</span><button onClick="{{ it.inc }}" style="width:32px;height:34px;border:0;background:none;color:#0B1422;cursor:pointer;font:700 18px Geist,sans-serif;padding:0">+</button></div></sc-if>
+</div>
+</div>
+</sc-for>
+</sc-for>
+</div>
+<sc-if value="{{ cartOn }}">
+<div style="position:absolute;left:12px;right:12px;bottom:28px;z-index:12;height:66px;border-radius:22px;background:#0B1422;color:#FFFFFF;display:flex;align-items:center;padding:0 10px 0 20px;box-shadow:0 20px 40px -16px rgba(0,0,0,.6);animation:mf-in .3s ease">
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:15px">{{ cartLabel }}</div><div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:2px">{{ cartNote }}</div></div>
+<button onClick="{{ goCheckout }}" style="height:46px;padding:0 16px;border-radius:16px;border:0;background:var(--acc);color:#0B1422;font:600 14px Geist,sans-serif;cursor:pointer;display:flex;align-items:center;gap:4px">Checkout<span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1">arrow_forward</span></button>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ s.checkout }}">
+<sc-if value="{{ notPlaced }}">
+<div data-screen-label="Checkout" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 6px">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<div style="font-weight:600;font-size:16px">Checkout</div>
+<div style="width:44px"></div>
+</div>
+<div style="margin:12px 16px 0;padding:16px;border-radius:24px;background:var(--solid);display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;gap:12px;align-items:flex-start">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--accText)">home</span>
+<div style="flex:1"><div style="font-weight:600;font-size:15px">Home · Bandra West</div><div style="font-size:12.5px;color:var(--ink2);margin-top:3px">Flat 1202, Sea Breeze, 14th Road</div></div>
+<button onClick="{{ soonAddress }}" style="border:0;background:none;color:var(--accText);font:600 13px Geist,sans-serif;cursor:pointer;padding:0">Change</button>
+</div>
+<div style="height:1px;background:var(--line)"></div>
+<div style="display:flex;gap:12px;align-items:center">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--accText)">schedule</span>
+<div style="flex:1"><div style="font-weight:600;font-size:15px">Arriving in {{ dd.etaTxt }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:3px">{{ W.packNote }}</div></div>
+</div>
+</div>
+<div style="margin:12px 16px 0;padding:6px 16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<sc-for list="{{ cartLines }}" as="l" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0">
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14.5px">{{ l.name }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:2px">{{ l.unit }}</div></div>
+<div style="height:32px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center"><button onClick="{{ l.dec }}" style="width:30px;height:32px;border:0;background:none;color:var(--ink);cursor:pointer;font:600 16px Geist,sans-serif;padding:0">−</button><span style="font:600 13px Geist,sans-serif;min-width:14px;text-align:center">{{ l.qty }}</span><button onClick="{{ l.inc }}" style="width:30px;height:32px;border:0;background:none;color:var(--ink);cursor:pointer;font:600 16px Geist,sans-serif;padding:0">+</button></div>
+<div style="width:56px;text-align:right;font-weight:600;font-size:14px">{{ l.total }}</div>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ hasDiscount }}">
+<div style="margin:12px 16px 0;padding:12px 14px;border-radius:18px;background:var(--accSoft);display:flex;gap:10px;align-items:center;color:var(--accText);font-size:13.5px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1">sell</span>MOODFOOD60 applied · you save ₹60</div>
+</sc-if>
+<div style="margin:12px 16px 0;padding:14px 16px;border-radius:24px;background:var(--solid);display:flex;flex-direction:column;gap:9px">
+<sc-for list="{{ billRows }}" as="b" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;font-size:13.5px"><span style="color:var(--ink2)">{{ b.label }}</span><span style="{{ b.valStyle }}">{{ b.val }}</span></div></sc-for>
+<div style="height:1px;background:var(--line);margin:3px 0"></div>
+<div style="display:flex;justify-content:space-between;font-weight:700;font-size:16px"><span>To pay</span><span>{{ toPayTxt }}</span></div>
+</div>
+<div style="padding:22px 20px 10px;font-weight:600;font-size:15px">Pay with</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ payOpts }}" as="p" hint-placeholder-count="3">
+<button onClick="{{ p.tap }}" style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(20px);color:var(--ink);cursor:pointer;text-align:left">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--ink2)">{{ p.icon }}</span>
+<div style="flex:1"><div style="font-weight:600;font-size:14.5px">{{ p.label }}</div><div style="font-size:12px;color:var(--ink2);margin-top:2px">{{ p.sub }}</div></div>
+<span style="{{ p.radio }}"></span>
+</button>
+</sc-for>
+</div>
+<div style="margin:14px 16px 0;padding:12px 14px;border-radius:18px;border:1px dashed var(--line);display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink2)"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:#2BB673">link</span>Ordering through your connected Swiggy account</div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;z-index:12;padding:24px 16px 30px;background:linear-gradient(180deg,transparent,var(--solid) 38%)">
+<button onClick="{{ placeOrder }}" style="width:100%;height:58px;border-radius:18px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">Place order · {{ toPayTxt }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ placed }}">
+<div data-screen-label="Order placed" style="position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 32px;text-align:center;animation:mf-in .4s ease">
+<div style="width:120px;height:120px;border-radius:50%;background:var(--acc);display:grid;place-items:center;box-shadow:0 0 0 14px var(--accSoft),0 30px 60px -20px var(--acc);animation:mf-pop .6s cubic-bezier(.2,.9,.3,1.3) both"><span style="font-family:'Material Symbols Rounded';font-size:60px;line-height:1;color:#0B1422">check</span></div>
+<div style="margin-top:36px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:34px;letter-spacing:-.03em">Good choice.</div>
+<div style="margin-top:10px;font-size:15px;color:var(--ink2);line-height:1.45">{{ dd.rest }} is on it. Arriving in about {{ dd.eta }} minutes.</div>
+<div style="margin-top:20px;height:36px;padding:0 14px;border-radius:18px;background:var(--surf);border:1px solid var(--line);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--accText)">local_fire_department</span>Mood streak → 6 days</div>
+<div style="position:absolute;left:16px;right:16px;bottom:36px;display:flex;flex-direction:column;gap:10px">
+<button onClick="{{ soonTrack }}" style="height:56px;border-radius:18px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer">Track order</button>
+<button onClick="{{ backHome }}" style="height:52px;border-radius:18px;border:1px solid var(--line);background:var(--surf);color:var(--ink);font:600 15px Geist,sans-serif;cursor:pointer">Back home</button>
+</div>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ s.games }}">
+<div data-screen-label="Game picker" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:10px 20px 0">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Decision modes</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:36px;letter-spacing:-.03em;margin-top:4px">Play to decide</div>
+<div style="font-size:14.5px;color:var(--ink2);margin-top:6px">Every result is already filtered to your mood.</div>
+</div>
+<div onClick="{{ goSwipe }}" style="margin:20px 16px 0;height:230px;border-radius:30px;position:relative;overflow:hidden;background:linear-gradient(140deg,var(--acc),var(--acc2));color:#0B1422;cursor:pointer;box-shadow:0 30px 50px -26px var(--acc)">
+<div style="position:absolute;right:-20px;top:40px;width:130px;height:170px;border-radius:22px;background:rgba(255,255,255,.28);transform:rotate(14deg)"></div>
+<div style="position:absolute;right:30px;top:30px;width:130px;height:170px;border-radius:22px;background:rgba(255,255,255,.5);transform:rotate(4deg);display:grid;place-items:center"><span style="font-family:'Material Symbols Rounded';font-size:40px;line-height:1">swipe</span></div>
+<div style="position:absolute;left:20px;bottom:20px;right:170px;display:flex;flex-direction:column;gap:6px">
+<span style="align-self:flex-start;height:24px;padding:0 9px;border-radius:12px;background:#0B1422;color:#FFFFFF;font:600 11px Geist,sans-serif;display:flex;align-items:center">Most played tonight</span>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:30px;letter-spacing:-.03em;line-height:1">Swipe Vibe</div>
+<div style="font-size:13px;line-height:1.35">Six dishes. Swipe on instinct. We read the pattern.</div>
+</div>
+</div>
+<div style="padding:12px 16px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<sc-for list="{{ gamesGrid }}" as="g" hint-placeholder-count="8">
+<button onClick="{{ g.open }}" style="text-align:left;padding:16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);min-height:170px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;color:var(--ink);cursor:pointer">
+<div style="display:flex;width:100%;justify-content:space-between;align-items:flex-start">
+<div style="{{ g.iconStyle }}"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">{{ g.icon }}</span></div>
+<span style="{{ g.tagStyle }}">{{ g.tag }}</span>
+</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px;letter-spacing:-.015em;margin-top:4px">{{ g.t }}</div>
+<div style="font-size:12.5px;line-height:1.35;color:var(--ink2)">{{ g.d }}</div>
+<div style="margin-top:auto;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ g.time }}</div>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.swipe }}">
+<div data-screen-label="Swipe Vibe" style="position:absolute;inset:0;z-index:1;padding-top:58px;box-sizing:border-box;display:flex;flex-direction:column;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 0">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<div style="text-align:center"><div style="font-weight:600;font-size:16px">Swipe Vibe</div><div style="font-size:12px;color:var(--ink2)">{{ swipeCount }}</div></div>
+<div style="width:44px"></div>
+</div>
+<div style="display:flex;gap:4px;padding:14px 20px 0">
+<sc-for list="{{ swipeProg }}" as="p" hint-placeholder-count="6"><div style="{{ p.style }}"></div></sc-for>
+</div>
+<sc-if value="{{ swipeActive }}">
+<div style="position:relative;flex:1;margin:16px 20px 0">
+<sc-if value="{{ hasNext }}"><div style="position:absolute;inset:0;border-radius:30px;background:var(--surf2);border:1px solid var(--line);transform:scale(.93) translateY(20px)"></div></sc-if>
+<div style="{{ cardTf }}">
+<div style="position:absolute;inset:0;border-radius:30px;overflow:hidden;box-shadow:0 30px 50px -24px rgba(0,0,0,.55);background:var(--solid)">
+<div style="position:absolute;inset:0;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:flex;justify-content:center;padding-top:120px"><span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">photo · {{ sw.img }}</span></div>
+<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,14,0) 40%,rgba(8,8,14,.88) 100%)"></div>
+<sc-if value="{{ flyRight }}"><div style="position:absolute;top:28px;left:24px;padding:6px 14px;border:3px solid var(--acc);border-radius:12px;color:var(--acc);font:800 28px 'Bricolage Grotesque',sans-serif;transform:rotate(-12deg)">YUM</div></sc-if>
+<sc-if value="{{ flyLeft }}"><div style="position:absolute;top:28px;right:24px;padding:6px 14px;border:3px solid #FFFFFF;border-radius:12px;color:#FFFFFF;font:800 28px 'Bricolage Grotesque',sans-serif;transform:rotate(12deg)">NAH</div></sc-if>
+<div style="position:absolute;left:20px;right:20px;bottom:20px;color:#FFFFFF;display:flex;flex-direction:column;gap:6px">
+<span style="align-self:flex-start;height:26px;padding:0 9px;border-radius:13px;background:var(--acc);color:#0B1422;font:700 11.5px Geist,sans-serif;display:flex;align-items:center">{{ sw.m }} match</span>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:28px;line-height:1.02;letter-spacing:-.025em">{{ sw.name }}</div>
+<div style="font-size:13px;color:rgba(255,255,255,.78)">{{ sw.cuisine }} · {{ sw.eta }} min · {{ sw.priceTxt }}</div>
+</div>
+</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:22px;padding:22px 0 36px">
+<button onClick="{{ swipeLeft }}" style="width:66px;height:66px;border-radius:50%;border:1px solid var(--line);background:var(--surf2);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1">close</span></button>
+<button onClick="{{ swipeUndo }}" style="width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--surf);color:var(--ink2);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">undo</span></button>
+<button onClick="{{ swipeRight }}" style="width:66px;height:66px;border-radius:50%;border:0;background:var(--acc);color:#0B1422;display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:0 16px 30px -12px var(--acc)"><span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;font-variation-settings:'FILL' 1">favorite</span></button>
+</div>
+</sc-if>
+<sc-if value="{{ swipeDone }}">
+<div style="flex:1;padding:28px 20px 36px;display:flex;flex-direction:column;animation:mf-in .4s ease">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Your vibe right now</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:44px;line-height:.98;letter-spacing:-.035em;margin-top:6px">{{ vibeWord }}</div>
+<div style="font-size:14.5px;color:var(--ink2);line-height:1.45;margin-top:10px;text-wrap:pretty">{{ vibeText }}</div>
+<div onClick="{{ vibePick.open }}" style="margin-top:22px;border-radius:26px;overflow:hidden;background:var(--solid);cursor:pointer;animation:mf-pop .5s ease both">
+<div style="height:170px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:grid;place-items:center"><span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ vibePick.img }}</span></div>
+<div style="padding:14px 16px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px"><div><div style="font-weight:600;font-size:16px">{{ vibePick.name }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:3px">{{ vibePick.rest }} · {{ vibePick.priceTxt }}</div></div><span style="height:28px;padding:0 10px;border-radius:14px;background:var(--acc);color:#0B1422;font:700 12px Geist,sans-serif;display:flex;align-items:center">{{ vibePick.m }}</span></div>
+</div>
+<div style="margin-top:auto;display:flex;gap:10px">
+<button onClick="{{ swipeReset }}" style="height:56px;padding:0 20px;border-radius:18px;border:1px solid var(--line);background:var(--surf);color:var(--ink);font:600 15px Geist,sans-serif;cursor:pointer">Play again</button>
+<button onClick="{{ vibePick.open }}" style="flex:1;height:56px;border-radius:18px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer">Let's eat this</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.roulette }}">
+<div data-screen-label="Meal Roulette" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 40px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 0">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<div style="font-weight:600;font-size:16px">Meal Roulette</div>
+<div style="width:44px"></div>
+</div>
+<div style="text-align:center;padding:14px 32px 0">
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:32px;letter-spacing:-.03em">Let fate pick.</div>
+<div style="font-size:14px;color:var(--ink2);margin-top:6px;line-height:1.4;text-wrap:balance">Every slice already suits “{{ M.label }}”, so there's no bad outcome.</div>
+</div>
+<div style="position:relative;width:320px;height:320px;margin:26px auto 0">
+<div style="position:absolute;top:-10px;left:50%;margin-left:-13px;width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;border-top:24px solid var(--ink);z-index:3"></div>
+<div style="{{ wheelStyle }}">
+<sc-for list="{{ wheelLabels }}" as="l" hint-placeholder-count="8"><div style="{{ l.style }}">{{ l.t }}</div></sc-for>
+</div>
+<button onClick="{{ spin }}" style="position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;border:0;background:var(--solid);color:var(--ink);font:800 18px 'Bricolage Grotesque',sans-serif;letter-spacing:.02em;cursor:pointer;box-shadow:0 10px 30px -8px rgba(0,0,0,.5),0 0 0 6px var(--accSoft);z-index:2">{{ hubLabel }}</button>
+</div>
+<sc-if value="{{ hasSpin }}">
+<div style="margin:30px 16px 0;padding:14px;border-radius:26px;background:var(--solid);display:flex;flex-direction:column;gap:14px;animation:mf-pop .5s cubic-bezier(.2,.9,.3,1.2) both">
+<div style="display:flex;gap:14px;align-items:center">
+<div style="width:72px;height:72px;flex:none;border-radius:18px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<div style="flex:1;min-width:0"><div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accText)">The wheel says</div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em;margin-top:2px">{{ spun.name }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:2px">{{ spun.rest }} · {{ spun.eta }} min · {{ spun.priceTxt }}</div></div>
+</div>
+<div style="display:flex;gap:8px">
+<button onClick="{{ spin }}" style="height:50px;padding:0 18px;border-radius:16px;border:1px solid var(--line);background:var(--tint);color:var(--ink);font:600 14px Geist,sans-serif;cursor:pointer">Spin again</button>
+<button onClick="{{ spun.open }}" style="flex:1;height:50px;border-radius:16px;border:0;background:var(--acc);color:#0B1422;font:600 15px Geist,sans-serif;cursor:pointer">Deal. Show me</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ noSpin }}"><div style="text-align:center;margin-top:30px;font-size:13.5px;color:var(--ink2)">Tap spin. One free re-spin, we won't tell.</div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.group }}">
+<div data-screen-label="Group decision" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:10px 20px 0">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Friday dinner · flat 1202</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:36px;letter-spacing:-.03em;margin-top:4px">Group decision</div>
+</div>
+<div style="margin:18px 16px 0;padding:18px;border-radius:26px;background:var(--solid);display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 40px -26px rgba(0,0,0,.4)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div><div style="font-size:12px;color:var(--ink2)">Room code</div><div style="font-family:'Geist Mono',monospace;font-weight:500;font-size:22px;letter-spacing:.08em;margin-top:2px">RAIN-42</div></div>
+<button onClick="{{ invite }}" style="height:40px;padding:0 14px;border-radius:14px;border:0;background:var(--acc);color:#0B1422;font:600 13.5px Geist,sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1">person_add</span>Invite</button>
+</div>
+<div style="display:flex;align-items:center;gap:14px">
+<sc-for list="{{ members }}" as="m" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div style="{{ m.av }}">{{ m.i }}<span style="{{ m.dot }}"></span></div><span style="font-size:11.5px;color:var(--ink2)">{{ m.n }}</span></div></sc-for>
+<div style="margin-left:auto;font-size:12.5px;color:var(--ink2);text-align:right">{{ groupStatus }}</div>
+</div>
+</div>
+<sc-if value="{{ notRevealed }}">
+<div style="padding:24px 20px 4px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">Cast your vote</div>
+<div style="padding:0 20px 12px;font-size:13px;color:var(--ink2)">Four picks that suit everyone's check-ins.</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ groupOpts }}" as="o" hint-placeholder-count="4">
+<button onClick="{{ o.tap }}" style="position:relative;padding:12px;border-radius:22px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(20px);color:var(--ink);display:flex;gap:12px;align-items:center;cursor:pointer;text-align:left">
+<div style="width:60px;height:60px;flex:none;border-radius:16px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600;font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.name }}</span><span style="font-size:12px;color:var(--ink2);white-space:nowrap;flex:none">{{ o.votesTxt }}</span></div>
+<div style="height:6px;border-radius:4px;background:var(--track);overflow:hidden"><div style="{{ o.bar }}"></div></div>
+<span style="font-size:12px;color:var(--ink2)">{{ o.rest }} · {{ o.priceTxt }}</span>
+</div>
+<div style="{{ o.ring }}"></div>
+</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ revealed }}">
+<div style="margin:18px 16px 0;border-radius:30px;overflow:hidden;background:linear-gradient(140deg,var(--acc),var(--acc2));color:#0B1422;animation:mf-pop .6s cubic-bezier(.2,.9,.3,1.2) both;box-shadow:0 30px 50px -26px var(--acc)">
+<div style="padding:20px 20px 0">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">It's a match · {{ winVotes }} of 4 votes</div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:32px;line-height:1;letter-spacing:-.03em;margin-top:8px">{{ winner.name }}</div>
+<div style="font-size:13.5px;margin-top:8px">{{ winner.rest }} · {{ winner.eta }} min · everyone's covered</div>
+</div>
+<div style="margin:16px 12px 0;height:150px;border-radius:20px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 9px,rgba(255,255,255,.12) 9px 18px);display:grid;place-items:center"><span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase">{{ winner.img }}</span></div>
+<div style="padding:12px;display:flex;gap:8px">
+<button onClick="{{ resetGroup }}" style="height:52px;padding:0 16px;border-radius:16px;border:0;background:rgba(255,255,255,.4);color:#0B1422;font:600 14px Geist,sans-serif;cursor:pointer">Revote</button>
+<button onClick="{{ groupOrder }}" style="flex:1;height:52px;border-radius:16px;border:0;background:#0B1422;color:#FFFFFF;font:600 15px Geist,sans-serif;cursor:pointer">Order for 4 · {{ groupPriceTxt }}</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.onboard }}">
+<div data-screen-label="Onboarding" style="position:absolute;inset:0;z-index:1;padding-top:58px;box-sizing:border-box;display:flex;flex-direction:column;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:8px 20px 0;display:flex;justify-content:space-between;align-items:center">
+<div style="width:70px;height:40px;border-radius:20px;background:#FFFFFF;display:grid;place-items:center;box-shadow:0 8px 18px -10px rgba(0,0,0,.4)"><div style="width:56px;height:32px;background-image:url(assets/moodfood-logo.png);background-repeat:no-repeat;background-size:160px 160px;background-position:-56px -34px"></div></div>
+<button onClick="{{ obSkip }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap">Skip</button>
+</div>
+<div style="flex:1;position:relative;margin:16px 16px 0;min-height:0">
+<sc-if value="{{ ob1 }}">
+<div style="position:absolute;inset:0;display:grid;place-items:center;animation:mf-in .5s ease">
+{{ obOrb }}
+<div style="position:absolute;top:30px;left:14px;height:40px;padding:0 14px;border-radius:20px;background:var(--surf2);backdrop-filter:blur(16px);border:1px solid var(--line);display:flex;align-items:center;gap:8px;font:600 13.5px Geist,sans-serif"><span style="width:10px;height:10px;border-radius:50%;background:oklch(0.76 0.17 55)"></span>Happy</div>
+<div style="position:absolute;top:92px;right:6px;height:40px;padding:0 14px;border-radius:20px;background:var(--surf2);backdrop-filter:blur(16px);border:1px solid var(--line);display:flex;align-items:center;gap:8px;font:600 13.5px Geist,sans-serif"><span style="width:10px;height:10px;border-radius:50%;background:oklch(0.76 0.12 72)"></span>Tired</div>
+<div style="position:absolute;bottom:70px;left:24px;height:40px;padding:0 14px;border-radius:20px;background:var(--surf2);backdrop-filter:blur(16px);border:1px solid var(--line);display:flex;align-items:center;gap:8px;font:600 13.5px Geist,sans-serif"><span style="width:10px;height:10px;border-radius:50%;background:oklch(0.76 0.1 165)"></span>Stressed</div>
+<div style="position:absolute;bottom:16px;right:30px;height:40px;padding:0 14px;border-radius:20px;background:var(--surf2);backdrop-filter:blur(16px);border:1px solid var(--line);display:flex;align-items:center;gap:8px;font:600 13.5px Geist,sans-serif"><span style="width:10px;height:10px;border-radius:50%;background:oklch(0.76 0.18 355)"></span>Adventurous</div>
+</div>
+</sc-if>
+<sc-if value="{{ ob2 }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:0 8px;animation:mf-in .5s ease">
+<div style="padding:18px;border-radius:24px;background:var(--surf2);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;align-items:center;gap:14px;transform:rotate(-2deg)">
+<span style="font-family:'Material Symbols Rounded';font-size:40px;line-height:1;color:var(--accText)">{{ W.icon }}</span>
+<div><div style="font:700 26px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em">{{ tempTxt }}</div><div style="font-size:13px;color:var(--ink2)">{{ W.label }} right now</div></div>
+</div>
+<div style="padding:18px;border-radius:24px;background:var(--surf2);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;align-items:center;gap:14px;margin-left:36px;transform:rotate(2deg)">
+<span style="font-family:'Material Symbols Rounded';font-size:40px;line-height:1;color:var(--accText)">schedule</span>
+<div><div style="font:700 26px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em">{{ clockTxt }}</div><div style="font-size:13px;color:var(--ink2)">Time for {{ T.meal }}</div></div>
+</div>
+<div style="padding:16px 18px;border-radius:24px;background:var(--acc);color:#0B1422;display:flex;align-items:center;gap:12px;transform:rotate(-1deg);box-shadow:0 20px 40px -20px var(--acc)">
+<span style="font-family:'Material Symbols Rounded';font-size:26px;line-height:1">auto_awesome</span>
+<div style="font-weight:600;font-size:14.5px;line-height:1.3">{{ top.name }} moves to the top</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ob3 }}">
+<div style="position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;align-content:center;gap:10px;padding:0 4px;animation:mf-in .5s ease">
+<sc-for list="{{ gamesHome }}" as="g" hint-placeholder-count="4">
+<div style="padding:16px;border-radius:24px;background:var(--surf2);backdrop-filter:blur(20px);border:1px solid var(--line);min-height:120px;display:flex;flex-direction:column;gap:8px">
+<div style="{{ g.iconStyle }}"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">{{ g.icon }}</span></div>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px;letter-spacing:-.015em;margin-top:auto">{{ g.t }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="padding:22px 24px 0">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accText)">{{ ob.k }}</div>
+<div style="margin-top:8px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.03em;text-wrap:balance">{{ ob.t }}</div>
+<div style="margin-top:10px;font-size:15px;line-height:1.45;color:var(--ink2);text-wrap:pretty">{{ ob.d }}</div>
+</div>
+<div style="padding:26px 20px 40px;display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;gap:6px"><sc-for list="{{ obDots }}" as="d" hint-placeholder-count="3"><div style="{{ d.style }}"></div></sc-for></div>
+<button onClick="{{ obNext }}" style="height:56px;padding:0 24px;border-radius:20px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">{{ obCta }}<span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1">arrow_forward</span></button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.login }}">
+<div data-screen-label="Login" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 40px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:6px 16px 0;display:flex;align-items:center">
+<button onClick="{{ loginBack }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+</div>
+<div style="padding:28px 20px 0">
+<div style="width:84px;height:84px;border-radius:24px;background:#FFFFFF;display:grid;place-items:center;overflow:hidden;box-shadow:0 20px 40px -20px rgba(0,0,0,.5)"><img src="assets/moodfood-logo.png" alt="MoodFood" style="width:80px;height:80px;object-fit:contain"></div>
+<div style="margin-top:24px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:36px;line-height:1;letter-spacing:-.03em">{{ loginTitle }}</div>
+<div style="margin-top:10px;font-size:15px;color:var(--ink2);line-height:1.45">{{ loginSub }}</div>
+</div>
+<sc-if value="{{ loginPhone }}">
+<div style="margin:26px 16px 0;padding:6px 6px 6px 16px;border-radius:22px;background:var(--solid);border:1px solid var(--line);display:flex;align-items:center;gap:12px">
+<span style="font-weight:600;font-size:17px">+91</span>
+<span style="width:1px;height:28px;background:var(--line)"></span>
+<input value="{{ phone }}" onChange="{{ onPhone }}" inputMode="numeric" style="flex:1;min-width:0;height:52px;border:0;outline:0;background:transparent;color:var(--ink);font:600 18px Geist,sans-serif;letter-spacing:.04em">
+</div>
+<div style="padding:14px 16px 0"><button onClick="{{ sendOtp }}" style="width:100%;height:58px;border-radius:20px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">Send OTP</button></div>
+<div style="padding:24px 20px 0;display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--ink2)"><span style="flex:1;height:1px;background:var(--line)"></span>or<span style="flex:1;height:1px;background:var(--line)"></span></div>
+<div style="padding:16px 16px 0;display:flex;flex-direction:column;gap:10px">
+<button onClick="{{ socialLogin }}" style="height:54px;border-radius:18px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);font:600 15px Geist,sans-serif;cursor:pointer">Continue with Google</button>
+<button onClick="{{ socialLogin }}" style="height:54px;border-radius:18px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);font:600 15px Geist,sans-serif;cursor:pointer">Continue with Apple</button>
+</div>
+<div style="padding:22px 28px 0;font-size:12px;line-height:1.5;color:var(--ink2);text-align:center">By continuing you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>. Mood data stays on your account and is never sold.</div>
+</sc-if>
+<sc-if value="{{ loginOtp }}">
+<div style="margin:26px 16px 0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+<sc-for list="{{ otpBoxes }}" as="b" hint-placeholder-count="4"><div style="{{ b.style }}">{{ b.d }}</div></sc-for>
+</div>
+<div style="padding:16px 20px 0;display:flex;justify-content:space-between;font-size:13px;color:var(--ink2)"><span style="display:flex;align-items:center;gap:6px"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;color:var(--accText)">sms</span>{{ otpStatus }}</span><span>Resend in 0:24</span></div>
+<div style="padding:24px 16px 0"><button onClick="{{ verifyOtp }}" style="width:100%;height:58px;border-radius:20px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">Verify &amp; continue</button></div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.swiggy }}">
+<div data-screen-label="Swiggy connect" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 40px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:6px 16px 0;display:flex;align-items:center;justify-content:space-between">
+<span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);white-space:nowrap">Step 2 of 2</span>
+<button onClick="{{ swLater }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap">Later</button>
+</div>
+<div style="margin:30px auto 0;display:flex;align-items:center;justify-content:center;gap:0">
+<div style="width:96px;height:96px;border-radius:28px;background:#FFFFFF;display:grid;place-items:center;overflow:hidden;box-shadow:0 20px 40px -18px rgba(0,0,0,.5)"><img src="assets/moodfood-logo.png" alt="" style="width:92px;height:92px;object-fit:contain"></div>
+<div style="width:70px;position:relative;display:flex;align-items:center;justify-content:center">
+<div style="position:absolute;left:0;right:0;top:50%;border-top:2px dashed var(--ink2);opacity:.5"></div>
+<div style="{{ swLinkDot }}"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1">{{ swLinkIcon }}</span></div>
+</div>
+<div style="width:96px;height:96px;border-radius:28px;background:#FC8019;display:grid;place-items:center;color:#FFFFFF;font:800 22px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;box-shadow:0 20px 40px -18px rgba(252,128,25,.7)">Swiggy</div>
+</div>
+<div style="padding:30px 20px 0;text-align:center">
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:32px;line-height:1.02;letter-spacing:-.03em;text-wrap:balance">{{ swTitle }}</div>
+<div style="margin-top:10px;font-size:15px;line-height:1.45;color:var(--ink2);text-wrap:balance">{{ swSub }}</div>
+</div>
+<div style="margin:24px 16px 0;padding:6px 16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<sc-for list="{{ swPerms }}" as="p" hint-placeholder-count="3">
+<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0">
+<div style="width:40px;height:40px;flex:none;border-radius:14px;background:var(--accSoft);color:var(--accText);display:grid;place-items:center"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1">{{ p.icon }}</span></div>
+<div style="flex:1"><div style="font-weight:600;font-size:15px">{{ p.t }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:3px;line-height:1.4">{{ p.d }}</div></div>
+<span style="{{ p.check }}">check_circle</span>
+</div>
+</sc-for>
+</div>
+<div style="margin:12px 20px 0;display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink2)"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1">lock</span>We never see card details. Disconnect any time in Settings.</div>
+<div style="padding:22px 16px 0"><button onClick="{{ swMain }}" style="width:100%;height:58px;border-radius:20px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">{{ swCta }}</button></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.recipe }}">
+<div data-screen-label="DIY recipe" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:0 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="position:relative;height:280px;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px);display:grid;place-items:center">
+<span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">home-cooked · {{ dd.img }}</span>
+<button onClick="{{ back }}" style="position:absolute;top:56px;left:16px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,16,.42);backdrop-filter:blur(16px);color:#FFFFFF;display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+</div>
+<div style="margin:-52px 12px 0;position:relative;padding:22px 18px 20px;border-radius:30px;background:var(--solid);box-shadow:0 -10px 40px -20px rgba(0,0,0,.45)">
+<span style="align-self:flex-start;height:28px;padding:0 10px;border-radius:14px;background:var(--accSoft);color:var(--accText);font:600 12px Geist,sans-serif;display:inline-flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">skillet</span>Cook it yourself</span>
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:28px;line-height:1.02;letter-spacing:-.03em;margin-top:12px;text-wrap:balance">{{ dd.name }}</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:16px">
+<sc-for list="{{ rcMeta }}" as="m" hint-placeholder-count="4"><div style="padding:10px 6px;border-radius:14px;background:var(--tint);text-align:center"><div style="font-weight:700;font-size:14px">{{ m.v }}</div><div style="font-size:11px;color:var(--ink2);margin-top:2px">{{ m.l }}</div></div></sc-for>
+</div>
+<div style="margin-top:22px;display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600;font-size:16px">Ingredients</span><span style="font-size:12.5px;color:var(--ink2);white-space:nowrap">{{ rcHave }}</span></div>
+<div style="margin-top:8px;display:flex;flex-direction:column">
+<sc-for list="{{ rcIng }}" as="i" hint-placeholder-count="4">
+<button onClick="{{ i.tap }}" style="display:flex;align-items:center;gap:12px;padding:11px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);cursor:pointer;text-align:left">
+<span style="{{ i.box }}">check</span>
+<span style="{{ i.nameStyle }}">{{ i.n }}</span>
+<span style="font-size:13px;color:var(--ink2)">{{ i.q }}</span>
+</button>
+</sc-for>
+</div>
+<div style="margin-top:24px;font-weight:600;font-size:16px">Method</div>
+<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ rcSteps }}" as="st" hint-placeholder-count="4">
+<button onClick="{{ st.tap }}" style="{{ st.style }}">
+<span style="{{ st.num }}">{{ st.n }}</span>
+<div style="flex:1;min-width:0"><div style="font-size:14px;line-height:1.45;text-wrap:pretty">{{ st.t }}</div><sc-if value="{{ st.hasMin }}"><div style="margin-top:6px;font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1">timer</span>{{ st.minTxt }}</div></sc-if></div>
+</button>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;z-index:12;padding:24px 16px 30px;background:linear-gradient(180deg,transparent,var(--solid) 38%);display:flex;gap:10px">
+<button onClick="{{ rcPrev }}" style="width:56px;height:56px;flex:none;border-radius:18px;border:1px solid var(--line);background:var(--solid);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1">chevron_left</span></button>
+<button onClick="{{ rcTimer }}" style="width:56px;height:56px;flex:none;border-radius:18px;border:1px solid var(--line);background:var(--solid);color:var(--accText);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1">timer</span></button>
+<button onClick="{{ rcNext }}" style="flex:1;height:56px;border-radius:18px;border:0;background:var(--acc);color:#0B1422;font:600 16px Geist,sans-serif;cursor:pointer;box-shadow:0 16px 30px -14px var(--acc)">{{ rcCta }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.quests }}">
+<div data-screen-label="Quests" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 0">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<div style="font-weight:600;font-size:16px">Quests &amp; streaks</div>
+<div style="width:44px"></div>
+</div>
+<div style="margin:18px 16px 0;padding:22px 20px 20px;border-radius:30px;background:linear-gradient(140deg,var(--acc),var(--acc2));color:#0B1422;box-shadow:0 30px 50px -26px var(--acc)">
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+<div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">Mood streak</div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:64px;line-height:.9;letter-spacing:-.04em;margin-top:8px">5<span style="font-size:24px;letter-spacing:-.02em"> days</span></div></div>
+<span style="font-family:'Material Symbols Rounded';font-size:44px;line-height:1;font-variation-settings:'FILL' 1">local_fire_department</span>
+</div>
+<div style="font-size:13.5px;margin-top:10px">Best: 12 days · 2 more for ₹75 off</div>
+<div style="height:8px;border-radius:4px;background:rgba(11,20,34,.18);margin-top:12px;overflow:hidden"><div style="width:71%;height:100%;border-radius:4px;background:#0B1422"></div></div>
+</div>
+<div style="margin:12px 16px 0;padding:16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600">Last 4 weeks</span><span style="color:var(--ink2)">22 check-ins</span></div>
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:12px">
+<sc-for list="{{ heat }}" as="c" hint-placeholder-count="28"><div style="{{ c }}"></div></sc-for>
+</div>
+</div>
+<div style="padding:26px 20px 12px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">Active quests</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ quests }}" as="q" hint-placeholder-count="4">
+<div style="padding:14px;border-radius:22px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;gap:14px;align-items:center">
+<div style="{{ q.tile }}"><span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1">{{ q.icon }}</span></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600;font-size:15px">{{ q.t }}</span><span style="font:600 12.5px 'Geist Mono',monospace;color:var(--accText)">{{ q.prog }}</span></div>
+<div style="font-size:12.5px;color:var(--ink2)">{{ q.d }}</div>
+<div style="height:6px;border-radius:3px;background:var(--track);overflow:hidden"><div style="{{ q.bar }}"></div></div>
+<div style="font-size:11.5px;color:var(--ink2);display:flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:14px;line-height:1">redeem</span>{{ q.reward }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:26px 20px 12px;display:flex;align-items:baseline;justify-content:space-between"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.02em">Badges</span><span style="font-size:13px;color:var(--ink2)">4 of 9</span></div>
+<div style="padding:0 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+<sc-for list="{{ badges }}" as="b" hint-placeholder-count="9">
+<div style="padding:16px 8px 14px;border-radius:22px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+<div style="{{ b.medal }}"><span style="font-family:'Material Symbols Rounded';font-size:28px;line-height:1">{{ b.icon }}</span></div>
+<span style="{{ b.label }}">{{ b.t }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.notifs }}">
+<div data-screen-label="Notifications" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 40px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 0">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<button onClick="{{ readAll }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap;flex:none">Mark all read</button>
+</div>
+<div style="padding:16px 20px 0;display:flex;align-items:baseline;gap:10px"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:36px;letter-spacing:-.03em">Notifications</span><span style="font-size:14px;color:var(--accText);font-weight:600">{{ unreadTxt }}</span></div>
+<sc-for list="{{ notifSecs }}" as="sec" hint-placeholder-count="2">
+<div style="padding:22px 20px 10px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ sec.title }}</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ sec.items }}" as="n" hint-placeholder-count="3">
+<button onClick="{{ n.tap }}" style="{{ n.card }}">
+<div style="{{ n.tile }}"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">{{ n.icon }}</span></div>
+<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600;font-size:14.5px;line-height:1.3;min-width:0">{{ n.t }}</span><span style="font-size:12px;color:var(--ink2);flex:none">{{ n.time }}</span></div><div style="font-size:13px;color:var(--ink2);margin-top:4px;line-height:1.4;text-wrap:pretty">{{ n.b }}</div></div>
+<sc-if value="{{ n.unread }}"><span style="position:absolute;top:16px;left:8px;width:7px;height:7px;border-radius:50%;background:var(--acc)"></span></sc-if>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.profile }}">
+<div data-screen-label="Profile" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="padding:10px 20px 0;display:flex;align-items:center;gap:16px">
+<div style="width:76px;height:76px;flex:none;border-radius:26px;background:var(--acc);color:#0B1422;display:grid;place-items:center;font:800 32px 'Bricolage Grotesque',sans-serif;box-shadow:0 16px 30px -14px var(--acc)">A</div>
+<div style="flex:1;min-width:0"><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:28px;letter-spacing:-.025em">Aarav Mehta</div><div style="font-size:13px;color:var(--ink2);margin-top:3px">Bandra West · member since March</div></div>
+<button onClick="{{ goSettings }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">settings</span></button>
+</div>
+<div style="margin:20px 16px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+<sc-for list="{{ pStats }}" as="p" hint-placeholder-count="3"><button onClick="{{ p.tap }}" style="padding:14px 10px;border-radius:20px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);color:var(--ink);cursor:pointer;text-align:left"><div style="font:700 26px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em">{{ p.v }}</div><div style="font-size:12px;color:var(--ink2);margin-top:2px">{{ p.l }}</div></button></sc-for>
+</div>
+<div style="margin:12px 16px 0;padding:18px;border-radius:26px;background:var(--solid);display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 40px -26px rgba(0,0,0,.4)">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600;font-size:15px">Your taste profile</span><span style="font-size:12px;color:var(--ink2)">from 42 orders</span></div>
+<sc-for list="{{ taste }}" as="t" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px"><span style="width:92px;font-size:13px">{{ t.l }}</span><div style="flex:1;height:8px;border-radius:4px;background:var(--track);overflow:hidden"><div style="{{ t.bar }}"></div></div><span style="width:30px;text-align:right;font:500 12px 'Geist Mono',monospace;color:var(--ink2)">{{ t.v }}</span></div>
+</sc-for>
+<div style="height:1px;background:var(--line)"></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600;font-size:15px">This month you felt</span><span style="font-size:12px;color:var(--ink2)">31 check-ins</span></div>
+<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;gap:3px"><sc-for list="{{ moodMix }}" as="m" hint-placeholder-count="4"><div style="{{ m.seg }}"></div></sc-for></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 14px"><sc-for list="{{ moodMix }}" as="m" hint-placeholder-count="4"><span style="display:flex;align-items:center;gap:6px;font-size:12.5px"><span style="{{ m.dot }}"></span>{{ m.l }}</span></sc-for></div>
+</div>
+<div style="margin:12px 16px 0;padding:4px 6px;border-radius:26px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<sc-for list="{{ pMenu }}" as="r" hint-placeholder-count="6">
+<button onClick="{{ r.tap }}" style="width:100%;display:flex;align-items:center;gap:14px;padding:12px 10px;border:0;background:none;color:var(--ink);cursor:pointer;text-align:left">
+<div style="width:40px;height:40px;flex:none;border-radius:14px;background:var(--tint);display:grid;place-items:center;color:var(--accText)"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1">{{ r.icon }}</span></div>
+<span style="flex:1;font-weight:600;font-size:15px">{{ r.l }}</span>
+<span style="font-size:12.5px;color:var(--ink2)">{{ r.sub }}</span>
+<span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;color:var(--ink2)">chevron_right</span>
+</button>
+</sc-for>
+</div>
+<div style="padding:18px 16px 0"><button onClick="{{ logout }}" style="width:100%;height:50px;border-radius:18px;border:1px solid var(--line);background:transparent;color:var(--ink2);font:600 14px Geist,sans-serif;cursor:pointer">Log out</button></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.history }}">
+<div data-screen-label="History & saved" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 130px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 0">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<div style="font-weight:600;font-size:16px">Your food</div>
+<div style="width:44px"></div>
+</div>
+<div style="margin:16px 16px 0;padding:4px;border-radius:18px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:4px">
+<sc-for list="{{ histTabs }}" as="t" hint-placeholder-count="2"><button onClick="{{ t.tap }}" style="{{ t.style }}">{{ t.l }}</button></sc-for>
+</div>
+<sc-if value="{{ histOrders }}">
+<div style="margin:16px 16px 0;padding:14px 16px;border-radius:20px;background:var(--accSoft);display:flex;gap:12px;align-items:center">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--accText)">insights</span>
+<span style="font-size:13px;line-height:1.4">When you're tired you reorder khichdi 3× more than anything else.</span>
+</div>
+<div style="padding:10px 16px 0;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ orders }}" as="o" hint-placeholder-count="5">
+<div style="padding:12px;border-radius:22px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:flex;gap:12px;align-items:center">
+<div onClick="{{ o.open }}" style="width:64px;height:64px;flex:none;border-radius:16px;cursor:pointer;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 7px,var(--ph2) 7px 14px)"></div>
+<div onClick="{{ o.open }}" style="flex:1;min-width:0;cursor:pointer">
+<div style="font-size:11.5px;color:var(--ink2)">{{ o.when }}</div>
+<div style="font-weight:600;font-size:14.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.name }}</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--ink2)"><span style="{{ o.moodDot }}"></span>{{ o.moodTxt }} · {{ o.priceTxt }}</div>
+</div>
+<button onClick="{{ o.order }}" style="height:36px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--solid);color:var(--ink);font:600 12.5px Geist,sans-serif;cursor:pointer;display:flex;align-items:center;gap:4px"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1">replay</span>Reorder</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ histSaved }}">
+<sc-if value="{{ noSaved }}">
+<div style="margin:60px 32px 0;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+<span style="font-family:'Material Symbols Rounded';font-size:44px;line-height:1;color:var(--ink2)">bookmark</span>
+<div style="font-weight:600;font-size:16px">Nothing saved yet</div>
+<div style="font-size:13.5px;color:var(--ink2);line-height:1.45">Tap the bookmark on any pick and it lands here for later.</div>
+</div>
+</sc-if>
+<div style="padding:16px 16px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<sc-for list="{{ savedList }}" as="d" hint-placeholder-count="2">
+<div style="border-radius:22px;overflow:hidden;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<div onClick="{{ d.open }}" style="height:120px;position:relative;cursor:pointer;background:linear-gradient(160deg,var(--accSoft),transparent 70%),repeating-linear-gradient(135deg,var(--ph1) 0 9px,var(--ph2) 9px 18px)">
+<button onClick="{{ d.save }}" style="position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;border:0;background:var(--solid);display:grid;place-items:center;cursor:pointer;padding:0"><span style="{{ d.saveStyle }}">bookmark</span></button>
+</div>
+<div onClick="{{ d.open }}" style="padding:10px 12px 12px;cursor:pointer"><div style="font-weight:600;font-size:14px;line-height:1.25;min-height:35px">{{ d.name }}</div><div style="font-size:12px;color:var(--ink2);margin-top:4px">{{ d.rest }} · {{ d.priceTxt }}</div></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s.settings }}">
+<div data-screen-label="Settings" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;z-index:1;padding:58px 0 40px;animation:mf-in .4s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 0">
+<button onClick="{{ back }}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surf);backdrop-filter:blur(16px);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">arrow_back</span></button>
+<div style="font-weight:600;font-size:16px">Settings</div>
+<div style="width:44px"></div>
+</div>
+<div style="padding:24px 20px 10px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Diet</div>
+<div style="padding:0 16px;display:flex;flex-wrap:wrap;gap:8px">
+<sc-for list="{{ dietChips }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.tap }}" style="{{ c.style }}">{{ c.l }}</button></sc-for>
+</div>
+<div style="padding:24px 20px 10px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Spice tolerance</div>
+<div style="margin:0 16px;padding:4px;border-radius:18px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+<sc-for list="{{ spiceSeg }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.tap }}" style="{{ t.style }}">{{ t.l }}</button></sc-for>
+</div>
+<div style="padding:24px 20px 10px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Usual budget per meal</div>
+<div style="margin:0 16px;padding:4px;border-radius:18px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+<sc-for list="{{ budgetSeg }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.tap }}" style="{{ t.style }}">{{ t.l }}</button></sc-for>
+</div>
+<sc-for list="{{ setSecs }}" as="sec" hint-placeholder-count="2">
+<div style="padding:24px 20px 10px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">{{ sec.title }}</div>
+<div style="margin:0 16px;padding:2px 16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:14px;padding:14px 0">
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14.5px">{{ it.l }}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:2px">{{ it.sub }}</div></div>
+<button onClick="{{ it.tap }}" style="{{ it.track }}"><span style="{{ it.knob }}"></span></button>
+</div>
+</sc-for>
+</div>
+</sc-for>
+<div style="padding:24px 20px 10px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)">Account</div>
+<div style="margin:0 16px;padding:2px 16px;border-radius:24px;background:var(--surf);backdrop-filter:blur(20px);border:1px solid var(--line)">
+<button onClick="{{ goSwiggy }}" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);cursor:pointer;text-align:left"><span style="flex:1;font-weight:600;font-size:14.5px">Swiggy account</span><span style="font-size:12.5px;color:var(--ink2)">{{ swStatus }}</span><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;color:var(--ink2)">chevron_right</span></button>
+<button onClick="{{ clearMood }}" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px 0;border:0;background:none;color:oklch(0.62 0.19 25);cursor:pointer;text-align:left;font:600 14.5px Geist,sans-serif">Delete my mood history</button>
+</div>
+<div style="padding:20px 20px 0;font-size:12px;color:var(--ink2);text-align:center">MoodFood 2.0 · Made in Mumbai</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:14px;right:14px;bottom:22px;height:70px;z-index:15;border-radius:28px;background:var(--tab);backdrop-filter:blur(24px) saturate(1.5);border:1px solid var(--line);box-shadow:0 20px 40px -18px rgba(0,0,0,.5);display:grid;grid-template-columns:1fr 1fr 84px 1fr 1fr;align-items:center">
+<sc-for list="{{ tabsL }}" as="t" hint-placeholder-count="2"><button onClick="{{ t.tap }}" style="height:70px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:0"><span style="{{ t.iconStyle }}">{{ t.icon }}</span><span style="{{ t.labelStyle }}">{{ t.label }}</span></button></sc-for>
+<div style="display:flex;justify-content:center"><button onClick="{{ goMood }}" style="width:62px;height:62px;margin-top:-36px;border-radius:22px;border:0;background:var(--acc);color:#0B1422;display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:0 14px 28px -10px var(--acc),0 0 0 5px var(--solid)"><span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1">mood</span></button></div>
+<sc-for list="{{ tabsR }}" as="t" hint-placeholder-count="2"><button onClick="{{ t.tap }}" style="height:70px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:0"><span style="{{ t.iconStyle }}">{{ t.icon }}</span><span style="{{ t.labelStyle }}">{{ t.label }}</span></button></sc-for>
+</div>
+</sc-if>
+
+<div style="position:absolute;top:0;left:0;right:0;height:52px;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:4px 30px 0 34px;pointer-events:none;color:var(--ink)">
+<span style="font:600 15px Geist,sans-serif">{{ T.clock }}</span>
+<div style="position:absolute;left:50%;top:11px;width:122px;height:34px;margin-left:-61px;border-radius:20px;background:#000000"></div>
+<div style="display:flex;gap:5px;align-items:center"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1">signal_cellular_alt</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1">wifi</span><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1">battery_full</span></div>
+</div>
+
+<sc-if value="{{ toastOn }}"><div style="position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:30;padding:11px 16px;border-radius:16px;background:#0B1422;color:#FFFFFF;font:500 13px Geist,sans-serif;white-space:nowrap;box-shadow:0 14px 30px -12px rgba(0,0,0,.6)">{{ toast }}</div></sc-if>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ showPanel }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;flex:none;display:flex;flex-direction:column;gap:22px;padding:24px;border-radius:24px;background:#F8F6F2;border:1px solid rgba(0,0,0,.06);color:#17130F;box-shadow:0 20px 40px -30px rgba(0,0,0,.3)">
+<div style="display:flex;gap:12px;align-items:center">
+<img src="assets/moodfood-logo.png" alt="MoodFood" style="width:52px;height:52px;border-radius:14px;background:#FFFFFF;border:1px solid rgba(0,0,0,.06);object-fit:contain">
+<div><div style="font-weight:600;font-size:15px">MoodFood prototype</div><div style="font-size:12.5px;color:#6B645C;margin-top:2px;line-height:1.35">Tap through the phone, or change the context and watch it re-theme.</div></div>
+</div>
+<sc-for list="{{ ctlGroups }}" as="grp" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#6B645C">{{ grp.title }}</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+<sc-for list="{{ grp.opts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.tap }}" style="{{ o.style }}"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1">{{ o.icon }}</span>{{ o.label }}</button></sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#6B645C">Jump to screen</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ jumps }}" as="j" hint-placeholder-count="11"><button onClick="{{ j.tap }}" style="{{ j.style }}"><span style="font-family:'Geist Mono',monospace;font-size:10.5px;opacity:.55;width:20px">{{ j.n }}</span>{{ j.label }}</button></sc-for>
+</div>
+</div>
+<div style="font-size:12px;color:#6B645C;line-height:1.45">Mood check-in taps re-theme the app live. Swipe Vibe, Meal Roulette, Group vote, menu → checkout are all playable.</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;time&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;morning&quot;,&quot;afternoon&quot;,&quot;evening&quot;,&quot;night&quot;],&quot;default&quot;:&quot;evening&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Context&quot;},&quot;weather&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;rainy&quot;,&quot;sunny&quot;,&quot;cloudy&quot;,&quot;stormy&quot;],&quot;default&quot;:&quot;rainy&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Context&quot;},&quot;mood&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;happy&quot;,&quot;tired&quot;,&quot;stressed&quot;,&quot;adventurous&quot;],&quot;default&quot;:&quot;tired&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Context&quot;},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;launch&quot;,&quot;onboard&quot;,&quot;login&quot;,&quot;swiggy&quot;,&quot;mood&quot;,&quot;home&quot;,&quot;feed&quot;,&quot;detail&quot;,&quot;recipe&quot;,&quot;menu&quot;,&quot;checkout&quot;,&quot;games&quot;,&quot;swipe&quot;,&quot;roulette&quot;,&quot;group&quot;,&quot;quests&quot;,&quot;notifs&quot;,&quot;profile&quot;,&quot;history&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;launch&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototype&quot;},&quot;bare&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototype&quot;}}">
+const H = React.createElement;
+const RAW = [
+ ['bc','Butter Chicken & Garlic Naan','Butter chicken','North Indian','Kesar Da Dhaba',420,32,4.6,780,38,52,false,'butter chicken · naan','rich, slow-cooked and the kind of comfort that asks nothing of you',['Tandoori chicken','Tomato-cashew gravy','Cultured butter','Garlic naan']],
+ ['rs','Pepper Rasam & Ghee Rice','Rasam rice','South Indian',"Amma's Mess",220,24,4.7,430,12,84,true,'rasam · ghee rice','peppery and brothy — warmth without the heaviness',['Tamarind broth','Black pepper','Curry leaves','Ghee rice','Papad']],
+ ['rm','Spicy Miso Ramen','Miso ramen','Japanese','Kuro Ramen Bar',540,38,4.5,690,34,61,false,'miso ramen bowl','a deep, spicy broth that turns a grey evening into an event',['Miso-chilli broth','Wheat noodles','Chashu chicken','Soft egg','Scallion']],
+ ['kh','Masala Khichdi Bowl','Khichdi','Home-style','The Good Bowl',240,22,4.4,410,16,88,true,'khichdi · pickle','soft, soothing and here in 20 minutes — a hug in a bowl',['Moong dal','Rice','Ghee tadka','Lime pickle']],
+ ['pt','Paneer Tikka Protein Bowl','Paneer bowl','Healthy','Greens & Grains',310,26,4.5,480,32,91,true,'paneer tikka bowl','high protein, bright flavours, and you still feel light after',['Charred paneer','Millet','Mint yoghurt','Pickled onion']],
+ ['vp','Cheese Vada Pav ×2','Vada pav','Street food','Mumbai Tapri',110,18,4.3,520,11,40,true,'vada pav','under ₹120, arrives fast, zero regret',['Spiced potato vada','Pav','Garlic chutney','Cheese']],
+ ['by','Hyderabadi Chicken Biryani','Biryani','Hyderabadi','Paradise Lane',380,35,4.6,820,36,55,false,'biryani handi','layered, fragrant and shareable — a proper reward meal',['Aged basmati','Dum-cooked chicken','Saffron','Fried onion','Raita']],
+ ['ck','Korean Fried Chicken','Korean chicken','Korean','Seoul Street',460,30,4.4,740,40,45,false,'gochujang wings','crunchy, sticky, loud — for when you want a little chaos',['Double-fried chicken','Gochujang glaze','Sesame','Pickled radish']],
+ ['cb','Chole Bhature','Chole bhature','Punjabi','Amritsari Haveli',190,27,4.5,690,18,42,true,'chole bhature','fluffy, indulgent and very much a treat',['Spiced chickpeas','Bhatura','Onion','Green chilli']],
+ ['mt','Masala Chai & Bun Maska','Chai & maska','Irani café','Café Irani Chaii',140,15,4.7,360,7,50,true,'chai · bun maska','the classic slow start — sweet, buttery, calming',['Assam tea','Ginger, cardamom','Soft bun','Salted butter']]
+];
+const DISH = {};
+RAW.forEach(r => { DISH[r[0]] = {id:r[0],name:r[1],short:r[2],cuisine:r[3],rest:r[4],price:r[5],eta:r[6],rating:r[7],kcal:r[8],protein:r[9],health:r[10],veg:r[11],img:r[12],why:r[13],ing:r[14]}; });
+const ORDER = {
+ happy:['ck','by','bc','rm','cb','rs','kh','pt','vp','mt'],
+ tired:['kh','bc','rs','by','rm','mt','cb','pt','ck','vp'],
+ stressed:['rs','kh','bc','mt','pt','rm','by','cb','ck','vp'],
+ adventurous:['rm','ck','by','bc','cb','rs','pt','kh','vp','mt']
+};
+const MATCH = [96,93,91,88,86,83,81,79,77,75];
+const TIMES = {
+ morning:{dark:false,bg:'linear-gradient(165deg,#FFE6CC 0%,#FFD1AE 40%,#FFF4E8 100%)',orb1:'#FFB45E',orb2:'#FF8FA3',clock:'8:12',ampm:'AM',part:'mornings',meal:'breakfast',greet:'Good morning, Aarav',hero:'Breakfast that matches your mood.',tag:'Good morning, hungry soul.'},
+ afternoon:{dark:false,bg:'linear-gradient(165deg,#FFF0D2 0%,#FFDDB0 38%,#D6F1E8 100%)',orb1:'#FFBE45',orb2:'#4FC7B0',clock:'1:24',ampm:'PM',part:'afternoons',meal:'lunch',greet:'Good afternoon, Aarav',hero:'Lunch deserves a better mood.',tag:'Lunch deserves a better mood.'},
+ evening:{dark:true,bg:'linear-gradient(170deg,#2A1732 0%,#5A2436 48%,#B0532A 100%)',orb1:'#FF9A4D',orb2:'#8B3FA0',solid:'#231726',clock:'7:48',ampm:'PM',part:'evenings',meal:'dinner',greet:'Good evening, Aarav',hero:"What's tonight for?",tag:"Let's make tonight taste better."},
+ night:{dark:true,bg:'linear-gradient(170deg,#070B1C 0%,#141638 55%,#2A1740 100%)',orb1:'#4B3FA8',orb2:'#8A2E6E',solid:'#13152B',clock:'11:06',ampm:'PM',part:'late nights',meal:'late-night',greet:'Still up, Aarav?',hero:'What are you craving tonight?',tag:'What are you craving tonight?'}
+};
+const MOODS = {
+ happy:{h:55,c:.17,label:'Happy',lower:'happy',lean:'bright, zesty and a little celebratory',lead:"You're in a good mood",chip:'Mood booster'},
+ tired:{h:72,c:.12,label:'Tired',lower:'tired',lean:'slow-cooked, warm and zero-effort',lead:"Your energy's low",chip:'Low effort'},
+ stressed:{h:165,c:.1,label:'Stressed',lower:'stressed',lean:'grounding, light and familiar',lead:"It's been a heavy day",chip:'Good for stress relief'},
+ adventurous:{h:355,c:.18,label:'Adventurous',lower:'adventurous',lean:"bold flavours you haven't tried",lead:"You're up for something new",chip:'New for you'}
+};
+const WX = {
+ rainy:{icon:'rainy',temp:24,label:'Rainy',lead:"it's pouring outside",insight:"It's raining in Bandra — warm, brothy picks are what people nearby are ordering.",topFor:'Top for rain',phrase:'the rain',reason:'Travels hot through the rain — we filtered for sealed, rain-proof packaging.',packNote:'Rain-proof packaging added'},
+ sunny:{icon:'sunny',temp:31,label:'Sunny',lead:"it's bright and warm out",insight:'Bright and 31° — lighter, cooling plates are trending around you.',topFor:'Sunny-day pick',phrase:'the sunshine',reason:"Won't weigh you down on a hot day.",packNote:'Cold items packed separately'},
+ cloudy:{icon:'cloud',temp:26,label:'Cloudy',lead:'the sky is grey',insight:'Grey skies — comfort classics are getting ordered the most right now.',topFor:'Cosy pick',phrase:'the grey skies',reason:'A reliable classic for a flat, grey day.',packNote:'Contactless drop at the door'},
+ stormy:{icon:'thunderstorm',temp:22,label:'Stormy',lead:"there's a storm rolling in",insight:"Storm alert — we're only showing kitchens that can reach you in under 40 min.",topFor:'Storm-proof · fast',phrase:'the storm',reason:'Kitchen is close, so it reaches you before the storm peaks.',packNote:'Rider safety buffer included'}
+};
+const ADDONS = [
+ {title:'Mains',note:'',items:[['m1','Dal Makhani','Overnight black lentils, cream, smoked butter',260,true],['m2','Paneer Butter Masala','Cottage cheese in tomato-butter gravy',300,true]]},
+ {title:'Breads & rice',note:'',items:[['b1','Garlic Naan','Tandoor-baked, brushed with butter',70,true],['b2','Jeera Rice','Basmati, cumin, ghee',150,true]]},
+ {title:'Drinks & dessert',note:'',items:[['d1','Masala Chai','Ginger, cardamom, a proper boil',60,true],['d2','Gulab Jamun (2)','Warm, saffron syrup',90,true]]}
+];
+const ADDON = {};
+ADDONS.forEach(s => s.items.forEach(i => { ADDON[i[0]] = {id:i[0],name:i[1],desc:i[2],price:i[3],veg:i[4]}; }));
+const GAMES = [
+ {id:'swipe',t:'Swipe Vibe',d:'Six dishes. Swipe on instinct.',time:'45 sec',tag:'Popular',icon:'swipe',hue:40,live:true},
+ {id:'roulette',t:'Meal Roulette',d:'Spin a wheel of mood-matched picks.',time:'10 sec',tag:'Quick',icon:'casino',hue:350,live:true},
+ {id:'scoop',t:'Mood Scoop',d:'Three questions, one perfect bowl.',time:'30 sec',tag:'',icon:'icecream',hue:220},
+ {id:'group',t:'Group decision',d:'Everyone votes, one winner.',time:'2 min',tag:'Social',icon:'groups',hue:180,live:true},
+ {id:'tot',t:'This or That',d:'Rapid-fire pairs until one wins.',time:'40 sec',tag:'Quick',icon:'compare_arrows',hue:140},
+ {id:'radar',t:'Craving Radar',d:"Tap what you're craving on a flavour map.",time:'20 sec',tag:'',icon:'radar',hue:270},
+ {id:'bracket',t:'Bracket',d:'Eight dishes, knockout rounds.',time:'1 min',tag:'',icon:'account_tree',hue:95},
+ {id:'story',t:'Story mode',d:"Tell us your day, we'll plate it.",time:'1 min',tag:'New',icon:'auto_stories',hue:310},
+ {id:'pantry',t:'Pantry mode',d:"Cook with what's already at home.",time:'1 min',tag:'',icon:'kitchen',hue:65}
+];
+const SCREENS = [['launch','Launch'],['onboard','Onboarding'],['login','Login'],['swiggy','Swiggy connect'],['mood','Mood check-in'],['home','Home'],['feed','Recommendations'],['detail','Meal detail'],['recipe','DIY recipe'],['menu','Restaurant menu'],['checkout','Checkout'],['games','Game picker'],['swipe','Swipe Vibe'],['roulette','Meal Roulette'],['group','Group decision'],['quests','Quests & streaks'],['notifs','Notifications'],['profile','Profile'],['history','History & saved'],['settings','Settings']];
+const OB = [
+ {k:'Mood-first', t:'Food that matches how you feel.', d:'A 20-second check-in, and every pick is tuned to your energy, stress and hunger.'},
+ {k:'Context-aware', t:'Rain, sun, 2 AM. It all counts.', d:'Weather and time quietly reshape what we suggest, and how the app looks.'},
+ {k:'Never stuck', t:"Can't decide? Play it out.", d:"Swipe, spin or vote with friends. Every game lands on something you'll love."}
+];
+const RECIPES = {
+ bc:{time:'55 min', serves:2, level:'Medium', cost:180, ing:[['Chicken thighs','400 g'],['Tomatoes','4'],['Cashews','12'],['Butter','3 tbsp'],['Cream','60 ml'],['Kasuri methi','1 tsp']], steps:[['Marinate chicken in yoghurt, chilli and garam masala.',20],['Sear until charred at the edges.',8],['Simmer tomatoes and cashews, then blend smooth.',15],['Finish with butter, cream and crushed methi.',5]]},
+ kh:{time:'25 min', serves:2, level:'Easy', cost:70, ing:[['Moong dal','½ cup'],['Rice','½ cup'],['Ghee','2 tbsp'],['Cumin, turmeric','1 tsp each'],['Lime pickle','to serve']], steps:[['Rinse dal and rice together until the water runs clear.',0],['Pressure-cook with turmeric and 4 cups water.',12],['Temper cumin and garlic in hot ghee.',2],['Pour over, stir loose, serve with pickle.',0]]},
+ rs:{time:'30 min', serves:2, level:'Easy', cost:60, ing:[['Tamarind','lemon-size'],['Tomatoes','2'],['Black pepper','1 tbsp'],['Curry leaves','1 sprig'],['Ghee rice','2 cups']], steps:[['Crush pepper, cumin and garlic coarsely.',0],['Boil tamarind water with tomatoes and the spice mix.',10],['Temper mustard seeds and curry leaves in ghee.',2],['Pour over rice, drink the rest.',0]]},
+ pt:{time:'35 min', serves:1, level:'Easy', cost:140, ing:[['Paneer','200 g'],['Millet','½ cup'],['Hung curd','3 tbsp'],['Mint','handful'],['Red onion','1']], steps:[['Marinate paneer in curd, chilli and chaat masala.',10],['Cook millet till fluffy.',15],['Char paneer in a hot pan.',6],['Build the bowl with mint yoghurt and pickled onion.',0]]}
+};
+const QUESTS = [['Rainy Day Regular','Check in on 5 rainy days',4,5,'rainy',220,'Badge + ₹50 off'],['Explorer',"Try 3 cuisines you haven't ordered",1,3,'explore',300,'Badge'],['Green week','4 meals with a health score above 80',2,4,'eco',150,'Free delivery ×2'],['Group captain','Start 2 group decisions',1,2,'groups',185,'Badge']];
+const BADGES = [['Night Owl','dark_mode',true,270],['First Check-in','mood',true,55],['Comfort Pro','favorite',true,20],['Spice Scout','local_fire_department',true,40],['Rainy Regular','rainy',false],['Explorer','explore',false],['Home Chef','skillet',false],['Party Host','celebration',false],['30-day Streak','military_tech',false]];
+const HISTORY = [['bc','Yesterday · 9:12 PM','tired'],['pt','Sat · 1:40 PM','happy'],['rs','Thu · 8:05 PM','stressed'],['rm','Tue · 10:30 PM','adventurous'],['kh','Mon · 7:55 PM','tired']];
+const HEAT = '1101111011101111110111011112';
+const TABS = [['home','Home','home'],['feed','For you','auto_awesome'],['games','Play','stadia_controller'],['profile','You','person']];
+const ROWS = [['energy','Energy','bolt',['Running on empty','Low','Steady','Good','Buzzing']],['stress','Stress','spa',['Zen','Calm','A little','Tense','Frazzled']],['hunger','Hunger','restaurant',['Snacky','Peckish','Hungry','Very hungry','Starving']],['social','Company','group',['Solo','Duo','Small group','Friends over','Party']]];
+const OCC = [['comfort','Comfort','favorite'],['treat','Treat','cake'],['reward','Reward','military_tech'],['fuel','Fuel','bolt']];
+const MEMBERS = [['You','A',55],['Isha','I',210],['Kabir','K',140],['Meera','M',320]];
+const GOPTS = ['bc','rm','by','kh'];
+const ICON = {fontFamily:"'Material Symbols Rounded'",lineHeight:1};
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const stop = e => { if (e && e.stopPropagation) e.stopPropagation(); };
+
+function derive(s) {
+  if (s.stress >= 4) return 'stressed';
+  if (s.energy <= 2) return 'tired';
+  if (s.energy >= 4 && (s.social >= 4 || s.occasion === 'treat')) return 'adventurous';
+  return 'happy';
+}
+
+function theme(time, weather, mood) {
+  const t = TIMES[time] || TIMES.evening, m = MOODS[mood] || MOODS.tired;
+  const dark = t.dark || weather === 'stormy';
+  let bg = t.bg, overlay = null, orb1 = t.orb1, orb2 = t.orb2;
+  if (weather === 'stormy') { bg = 'linear-gradient(170deg,#0E1322 0%,#1F2740 55%,#352B4A 100%)'; orb1 = '#5A4FB8'; orb2 = '#2F6E9E'; }
+  else if (weather === 'rainy') { if (!dark) { bg = 'linear-gradient(165deg,#DCE4EE 0%,#C4D0DE 48%,#EFEAE3 100%)'; orb1 = '#8FB0D6'; orb2 = t.orb1; } else overlay = 'linear-gradient(180deg,rgba(38,60,96,.5),rgba(30,44,70,.2))'; }
+  else if (weather === 'cloudy') { if (!dark) { bg = 'linear-gradient(165deg,#ECE8E3 0%,#D8D7DB 50%,#F3EEE8 100%)'; orb2 = '#AEB6C4'; } else overlay = 'linear-gradient(180deg,rgba(70,74,90,.42),rgba(40,42,55,.2))'; }
+  const {h, c} = m;
+  const vars = {
+    '--ink': dark ? '#F7F2EC' : '#17130F',
+    '--ink2': dark ? 'rgba(247,242,236,.7)' : 'rgba(23,19,15,.64)',
+    '--surf': dark ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.55)',
+    '--surf2': dark ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.86)',
+    '--line': dark ? 'rgba(255,255,255,.12)' : 'rgba(23,19,15,.08)',
+    '--track': dark ? 'rgba(255,255,255,.14)' : 'rgba(23,19,15,.1)',
+    '--tint': dark ? 'rgba(255,255,255,.06)' : 'rgba(23,19,15,.045)',
+    '--solid': dark ? (weather === 'stormy' ? '#161B2B' : t.solid) : '#FFFCF8',
+    '--tab': dark ? 'rgba(18,16,28,.62)' : 'rgba(255,255,255,.74)',
+    '--ph1': dark ? 'rgba(255,255,255,.07)' : 'rgba(23,19,15,.06)',
+    '--ph2': dark ? 'rgba(255,255,255,.02)' : 'rgba(23,19,15,.018)',
+    '--acc': `oklch(0.76 ${c} ${h})`,
+    '--acc2': `oklch(0.68 ${c} ${h + 28})`,
+    '--accSoft': `oklch(0.76 ${c} ${h} / ${dark ? .2 : .24})`,
+    '--accText': dark ? `oklch(0.82 ${c} ${h})` : `oklch(0.5 ${c} ${h})`,
+    position:'absolute', inset:0, color:'var(--ink)', fontFamily:'Geist,system-ui,sans-serif', transition:'color .4s'
+  };
+  return {vars, dark, bg, overlay, orb1, orb2};
+}
+
+class Component extends DCLogic {
+  state = {
+    time: this.props.time || 'evening', weather: this.props.weather || 'rainy', mood: this.props.mood || 'tired',
+    screen: this.props.screen || 'launch', stack: [], dishId: 'bc', cart: {},
+    energy: 2, stress: 3, hunger: 4, social: 2, occasion: 'comfort',
+    saved: {rm: true, pt: true}, liked: {}, vetoed: {}, feedShift: 0,
+    swipeIdx: 0, fly: null, swipeLikes: [],
+    rot: 0, spinning: false, spinResult: null,
+    myVote: null, meera: null, reveal: false,
+    pay: 'upi', placed: false, obIdx: 0, loginStep: 'phone', phone: '98765 43210', otpFill: 0, swiggyOn: false, swBusy: false, chk: {}, step: 0, timerOn: false, read: {}, histTab: 'orders', diet: {veg: true}, spice: 1, budget: 1, set: {weather: true, themes: true, remind: true, deals: false, group: true, quests: true}, toast: null, launchP: 0, menuTab: 0
+  };
+  timers = [];
+  later(fn, ms) { const id = setTimeout(fn, ms); this.timers.push(id); return id; }
+  componentDidMount() { if (this.state.screen === 'launch') this.startLaunch(); }
+  componentWillUnmount() { this.timers.forEach(clearTimeout); }
+  componentDidUpdate(prev) {
+    const p = this.props, up = {};
+    ['time','weather','mood'].forEach(k => { if (p[k] && p[k] !== prev[k]) up[k] = p[k]; });
+    if (p.screen && p.screen !== prev.screen) { up.screen = p.screen; up.stack = []; }
+    if (Object.keys(up).length) this.setState(up, () => { if (up.screen === 'launch') this.startLaunch(); });
+  }
+  startLaunch() {
+    clearTimeout(this.lt);
+    this.setState({launchP: 0});
+    this.later(() => this.setState({launchP: 100}), 60);
+    this.lt = this.later(() => { if (this.state.screen === 'launch') this.setState({screen: 'onboard', stack: [], obIdx: 0}); }, 3000);
+  }
+  toastMsg(msg) { clearTimeout(this.tt); this.setState({toast: msg}); this.tt = this.later(() => this.setState({toast: null}), 1900); }
+  nav(k) { this.setState(s => ({screen: k, stack: [...s.stack, s.screen]})); }
+  tab(k) { this.setState({screen: k, stack: [], placed: false}); }
+  back() { this.setState(s => { const st = [...s.stack]; const p = st.pop() || 'home'; return {screen: p, stack: st, placed: false}; }); }
+  openDish(id) { this.setState(s => ({dishId: id, screen: 'detail', stack: [...s.stack, s.screen]})); }
+  addQty(id, d) { this.setState(s => { const cart = {...s.cart}; cart[id] = Math.max(0, (cart[id] || 0) + d); if (!cart[id]) delete cart[id]; return {cart}; }); }
+  priceOf(id) { return (DISH[id] || ADDON[id]).price; }
+  jump(k) {
+    this.setState({screen: k, stack: [], placed: false, obIdx: 0, loginStep: 'phone', otpFill: 0, step: 0, timerOn: false, swipeIdx: 0, swipeLikes: [], fly: null, spinResult: null, reveal: false, myVote: null, meera: null}, () => { if (k === 'launch') this.startLaunch(); });
+  }
+  ranked() {
+    const st = this.state;
+    let o = [...ORDER[st.mood]];
+    if (st.time === 'morning') o = ['mt', ...o.filter(x => x !== 'mt')];
+    o = o.filter(x => !st.vetoed[x]);
+    const k = st.feedShift % o.length;
+    o = [...o.slice(k), ...o.slice(0, k)];
+    return o.map(id => DISH[id]);
+  }
+  view(d, i, M, W) {
+    const st = this.state, saved = !!st.saved[d.id], liked = !!st.liked[d.id];
+    const icon = (on, onColor) => ({...ICON, fontSize: 20, color: on ? onColor : 'var(--ink2)', fontVariationSettings: on ? "'FILL' 1" : "'FILL' 0"});
+    return {...d,
+      match: MATCH[Math.min(i, MATCH.length - 1)], m: MATCH[Math.min(i, MATCH.length - 1)] + '%', proteinTxt: d.protein + 'g', etaTxt: '~' + d.eta + ' min', priceTxt: '₹' + d.price, topFor: W.topFor, chip: i === 0 ? W.topFor : M.chip,
+      whyFull: `${M.lead} and ${W.lead} — ${d.why}.`, whyShort: cap(d.why) + '.',
+      open: e => { stop(e); this.openDish(d.id); },
+      order: e => { stop(e); this.setState(s => ({dishId: d.id, cart: s.cart[d.id] ? s.cart : {...s.cart, [d.id]: 1}})); this.nav('menu'); },
+      save: e => { stop(e); this.setState(s => ({saved: {...s.saved, [d.id]: !saved}})); this.toastMsg(saved ? 'Removed from saved' : 'Saved for later'); },
+      like: e => { stop(e); this.setState(s => ({liked: {...s.liked, [d.id]: !liked}})); if (!liked) this.toastMsg('Noted — more like this'); },
+      veto: e => { stop(e); this.setState(s => ({vetoed: {...s.vetoed, [d.id]: true}})); this.toastMsg(`Got it, no ${d.short} for a while`); },
+      share: e => { stop(e); this.toastMsg('Link copied'); },
+      saveStyle: icon(saved, 'var(--accText)'), likeStyle: icon(liked, 'oklch(0.66 0.2 20)'),
+      saveStyleLight: {...ICON, fontSize: 20, color: '#FFFFFF', fontVariationSettings: saved ? "'FILL' 1" : "'FILL' 0"}
+    };
+  }
+  ambient(th, weather, time) {
+    const k = [];
+    k.push(H('div', {key:'bg', style:{position:'absolute', inset:0, background:th.bg}}));
+    const orb = (key, color, pos, dur) => H('div', {key, style:{position:'absolute', width:340, height:340, borderRadius:'50%', background:color, filter:'blur(80px)', opacity:th.dark ? .55 : .5, animation:`mf-drift ${dur}s ease-in-out infinite alternate`, ...pos}});
+    k.push(orb('o1', th.orb1, {top:-90, right:-110}, 14));
+    k.push(orb('o2', th.orb2, {bottom:-60, left:-140}, 18));
+    if (th.overlay) k.push(H('div', {key:'ov', style:{position:'absolute', inset:0, background:th.overlay}}));
+    if (weather === 'sunny') k.push(H('div', {key:'sun', style:{position:'absolute', top:-160, right:-140, width:460, height:460, borderRadius:'50%', background:'radial-gradient(circle, rgba(255,214,120,.75), rgba(255,214,120,0) 65%)', animation:'mf-pulse 7s ease-in-out infinite'}}));
+    if (weather === 'cloudy') [140, 470].forEach((top, i) => k.push(H('div', {key:'fog' + i, style:{position:'absolute', top, left:'-30%', width:'160%', height:200, background:`radial-gradient(ellipse at center, ${th.dark ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.55)'}, rgba(255,255,255,0) 70%)`, filter:'blur(12px)', animation:`mf-fog ${16 + i * 6}s ease-in-out infinite alternate`}})));
+    if (weather === 'rainy' || weather === 'stormy') {
+      const col = th.dark ? 'rgba(210,225,255,.5)' : 'rgba(60,85,125,.4)';
+      for (let i = 0; i < 34; i++) {
+        k.push(H('div', {key:'r' + i, style:{position:'absolute', top:0, left:((i * 37) % 100) + '%', width:1.5, height:44 + (i * 13) % 40, borderRadius:2, background:`linear-gradient(180deg, rgba(0,0,0,0), ${col})`, opacity:.35 + ((i * 7) % 10) / 16, animation:`mf-rain ${(.7 + ((i * 29) % 10) / 18).toFixed(2)}s linear ${(((i * 53) % 100) / 100 * 1.4).toFixed(2)}s infinite`}}));
+      }
+    }
+    if (weather === 'stormy') k.push(H('div', {key:'fl', style:{position:'absolute', inset:0, background:'rgba(200,210,255,1)', opacity:0, animation:'mf-flash 7s linear infinite'}}));
+    return H('div', {style:{position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none', zIndex:0}}, k);
+  }
+  extra(rv, M, W, T, dd, top, gv) {
+    const st = this.state, H2 = React.createElement;
+    const moodCol = k => `oklch(0.76 ${MOODS[k].c} ${MOODS[k].h})`;
+    const seg = (on, tap, l) => ({l, tap, style:{height:40, borderRadius:14, border:0, cursor:'pointer', font:'600 13.5px Geist,sans-serif', background: on ? 'var(--solid)' : 'transparent', color: on ? 'var(--ink)' : 'var(--ink2)', boxShadow: on ? '0 4px 12px -6px rgba(0,0,0,.35)' : 'none', transition:'background .2s'}});
+    const tog = (on, tap) => ({tap, track:{width:50, height:30, borderRadius:15, border:0, padding:0, cursor:'pointer', flex:'none', position:'relative', background: on ? 'var(--acc)' : 'var(--track)', transition:'background .2s'}, knob:{position:'absolute', top:2, left: on ? 22 : 2, width:26, height:26, borderRadius:'50%', background:'#FFFFFF', boxShadow:'0 2px 6px rgba(0,0,0,.25)', transition:'left .2s'}});
+    const tile = (hue, sz) => ({width:sz, height:sz, flex:'none', borderRadius:sz * .33, background:`oklch(0.8 0.12 ${hue})`, color:'#0B1422', display:'grid', placeItems:'center'});
+    // onboarding
+    const ob = OB[st.obIdx];
+    const obOrb = H2('div', {style:{width:190, height:190, borderRadius:'50%', background:'radial-gradient(circle at 35% 30%, rgba(255,255,255,.75), var(--acc) 45%, var(--acc2))', boxShadow:'0 0 90px var(--accSoft)', animation:'mf-pulse 3.2s ease-in-out infinite'}});
+    // login
+    const otp = '4218';
+    const sendOtp = () => { this.setState({loginStep:'otp', otpFill:0}); [0,1,2,3].forEach(i => this.later(() => this.setState({otpFill: i + 1}), 900 + i * 180)); };
+    const otpBoxes = [0,1,2,3].map(i => ({d: st.otpFill > i ? otp[i] : '', style:{height:66, borderRadius:18, background:'var(--solid)', boxSizing:'border-box', border: st.otpFill > i ? '2px solid var(--acc)' : (st.otpFill === i ? '2px solid var(--ink2)' : '1px solid var(--line)'), display:'grid', placeItems:'center', font:"700 28px 'Bricolage Grotesque',sans-serif", transition:'border-color .2s'}}));
+    // swiggy
+    const connect = () => { if (st.swiggyOn || st.swBusy) return; this.setState({swBusy: true}); this.later(() => this.setState({swBusy: false, swiggyOn: true}), 1300); };
+    const swDone = () => st.stack.length ? this.back() : this.setState({screen:'mood', stack:[]});
+    const checkS = {fontFamily:"'Material Symbols Rounded'", lineHeight:1, fontSize:22, color: st.swiggyOn ? '#2BB673' : 'var(--track)', fontVariationSettings:"'FILL' 1", transition:'color .3s'};
+    // recipe
+    const r = RECIPES[dd.id] || {time:'30 min', serves:2, level:'Easy', cost:Math.round(dd.price * .4), ing: dd.ing.map(n => [n, '']), steps:[['Prep and measure everything first.',0],['Cook the base low and slow.',15],['Bring it together and season to taste.',5],['Plate it up.',0]]};
+    const ck = i => !!st.chk[dd.id + i];
+    const have = r.ing.filter((_, i) => ck(i)).length;
+    const stepN = Math.min(st.step, r.steps.length - 1);
+    const rcSteps = r.steps.map(([t, min], i) => { const cur = i === stepN, done = i < stepN;
+      return {t, n: done ? '✓' : String(i + 1), hasMin: min > 0, minTxt: cur && st.timerOn ? `Timer running · ${min}:00` : `${min} min`, tap: () => this.setState({step: i, timerOn: false}),
+        style:{display:'flex', gap:12, alignItems:'flex-start', padding:14, borderRadius:18, cursor:'pointer', textAlign:'left', color:'var(--ink)', background: cur ? 'var(--accSoft)' : 'var(--tint)', border: cur ? '1.5px solid var(--acc)' : '1.5px solid transparent', opacity: done ? .6 : 1, transition:'background .2s'},
+        num:{width:28, height:28, flex:'none', borderRadius:'50%', display:'grid', placeItems:'center', font:'700 13px Geist,sans-serif', background: cur || done ? 'var(--acc)' : 'var(--solid)', color: cur || done ? '#0B1422' : 'var(--ink2)'}}; });
+    // notifications
+    const NOTIFS = [
+      ['n1',0,W.icon,M.h,`${W.label} pick is ready`,`${top.name}, a ${top.m} match for ${T.meal}.`,'2 min',() => this.openDish(top.id)],
+      ['n2',0,'local_fire_department',40,'Keep your 5-day streak','Check in before midnight to unlock Rainy Day Regular.','1 h',() => this.nav('quests')],
+      ['n3',0,'groups',180,'Isha started “Friday dinner”','2 of 4 have voted. Your turn.','3 h',() => this.nav('group')],
+      ['n4',1,'sell',350,'₹60 off comfort food','MOODFOOD60 works on orders above ₹299 till Sunday.','Yesterday',() => this.tab('feed')],
+      ['n5',1,'military_tech',95,'Badge unlocked: Night Owl','Five late-night check-ins. We see you.','Mon',() => this.nav('quests')],
+      ['n6',1,'receipt_long',260,'How was the khichdi?',"Rate it so tomorrow's picks get smarter.",'Mon',() => this.nav('history')]
+    ];
+    const unread = NOTIFS.filter(n => !st.read[n[0]]).length;
+    const nv = ([id, g, icon, hue, t, b, time, go]) => { const u = !st.read[id]; return {icon, t, b, time, unread: u, tile: tile(hue, 44),
+      card:{position:'relative', display:'flex', gap:12, alignItems:'flex-start', padding:'14px 14px 14px 20px', borderRadius:22, cursor:'pointer', textAlign:'left', color:'var(--ink)', border:'1px solid var(--line)', background: u ? 'var(--surf2)' : 'var(--surf)', backdropFilter:'blur(20px)'},
+      tap: () => { this.setState(s => ({read: {...s.read, [id]: true}})); go(); }}; };
+    // profile
+    const savedIds = Object.keys(st.saved).filter(k => st.saved[k]);
+    const moodMix = [['tired',38],['happy',30],['stressed',18],['adventurous',14]].map(([k, v]) => ({l: `${MOODS[k].label} ${v}%`, seg:{flex:v, background: moodCol(k)}, dot:{width:9, height:9, borderRadius:'50%', background: moodCol(k)}}));
+    const pMenu = [['military_tech','Quests & badges','2 close',() => this.nav('quests')],['receipt_long','Order history','42',() => { this.setState({histTab:'orders'}); this.nav('history'); }],['bookmark','Saved dishes',String(savedIds.length),() => { this.setState({histTab:'saved'}); this.nav('history'); }],['notifications','Notifications', unread ? unread + ' new' : 'All read',() => this.nav('notifs')],['link','Swiggy', st.swiggyOn ? 'Connected' : 'Not linked',() => this.nav('swiggy')],['settings','Settings','Diet, spice',() => this.nav('settings')]].map(([icon, l, sub, tap]) => ({icon, l, sub, tap}));
+    // settings
+    const DIET = [['veg','Vegetarian'],['egg','Eggetarian'],['jain','Jain'],['nobeef','No beef'],['gf','Gluten-free'],['lowoil','Low oil']];
+    const SETS = [{title:'Personalisation', items:[['weather','Weather-aware picks','Rain and heat reshape your feed'],['themes','Living themes','Colours follow time, weather and mood'],['remind','Daily check-in reminder','7:30 PM, before dinner']]},{title:'Notifications', items:[['deals','Deals & offers','Only ones that fit your mood'],['group','Group invites','When friends start a vote'],['quests','Quest progress','Streak nudges and new badges']]}];
+    return {
+      ob, ob1: st.obIdx === 0, ob2: st.obIdx === 1, ob3: st.obIdx === 2, obOrb, obCta: st.obIdx < 2 ? 'Next' : 'Get started',
+      obDots: OB.map((_, i) => ({style:{width: i === st.obIdx ? 26 : 8, height:8, borderRadius:4, background: i === st.obIdx ? 'var(--acc)' : 'var(--track)', transition:'width .3s'}})),
+      obNext: () => st.obIdx < 2 ? this.setState({obIdx: st.obIdx + 1}) : this.setState({screen:'login', stack:[], loginStep:'phone'}),
+      obSkip: () => this.setState({screen:'login', stack:[], loginStep:'phone'}),
+      clockTxt: `${T.clock} ${T.ampm}`,
+      loginPhone: st.loginStep === 'phone', loginOtp: st.loginStep === 'otp',
+      loginTitle: st.loginStep === 'phone' ? 'Welcome to MoodFood' : 'Check your messages',
+      loginSub: st.loginStep === 'phone' ? 'Log in with your phone. Takes ten seconds.' : `We sent a 4-digit code to +91 ${st.phone}.`,
+      loginBack: () => st.loginStep === 'otp' ? this.setState({loginStep:'phone'}) : this.setState({screen:'onboard', obIdx:2}),
+      phone: st.phone, onPhone: e => this.setState({phone: e.target.value.replace(/[^0-9 ]/g, '').slice(0, 11)}),
+      sendOtp, otpBoxes, otpStatus: st.otpFill >= 4 ? 'Auto-filled from SMS' : 'Reading SMS…',
+      verifyOtp: () => { if (st.otpFill < 4) { this.toastMsg('Hang on, code is on its way'); return; } this.setState({screen:'swiggy', stack:[]}); },
+      socialLogin: () => this.setState({screen:'swiggy', stack:[]}),
+      swTitle: st.swiggyOn ? 'You’re connected.' : 'Connect Swiggy to order in one tap',
+      swSub: st.swiggyOn ? 'Your past orders are already teaching MoodFood what you like.' : 'We use your order history to learn your taste, then place orders for you.',
+      swPerms: [['history','Read order history','So picks start smart on day one'],['location_on','Use saved addresses','Home, work, that friend’s place'],['shopping_bag','Place orders for you','Only when you tap Order']].map(([icon, t, d]) => ({icon, t, d, check: checkS})),
+      swCta: st.swiggyOn ? 'Continue' : (st.swBusy ? 'Connecting…' : 'Connect Swiggy'), swMain: () => st.swiggyOn ? swDone() : connect(), swLater: swDone,
+      swLinkIcon: st.swiggyOn ? 'check' : 'link', swStatus: st.swiggyOn ? 'Connected' : 'Not linked', goSwiggy: () => this.nav('swiggy'),
+      swLinkDot: {position:'relative', width:40, height:40, borderRadius:'50%', display:'grid', placeItems:'center', background: st.swiggyOn ? '#2BB673' : 'var(--solid)', color: st.swiggyOn ? '#FFFFFF' : 'var(--ink)', border:'1px solid var(--line)', animation: st.swBusy ? 'mf-pulse .8s ease-in-out infinite' : 'none', transition:'background .3s'},
+      diyLine: `${r.time} · about ₹${r.cost} at home · ${r.level}`,
+      goRecipe: () => { this.setState({step: 0, timerOn: false}); this.nav('recipe'); },
+      rcMeta: [{v:r.time, l:'Time'}, {v:String(r.serves), l:'Serves'}, {v:r.level, l:'Level'}, {v:'₹' + r.cost, l:'Cost'}],
+      rcHave: `You have ${have} of ${r.ing.length}`,
+      rcIng: r.ing.map(([n, q], i) => { const on = ck(i); return {n, q, tap: () => this.setState(s => ({chk: {...s.chk, [dd.id + i]: !on}})),
+        box:{width:24, height:24, flex:'none', borderRadius:8, boxSizing:'border-box', display:'grid', placeItems:'center', fontFamily:"'Material Symbols Rounded'", fontSize:17, lineHeight:1, background: on ? 'var(--acc)' : 'transparent', border: on ? 0 : '1.5px solid var(--track)', color: on ? '#0B1422' : 'transparent'},
+        nameStyle:{flex:1, fontSize:14.5, fontWeight:500, textDecoration: on ? 'line-through' : 'none', opacity: on ? .55 : 1}}; }),
+      rcSteps, rcCta: stepN < r.steps.length - 1 ? `Next step · ${stepN + 2} of ${r.steps.length}` : 'Done, time to eat',
+      rcNext: () => { if (stepN < r.steps.length - 1) this.setState({step: stepN + 1, timerOn: false}); else { this.toastMsg('Home Chef badge progress +1'); this.back(); } },
+      rcPrev: () => this.setState({step: Math.max(0, stepN - 1), timerOn: false}),
+      rcTimer: () => { const m = r.steps[stepN][1]; if (!m) { this.toastMsg('No timer needed for this step'); return; } this.setState({timerOn: true}); this.toastMsg(`${m}-minute timer started`); },
+      goQuests: () => this.nav('quests'),
+      heat: HEAT.split('').map(c => ({aspectRatio:'1', borderRadius:7, boxSizing:'border-box', background: c === '1' ? 'var(--acc)' : 'var(--track)', border: c === '2' ? '1.5px dashed var(--ink2)' : 0, opacity: c === '2' ? .7 : 1})),
+      quests: QUESTS.map(([t, d, p, n, icon, hue, reward]) => ({t, d, icon, reward, prog: `${p}/${n}`, tile: tile(hue, 48), bar:{width:(p / n * 100) + '%', height:'100%', borderRadius:3, background:'var(--acc)'}})),
+      badges: BADGES.map(([t, icon, on, hue]) => ({t, icon, medal:{width:56, height:56, borderRadius:'50%', display:'grid', placeItems:'center', background: on ? `oklch(0.8 0.12 ${hue})` : 'var(--tint)', color: on ? '#0B1422' : 'var(--ink2)', border: on ? 0 : '1.5px dashed var(--track)', boxShadow: on ? `0 10px 20px -10px oklch(0.7 0.14 ${hue})` : 'none', opacity: on ? 1 : .7}, label:{fontSize:12, fontWeight:600, lineHeight:1.25, color: on ? 'var(--ink)' : 'var(--ink2)'}})),
+      notifSecs: [{title:'Today', items: NOTIFS.filter(n => n[1] === 0).map(nv)}, {title:'Earlier', items: NOTIFS.filter(n => n[1] === 1).map(nv)}],
+      unreadTxt: unread ? unread + ' new' : '', readAll: () => this.setState({read: Object.fromEntries(NOTIFS.map(n => [n[0], true]))}),
+      pStats: [['42','Orders',() => { this.setState({histTab:'orders'}); this.nav('history'); }],['5','Day streak',() => this.nav('quests')],['4','Badges',() => this.nav('quests')]].map(([v, l, tap]) => ({v, l, tap})),
+      taste: [['Comfort',82],['Spicy',64],['Adventurous',55],['Healthy',41]].map(([l, v]) => ({l, v, bar:{width: v + '%', height:'100%', borderRadius:4, background:'var(--acc)'}})),
+      moodMix, pMenu, goSettings: () => this.nav('settings'),
+      logout: () => this.setState({screen:'login', stack:[], loginStep:'phone', otpFill:0}),
+      histTabs: [['orders','Orders'],['saved','Saved']].map(([k, l]) => seg(st.histTab === k, () => this.setState({histTab: k}), l)),
+      histOrders: st.histTab === 'orders', histSaved: st.histTab === 'saved',
+      orders: HISTORY.map(([id, when, m]) => ({...this.view(DISH[id], 0, M, W), when, moodTxt: 'Felt ' + MOODS[m].lower, moodDot:{width:8, height:8, borderRadius:'50%', background: moodCol(m)}})),
+      savedList: savedIds.map(id => this.view(DISH[id], 0, M, W)), noSaved: !savedIds.length,
+      dietChips: DIET.map(([k, l]) => { const on = !!st.diet[k]; return {l, tap: () => this.setState(s => ({diet: {...s.diet, [k]: !on}})), style:{height:40, padding:'0 16px', borderRadius:20, whiteSpace:'nowrap', flex:'none', cursor:'pointer', font:'500 13.5px Geist,sans-serif', border: on ? '1px solid transparent' : '1px solid var(--line)', background: on ? 'var(--acc)' : 'var(--surf)', color: on ? '#0B1422' : 'var(--ink)', backdropFilter:'blur(16px)'}}; }),
+      spiceSeg: ['Mild','Medium','Hot','Fire'].map((l, i) => seg(st.spice === i, () => this.setState({spice: i}), l)),
+      budgetSeg: ['₹150','₹300','₹500','Any'].map((l, i) => seg(st.budget === i, () => this.setState({budget: i}), l)),
+      setSecs: SETS.map(sec => ({title: sec.title, items: sec.items.map(([k, l, sub]) => ({l, sub, ...tog(!!st.set[k], () => this.setState(s => ({set: {...s.set, [k]: !s.set[k]}})))}))})),
+      clearMood: () => this.toastMsg('Mood history cleared')
+    };
+  }
+  renderVals() {
+    const st = this.state, {time, weather, mood, screen} = st;
+    const th = theme(time, weather, mood), W = WX[weather], M = MOODS[mood], T = TIMES[time];
+    const ranked = this.ranked();
+    const rv = ranked.map((d, i) => this.view(d, i, M, W));
+    const top = rv[0];
+    const s = {}; SCREENS.forEach(([k]) => { s[k] = screen === k; });
+    const rIdx = ranked.findIndex(x => x.id === st.dishId);
+    const dd = this.view(DISH[st.dishId], Math.max(0, rIdx), M, W);
+    dd.chips = [W.topFor, M.chip];
+    dd.reasons = [
+      {icon:'self_improvement', t:`${M.lead} — ${dd.why}.`},
+      {icon:W.icon, t:W.reason},
+      {icon:'history', t:`${dd.cuisine} is in your top three for ${T.part} like this one.`}
+    ];
+    dd.ring = {width:58, height:58, borderRadius:'50%', background:`conic-gradient(var(--acc) ${dd.health * 3.6}deg, var(--track) 0)`, display:'grid', placeItems:'center'};
+    const swapsFor = base => {
+      const out = [];
+      if (base.id !== 'pt') out.push({label:'Healthier swap', d:this.view(DISH.pt, 4, M, W), delta: base.kcal > DISH.pt.kcal ? `${base.kcal - DISH.pt.kcal} kcal lighter` : 'More protein'});
+      if (base.id !== 'vp') out.push({label:'Budget pick', d:this.view(DISH.vp, 6, M, W), delta: base.price > DISH.vp.price ? `Save ₹${base.price - DISH.vp.price}` : 'Faster'});
+      return out;
+    };
+    const gv = g => ({...g,
+      tag: g.id === 'scoop' ? (weather === 'rainy' ? 'For rainy days' : 'New') : (g.live ? g.tag : (g.tag || 'Soon')),
+      open: () => g.live ? this.nav(g.id) : this.toastMsg(`${g.t} arrives in the next build`),
+      iconStyle: {width:42, height:42, borderRadius:14, background:`oklch(0.8 0.12 ${g.hue})`, color:'#0B1422', display:'grid', placeItems:'center'},
+      tagStyle: {height:22, padding:'0 8px', borderRadius:11, fontSize:10.5, fontWeight:600, display: 'flex', alignItems:'center', background: g.live ? 'var(--accSoft)' : 'var(--tint)', color: g.live ? 'var(--accText)' : 'var(--ink2)'}
+    });
+    const tabV = ([k, label, icon]) => { const on = screen === k; const col = on ? 'var(--accText)' : 'var(--ink2)';
+      return {label, icon, tap: () => this.tab(k), iconStyle:{...ICON, fontSize:24, color:col, fontVariationSettings: on ? "'FILL' 1" : "'FILL' 0"}, labelStyle:{font:'600 10.5px Geist,sans-serif', color:col}}; };
+    // cart
+    const lines = Object.entries(st.cart).map(([id, q]) => { const it = DISH[id] || ADDON[id]; return {name: it.name, qty: q, unit: `₹${it.price} each`, total: '₹' + it.price * q, inc: () => this.addQty(id, 1), dec: () => this.addQty(id, -1)}; });
+    const cartCount = Object.values(st.cart).reduce((a, b) => a + b, 0);
+    const itemTotal = Object.entries(st.cart).reduce((a, [id, q]) => a + this.priceOf(id) * q, 0);
+    const wet = weather === 'rainy' || weather === 'stormy';
+    const disc = itemTotal >= 299 ? 60 : 0;
+    const bill = [{label:'Item total', v:itemTotal}, {label:'Delivery', v:29}];
+    if (wet) bill.push({label:'Rain fee (goes to your rider)', v:15});
+    bill.push({label:'Platform fee', v:5});
+    if (disc) bill.push({label:'MOODFOOD60', v:-disc});
+    const toPay = bill.reduce((a, b) => a + b.v, 0);
+    const billRows = bill.map(b => ({label:b.label, val: b.v < 0 ? `−₹${-b.v}` : `₹${b.v}`, valStyle:{fontWeight:600, color: b.v < 0 ? 'var(--accText)' : 'var(--ink)'}}));
+    const itemV = (it, flag) => { const q = st.cart[it.id] || 0; return {name: it.name, desc: it.desc || it.ing.join(', '), priceTxt: '₹' + it.price, flag, qty: q, has: q > 0, none: q === 0,
+      add: () => this.addQty(it.id, 1), inc: () => this.addQty(it.id, 1), dec: () => this.addQty(it.id, -1),
+      vegStyle: {width:14, height:14, boxSizing:'border-box', borderRadius:3, border:`1.5px solid ${it.veg ? '#1E9E55' : '#C8392E'}`, background:`radial-gradient(circle, ${it.veg ? '#1E9E55' : '#C8392E'} 3px, transparent 3.5px)`, flex:'none'}}; };
+    const menuSecs = [{title:'Your match', note:'Picked for your mood', items:[itemV(dd, `${dd.match}% match`)]},
+      ...ADDONS.map(sec => ({title: sec.title, note: sec.note, items: sec.items.map(i => itemV(ADDON[i[0]], i[0] === 'd1' && wet ? 'Pairs with rain' : (i[0] === 'b1' && st.dishId === 'bc' ? 'Goes with your pick' : '')))}))];
+    const menuTabs = ['Your match','Mains','Breads & rice','Drinks & dessert'].map((label, i) => ({label, tap: () => this.setState({menuTab: i}),
+      style:{flex:'none', height:36, padding:'0 14px', borderRadius:18, cursor:'pointer', font:'500 13px Geist,sans-serif', border:'1px solid var(--line)', background: st.menuTab === i ? 'var(--ink)' : 'var(--surf)', color: st.menuTab === i ? 'var(--solid)' : 'var(--ink)'}}));
+    const payOpts = [['upi','UPI','qr_code_2','GPay · aarav@okaxis'],['card','Card','credit_card','HDFC •••• 4821'],['cod','Cash on delivery','payments','Keep change ready']].map(([k, label, icon, sub]) => ({label, icon, sub, tap: () => this.setState({pay: k}),
+      radio:{width:20, height:20, borderRadius:'50%', boxSizing:'border-box', border: st.pay === k ? '6px solid var(--acc)' : '2px solid var(--track)', flex:'none'}}));
+    // swipe
+    const deck = rv.slice(0, 6);
+    const sIdx = st.swipeIdx;
+    const sw = deck[Math.min(sIdx, deck.length - 1)];
+    const likedIds = st.swipeLikes;
+    const pickId = likedIds.length ? likedIds[0] : deck[0].id;
+    const vibePick = this.view(DISH[pickId], Math.max(0, ranked.findIndex(x => x.id === pickId)), M, W);
+    const has = ids => ids.some(x => likedIds.includes(x));
+    const vibeWord = !likedIds.length ? 'Hard to please.' : has(['rm','rs']) ? 'Warm & brothy.' : has(['ck','by']) ? 'Bold & loud.' : has(['pt','kh']) ? 'Light & kind.' : 'Comfort, always.';
+    const cuisines = [...new Set(likedIds.map(x => DISH[x].cuisine))].slice(0, 3).join(', ');
+    const vibeText = likedIds.length ? `You swiped right on ${likedIds.length} of ${deck.length}. The pattern: ${cuisines}. Here's the one that fits best.` : "Nothing grabbed you — fair. Here's our safest bet for your mood.";
+    const cardTf = {position:'absolute', inset:0, transition: st.fly ? 'transform .3s cubic-bezier(.4,0,.6,1), opacity .3s' : 'none', transform: st.fly === 'left' ? 'translateX(-130%) rotate(-16deg)' : st.fly === 'right' ? 'translateX(130%) rotate(16deg)' : 'none', opacity: st.fly ? .3 : 1};
+    const doSwipe = dir => { if (st.fly || sIdx >= deck.length) return; const id = deck[sIdx].id; this.setState({fly: dir}); this.later(() => this.setState(s => ({fly: null, swipeIdx: s.swipeIdx + 1, swipeLikes: dir === 'right' ? [...s.swipeLikes, id] : s.swipeLikes})), 300); };
+    // roulette
+    const wheel = rv.slice(0, 8);
+    const conic = 'conic-gradient(' + wheel.map((_, i) => `${i % 2 === 0 ? 'var(--acc)' : 'var(--solid)'} ${i * 45}deg ${(i + 1) * 45}deg`).join(',') + ')';
+    const wheelStyle = {position:'absolute', inset:0, borderRadius:'50%', background:conic, transform:`rotate(${st.rot}deg)`, transition:'transform 3.8s cubic-bezier(.12,.7,.18,1)', boxShadow:'0 30px 60px -25px rgba(0,0,0,.55), 0 0 0 6px var(--solid)'};
+    const wheelLabels = wheel.map((d, i) => ({t: d.short, style:{position:'absolute', left:'50%', top:'50%', width:76, height:32, marginLeft:-38, marginTop:-16, display:'flex', alignItems:'center', justifyContent:'center', textAlign:'center', font:'600 11.5px/1.1 Geist,sans-serif', color: i % 2 === 0 ? '#0B1422' : 'var(--ink)', transform:`rotate(${i * 45 + 22.5}deg) translateY(-104px)`}}));
+    const spin = () => { if (st.spinning) return; const j = Math.floor(Math.random() * 8); const cur = st.rot; const target = ((360 - (j * 45 + 22.5) - (cur % 360)) % 360 + 360) % 360; this.setState({rot: cur + 360 * 5 + target, spinning: true, spinResult: null}); this.later(() => this.setState({spinning: false, spinResult: j}), 3900); };
+    const spun = st.spinResult != null ? wheel[st.spinResult] : top;
+    // group
+    const votes = {bc:1, rm:1, by:0, kh:0};
+    if (st.myVote) votes[st.myVote]++;
+    if (st.meera) votes[st.meera]++;
+    const voted = [!!st.myVote, true, true, !!st.meera];
+    const members = MEMBERS.map(([n, i, hue], k) => ({n, i,
+      av:{width:44, height:44, borderRadius:'50%', background:`oklch(0.8 0.11 ${hue})`, color:'#0B1422', display:'grid', placeItems:'center', font:"700 16px 'Bricolage Grotesque',sans-serif", position:'relative'},
+      dot:{position:'absolute', right:-2, bottom:-2, width:14, height:14, boxSizing:'border-box', borderRadius:'50%', background: voted[k] ? '#2BB673' : 'var(--track)', border:'2px solid var(--solid)'}}));
+    const vote = id => { if (st.myVote) return; this.setState({myVote: id}); this.later(() => this.setState({meera: id}), 1300); this.later(() => this.setState({reveal: true}), 2700); };
+    const groupOpts = GOPTS.map((id, k) => { const d = this.view(DISH[id], k, M, W); const n = votes[id]; return {...d, votesTxt: n === 1 ? '1 vote' : `${n} votes`, tap: () => vote(id),
+      bar:{height:'100%', width:(n / 4 * 100) + '%', background:'var(--acc)', borderRadius:4, transition:'width .6s cubic-bezier(.2,.8,.2,1)'},
+      ring:{position:'absolute', inset:-1, borderRadius:22, border: st.myVote === id ? '2px solid var(--acc)' : '2px solid transparent', pointerEvents:'none'}}; });
+    const winId = GOPTS.reduce((a, b) => votes[b] > votes[a] ? b : a, GOPTS[0]);
+    const winner = this.view(DISH[winId], 0, M, W);
+    const votedCount = voted.filter(Boolean).length;
+    // panel
+    const optStyle = on => ({height:38, padding:'0 10px', borderRadius:12, display:'flex', alignItems:'center', gap:7, font:'500 13px Geist,sans-serif', cursor:'pointer', background: on ? '#17130F' : '#FFFFFF', color: on ? '#FFFFFF' : '#17130F', border: on ? '1px solid #17130F' : '1px solid rgba(0,0,0,.08)'});
+    const grp = (title, key, list) => ({title, opts: list.map(([v, label, icon]) => ({label, icon, tap: () => this.setState({[key]: v}), style: optStyle(st[key] === v)}))});
+    const ctlGroups = [
+      grp('Time of day', 'time', [['morning','Morning','wb_sunny'],['afternoon','Afternoon','light_mode'],['evening','Evening','wb_twilight'],['night','Night','dark_mode']]),
+      grp('Weather', 'weather', [['rainy','Rainy','rainy'],['sunny','Sunny','sunny'],['cloudy','Cloudy','cloud'],['stormy','Stormy','thunderstorm']]),
+      grp('Mood', 'mood', [['happy','Happy','sentiment_very_satisfied'],['tired','Tired','bedtime'],['stressed','Stressed','spa'],['adventurous','Adventurous','explore']])
+    ];
+    const jumps = SCREENS.map(([k, label], i) => ({label, n: String(i + 1).padStart(2, '0'), tap: () => this.jump(k),
+      style:{height:34, padding:'0 10px', borderRadius:10, border:0, display:'flex', alignItems:'center', gap:8, font:'500 13px Geist,sans-serif', cursor:'pointer', textAlign:'left', background: screen === k ? '#17130F' : 'transparent', color: screen === k ? '#FFFFFF' : '#17130F'}}));
+    const launchFloat = H('div', {style:{position:'absolute', inset:0, pointerEvents:'none'}}, rv.slice(0, 3).map((d, i) => H('div', {key:i, style:{position:'absolute', ...[{top:96, left:22}, {top:170, right:18}, {bottom:170, left:34}][i], height:36, padding:'0 14px', borderRadius:18, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6, background:'var(--surf)', border:'1px solid var(--line)', backdropFilter:'blur(16px)', font:'500 12.5px Geist,sans-serif', color:'var(--ink)', animation:`mf-float ${5 + i}s ease-in-out ${i * .6}s infinite, mf-in .6s ease ${.4 + i * .2}s both`}}, H('span', {style:{width:8, height:8, borderRadius:'50%', background:'var(--acc)'}}), `${d.short} · ${d.match}%`)));
+    const moodOrb = H('div', {style:{width:62, height:62, flex:'none', borderRadius:'50%', background:'radial-gradient(circle at 35% 30%, rgba(255,255,255,.7), var(--acc) 45%, var(--acc2))', boxShadow:'0 0 40px var(--accSoft)', animation:'mf-pulse 3s ease-in-out infinite'}});
+    return {
+      tempTxt: `${W.temp}° · Bandra`, feelingTxt: `Feeling ${M.lower}`, cartLabel: `${cartCount} items · ₹${itemTotal}`, toPayTxt: '₹' + toPay, groupPriceTxt: '₹' + winner.price * 4,
+      ...this.extra(rv, M, W, T, dd, top, gv),
+      vars: th.vars, ambient: this.ambient(th, weather, time), s, W, M, T, top, dd,
+      tagline: T.tag, launchSub: `Tuning ${T.meal} picks to ${W.phrase}.`, ctxShort: `${W.label} ${W.temp}° · ${T.clock} ${T.ampm}`,
+      launchBar: {height:'100%', width: st.launchP + '%', background:'var(--acc)', borderRadius:4, transition:'width 2.7s cubic-bezier(.4,0,.2,1)'},
+      skipLaunch: () => { clearTimeout(this.lt); this.setState({screen:'onboard', stack:[], obIdx: 0}); },
+      launchFloat, moodOrb,
+      moodRows: ROWS.map(([k, label, icon, words]) => ({label, icon, word: words[st[k] - 1], segs: [1,2,3,4,5].map(v => ({tap: () => this.setState(s => { const n = {...s, [k]: v}; return {[k]: v, mood: derive(n)}; }),
+        style:{flex:1, height:12 + v * 4.4, borderRadius:8, border:0, padding:0, cursor:'pointer', background: v <= st[k] ? 'var(--acc)' : 'var(--track)', transition:'background .25s'}}))})),
+      occasions: OCC.map(([k, label, icon]) => ({label, icon, tap: () => this.setState(s => { const n = {...s, occasion: k}; return {occasion: k, mood: derive(n)}; }),
+        style:{height:76, borderRadius:18, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, font:'600 13px Geist,sans-serif', cursor:'pointer', backdropFilter:'blur(16px)', border: st.occasion === k ? '1px solid transparent' : '1px solid var(--line)', background: st.occasion === k ? 'var(--acc)' : 'var(--surf)', color: st.occasion === k ? '#0B1422' : 'var(--ink)', transition:'background .25s'}})),
+      submitMood: () => { this.setState({screen:'feed', stack:['home']}); this.toastMsg('Check-in saved · streak kept alive'); },
+      greeting: T.greet, heroLine: T.hero, pickLabel: `Your ${T.meal} pick`,
+      quick: [['bolt','Quick pick',() => this.nav('roulette')],['sentiment_satisfied','Feel-good',() => this.tab('feed')],['eco','Healthy',() => this.openDish('pt')],['cake','Treat me',() => this.openDish(mood === 'adventurous' ? 'ck' : 'cb')]].map(([icon, label, tap]) => ({icon, label, tap})),
+      forYou: rv.slice(1, 5), gamesHome: ['swipe','roulette','scoop','group'].map(id => gv(GAMES.find(g => g.id === id))), gamesGrid: GAMES.filter(g => g.id !== 'swipe').map(gv),
+      streak: ['M','T','W','T','F','S','S'].map((l, i) => ({l, style:{width:30, height:30, borderRadius:10, boxSizing:'border-box', background: i < 5 ? 'var(--acc)' : 'var(--track)', border: i === 5 ? '1.5px dashed var(--ink2)' : '0', opacity: i === 6 ? .5 : 1}})),
+      ctxLine: `${M.label} · ${W.label} · ${T.clock} ${T.ampm}`,
+      refresh: () => { this.setState(s => ({feedShift: s.feedShift + 1})); this.toastMsg('Fresh picks, same mood'); },
+      feedRest: rv.slice(1, 7), swaps: swapsFor(screen === 'detail' ? dd : top),
+      orderNow: () => { this.setState(s => ({cart: s.cart[s.dishId] ? s.cart : {...s.cart, [s.dishId]: 1}})); this.nav('menu'); },
+      goMenu: () => this.nav('menu'), goCheckout: () => this.nav('checkout'),
+      menuSecs, menuTabs, cartOn: cartCount > 0, cartCount, cartTotal: itemTotal, cartNote: wet ? `${dd.eta} min · rain-proof packaging` : `Arrives in ${dd.eta} min`,
+      cartLines: lines, billRows, toPay, hasDiscount: disc > 0, payOpts,
+      placed: st.placed, notPlaced: !st.placed, placeOrder: () => { if (!cartCount) { this.toastMsg('Your cart is empty'); return; } this.setState({placed: true}); },
+      backHome: () => this.setState({placed: false, cart: {}, screen: 'home', stack: []}),
+      soonTrack: () => this.toastMsg('Rider assigned · live tracking next build'), soonAddress: () => this.toastMsg('Address book is in the next pass'),
+      soonBell: () => this.nav('notifs'), soonProfile: () => this.tab('profile'),
+      goHome: () => this.tab('home'), goFeed: () => this.tab('feed'), goGames: () => this.tab('games'), goMood: () => this.nav('mood'), goSwipe: () => this.nav('swipe'),
+      back: () => this.back(),
+      showTabs: ['home','feed','games','group','profile','quests','history'].includes(screen), tabsL: TABS.slice(0, 2).map(tabV), tabsR: TABS.slice(2).map(tabV),
+      sw, swipeActive: sIdx < deck.length, swipeDone: sIdx >= deck.length, hasNext: sIdx < deck.length - 1, cardTf,
+      flyLeft: st.fly === 'left', flyRight: st.fly === 'right', swipeCount: `${Math.min(sIdx + 1, deck.length)} of ${deck.length}`,
+      swipeProg: deck.map((_, i) => ({style:{flex:1, height:4, borderRadius:2, background: i < sIdx ? 'var(--acc)' : i === sIdx ? 'var(--ink2)' : 'var(--track)', transition:'background .3s'}})),
+      swipeLeft: () => doSwipe('left'), swipeRight: () => doSwipe('right'),
+      swipeUndo: () => { if (!sIdx || st.fly) return; const prevId = deck[sIdx - 1].id; this.setState(s => ({swipeIdx: s.swipeIdx - 1, swipeLikes: s.swipeLikes.filter(x => x !== prevId)})); },
+      swipeReset: () => this.setState({swipeIdx: 0, swipeLikes: [], fly: null}),
+      vibeWord, vibeText, vibePick,
+      wheelStyle, wheelLabels, spin, spun, hasSpin: st.spinResult != null, noSpin: st.spinResult == null && !st.spinning, hubLabel: st.spinning ? '···' : 'SPIN',
+      members, groupOpts, groupStatus: st.reveal ? 'Decided' : `${votedCount} of 4 voted`, revealed: st.reveal, notRevealed: !st.reveal, winner, winVotes: votes[winId], groupPrice: winner.price * 4,
+      invite: () => this.toastMsg('Invite link copied · RAIN-42'),
+      resetGroup: () => this.setState({myVote: null, meera: null, reveal: false}),
+      groupOrder: () => { this.setState(s => ({dishId: winId, cart: {[winId]: 4}, stack: [...s.stack, s.screen], screen: 'menu', myVote: null, meera: null, reveal: false})); },
+      toastOn: !!st.toast, toast: st.toast,
+      showPanel: !this.props.bare, ctlGroups, jumps
+    };
+  }
+}
+</script>
+</body>
+</html>
