@@ -2,6 +2,7 @@ import "../global.css";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ThemeProvider } from '../src/context/ThemeContext';
+import { LiveMoodProvider } from '../src/context/LiveMood';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { Component, type ReactNode } from "react";
 import { View, Text } from "react-native";
@@ -68,13 +69,16 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: "transparent" },
-            animation: "slide_from_right",
-          }}
-        />
+        {/* MoodFood 2.0 living theme (clock, weather, check-in) for @moodfood/ui screens */}
+        <LiveMoodProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: "transparent" },
+              animation: "slide_from_right",
+            }}
+          />
+        </LiveMoodProvider>
       </GestureHandlerRootView>
       </ThemeProvider>
     </ErrorBoundary>

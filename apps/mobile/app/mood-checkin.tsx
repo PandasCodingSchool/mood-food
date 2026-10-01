@@ -1,163 +1,157 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Utensils, Sun, ArrowRight, PartyPopper, Zap, Trophy, Battery, Frown, Smile, User, Users } from 'lucide-react-native';
-import { useTheme } from '../src/context/ThemeContext';
-import SliderRow from '../src/components/inputs/SliderRow';
-import { fw, colors } from '../src/constants/theme';
-import { trackEvent } from '../src/utils/analytics';
-import { saveTodayCheckin, today, type Occasion } from '../src/services/moodState';
+// 2.0 Mood check-in: four 5-level bars + occasion. The screen re-themes live
+// as you tap. Saves the same check-in v1 did (1-10 scales, so bars × 2), logs
+// signals, bumps the streak quest, then refreshes the app-wide theme.
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { MOOD_SPECS, shadow, space } from '@moodfood/tokens';
+import { Button, Icon, LevelBars, MoodOrb, MoodThemeProvider, Screen, Surface, Text, useTheme, useToast, type IconName } from '@moodfood/ui';
+import { MOOD_COPY } from '../src/constants/copy';
+import { useLiveMood } from '../src/context/LiveMood';
+import { moodFromCheckin } from '../src/hooks/useLiveMoodContext';
+import { getTodayCheckin, saveTodayCheckin, today, type Occasion } from '../src/services/moodState';
 import { logSignal } from '../src/services/signals';
 import { bumpQuestProgress } from '../src/services/quests';
+import { trackEvent } from '../src/utils/analytics';
 
-type LucideIcon = React.ComponentType<{ size?: number; color?: string }>;
-
-const OCCASIONS: Array<{ id: Occasion; icon: LucideIcon; label: string; sub: string }> = [
-  { id: 'treat', icon: PartyPopper, label: 'Treat', sub: 'Indulge tonight' },
-  { id: 'fuel', icon: Zap, label: 'Fuel', sub: 'Just get it done' },
-  { id: 'reward', icon: Trophy, label: 'Reward', sub: 'Earned this one' },
+type Key = 'energy' | 'stress' | 'hunger' | 'social';
+const ROWS: Array<{ k: Key; label: string; icon: IconName; words: string[] }> = [
+  { k: 'energy', label: 'Energy', icon: 'bolt', words: ['Running on empty', 'Low', 'Steady', 'Good', 'Buzzing'] },
+  { k: 'stress', label: 'Stress', icon: 'spa', words: ['Zen', 'Calm', 'A little', 'Tense', 'Frazzled'] },
+  { k: 'hunger', label: 'Hunger', icon: 'restaurant', words: ['Snacky', 'Peckish', 'Hungry', 'Very hungry', 'Starving'] },
+  { k: 'social', label: 'Company', icon: 'group', words: ['Solo', 'Duo', 'Small group', 'Friends over', 'Party'] },
+];
+// "Comfort" is the default framing and maps to no explicit occasion.
+const OCCASIONS: Array<{ id: Occasion | 'comfort'; label: string; icon: IconName }> = [
+  { id: 'comfort', label: 'Comfort', icon: 'favorite' },
+  { id: 'treat', label: 'Treat', icon: 'cake' },
+  { id: 'reward', label: 'Reward', icon: 'military_tech' },
+  { id: 'fuel', label: 'Fuel', icon: 'bolt' },
 ];
 
-// 1.1 — Mood-first check-in, plus 3.3 budget-vibe framing. A ~20s
-// opener gating home once/day: energy, stress, hunger, social, occasion.
-// Feeds mood_map + per-occasion spend-band learning.
+const toBars = (v: number) => Math.min(5, Math.max(1, Math.round(v / 2)));
+
 export default function MoodCheckinScreen() {
+  const { time, weather } = useLiveMood();
+  const [levels, setLevels] = useState<Record<Key, number>>({ energy: 3, stress: 3, hunger: 3, social: 2 });
+  const [occasion, setOccasion] = useState<Occasion | 'comfort'>('comfort');
+
+  useEffect(() => {
+    getTodayCheckin().then((c) => {
+      if (!c) return;
+      setLevels({ energy: toBars(c.energy), stress: toBars(c.stress), hunger: toBars(c.hunger), social: toBars(c.social) });
+      setOccasion(c.occasion ?? 'comfort');
+    });
+  }, []);
+
+  const mood = useMemo(
+    () =>
+      moodFromCheckin({
+        energy: levels.energy * 2,
+        stress: levels.stress * 2,
+        social: levels.social * 2,
+        occasion: occasion === 'comfort' ? undefined : occasion,
+      }),
+    [levels, occasion],
+  );
+
+  return (
+    <MoodThemeProvider time={time} weather={weather} mood={mood}>
+      <CheckinBody levels={levels} setLevels={setLevels} occasion={occasion} setOccasion={setOccasion} />
+    </MoodThemeProvider>
+  );
+}
+
+function CheckinBody({ levels, setLevels, occasion, setOccasion }: {
+  levels: Record<Key, number>;
+  setLevels: (l: Record<Key, number>) => void;
+  occasion: Occasion | 'comfort';
+  setOccasion: (o: Occasion | 'comfort') => void;
+}) {
   const router = useRouter();
-  const { theme } = useTheme();
   const { next } = useLocalSearchParams<{ next?: string }>();
-  const [step, setStep] = useState<0 | 1>(0);
-  const [energy, setEnergy] = useState(5);
-  const [stress, setStress] = useState(5);
-  const [hunger, setHunger] = useState(5);
-  const [social, setSocial] = useState(5);
+  const { colors, dark, mood } = useTheme();
+  const { refreshMood } = useLiveMood();
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
 
-  const handleOccasion = async (occasion: Occasion) => {
+  const submit = async () => {
     setSaving(true);
-    await saveTodayCheckin({ energy, stress, hunger, social, occasion });
-    await logSignal('mood_checkin', { energy, stress, hunger, social });
-    await logSignal('occasion', { occasion });
+    const values = { energy: levels.energy * 2, stress: levels.stress * 2, hunger: levels.hunger * 2, social: levels.social * 2 };
+    const occ = occasion === 'comfort' ? undefined : occasion;
+    await saveTodayCheckin({ ...values, occasion: occ });
+    void logSignal('mood_checkin', values);
+    if (occ) void logSignal('occasion', { occasion: occ });
     void bumpQuestProgress('mood_streak_7', 1, today());
-    trackEvent('mood_checkin_completed', { energy, stress, hunger, social, occasion });
-    setSaving(false);
-    router.replace((next as never) || '/home');
+    trackEvent('mood_checkin_saved', { mood, occasion });
+    await refreshMood();
+    toast('Check-in saved · streak kept alive');
+    router.replace((next as never) || '/recommendations');
   };
 
-  if (step === 1) {
-    return (
-      <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1 }}>
-        <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-        <View style={{ paddingTop: 70, paddingHorizontal: 24 }}>
-          <Utensils size={36} color={colors.orange} />
-          <Text style={[fw(900), { fontSize: 24, color: theme.text, marginTop: 12 }]}>
-            Is tonight a...
-          </Text>
-          <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>
-            Helps us match the right budget — no $40 suggestions on a fuel night.
-          </Text>
+  return (
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen>
+        <View style={{ paddingHorizontal: space.page, paddingTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text variant="label" tone="ink2">Check-in · 20 sec</Text>
+          <Button
+            label="Skip"
+            variant="glass"
+            size="sm"
+            style={{ height: 34, borderRadius: 17 }}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
+          />
         </View>
-        <View style={{ padding: 24, paddingTop: 36, gap: 12 }}>
-          {OCCASIONS.map((opt) => {
-            const OccasionIcon = opt.icon;
+        <Text variant="display36" style={{ paddingHorizontal: space.page, paddingTop: 16 }} accessibilityRole="header">How are you, really?</Text>
+        <Text variant="body15" tone="ink2" style={{ paddingHorizontal: space.page, paddingTop: 10 }}>Four taps. We'll handle the rest.</Text>
+
+        <Surface style={{ marginHorizontal: space.gutter, marginTop: 20, paddingHorizontal: 18, paddingVertical: 4 }}>
+          {ROWS.map((r) => (
+            <View key={r.k} style={{ paddingVertical: 15, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Icon name={r.icon} size={20} tone="accText" />
+                <Text variant="bodyStrong15">{r.label}</Text>
+                <Text variant="caption13" tone="ink2" style={{ marginLeft: 'auto' }}>{r.words[levels[r.k] - 1]}</Text>
+              </View>
+              <LevelBars label={r.label} value={levels[r.k]} onChange={(v) => setLevels({ ...levels, [r.k]: v })} />
+            </View>
+          ))}
+        </Surface>
+
+        <Text variant="title21" style={{ paddingHorizontal: space.page, paddingTop: 24, paddingBottom: 12 }}>What's this meal for?</Text>
+        <View style={{ paddingHorizontal: space.gutter, flexDirection: 'row', gap: 8 }}>
+          {OCCASIONS.map((o) => {
+            const on = occasion === o.id;
             return (
-              <TouchableOpacity
-                key={opt.id}
-                activeOpacity={0.85}
-                disabled={saving}
-                onPress={() => handleOccasion(opt.id)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 14,
-                  padding: 16,
-                  paddingHorizontal: 20,
-                  borderRadius: 16,
-                  backgroundColor: theme.card,
-                  borderWidth: 1.5,
-                  borderColor: theme.border,
-                  opacity: saving ? 0.6 : 1,
-                }}
+              <Pressable
+                key={o.id}
+                onPress={() => setOccasion(o.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                style={{ flex: 1, height: 76, borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: on ? 'transparent' : colors.line, backgroundColor: on ? colors.acc : colors.surf }}
               >
-                <OccasionIcon size={28} color={colors.orange} />
-                <View>
-                  <Text style={[fw(800), { fontSize: 16, color: theme.text }]}>{opt.label}</Text>
-                  <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>{opt.sub}</Text>
-                </View>
-              </TouchableOpacity>
+                <Icon name={o.icon} size={22} color={on ? colors.onAcc : colors.ink} />
+                <Text variant="button13" color={on ? colors.onAcc : colors.ink}>{o.label}</Text>
+              </Pressable>
             );
           })}
         </View>
-      </LinearGradient>
-    );
-  }
 
-  return (
-    <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ paddingTop: 70, paddingHorizontal: 24 }}>
-        <Sun size={36} color={colors.orange} />
-        <Text style={[fw(900), { fontSize: 24, color: theme.text, marginTop: 12 }]}>
-          How are you feeling?
-        </Text>
-        <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>
-          15 seconds — helps us read the room before we pick.
-        </Text>
-      </View>
+        <Surface kind="solid" radius={26} padding={18} style={{ marginHorizontal: space.gutter, marginTop: 22, flexDirection: 'row', alignItems: 'center', gap: 16, boxShadow: shadow.card }}>
+          <MoodOrb />
+          <View style={{ flex: 1 }} accessibilityLiveRegion="polite">
+            <Text variant="label" tone="ink2">Reading you as</Text>
+            <Text variant="display26" style={{ marginTop: 2 }}>{MOOD_SPECS[mood].label}</Text>
+            <Text variant="caption13" tone="ink2" style={{ marginTop: 2 }}>{`We'll lean ${MOOD_COPY[mood].lean}.`}</Text>
+          </View>
+        </Surface>
 
-      <View style={{ padding: 24, paddingTop: 36 }}>
-        <SliderRow
-          label="Energy"
-          IconLow={Battery}
-          IconHigh={Zap}
-          value={energy}
-          onChange={setEnergy}
-          accent={colors.orange}
-        />
-        <SliderRow
-          label="Stress"
-          IconLow={Smile}
-          IconHigh={Frown}
-          value={stress}
-          onChange={setStress}
-          accent={colors.rose}
-        />
-        <SliderRow
-          label="Hunger"
-          IconLow={Smile}
-          IconHigh={Utensils}
-          value={hunger}
-          onChange={setHunger}
-          accent={colors.green}
-        />
-        <SliderRow
-          label="Company tonight"
-          IconLow={User}
-          IconHigh={Users}
-          value={social}
-          onChange={setSocial}
-          accent={colors.purple}
-        />
-      </View>
-
-      <View style={{ paddingHorizontal: 32, marginTop: 8 }}>
-        <TouchableOpacity
-          onPress={() => setStep(1)}
-          activeOpacity={0.85}
-          style={{
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: colors.orange,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: 10,
-          }}
-        >
-          <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>That's me</Text>
-          <ArrowRight size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </LinearGradient>
+        <View style={{ paddingHorizontal: space.gutter, paddingTop: 14 }}>
+          <Button block label="Show my matches" iconRight="arrow_forward" loading={saving} onPress={submit} />
+        </View>
+      </Screen>
+    </View>
   );
 }

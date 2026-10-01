@@ -1,35 +1,44 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, ScrollView, ActivityIndicator, Linking, AppState } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, MapPin, Clock, Coins, Unlink, Link2, Check } from 'lucide-react-native';
-import { useTheme } from '../src/context/ThemeContext';
-import { fw, colors } from '../src/constants/theme';
-import Screen from '../src/components/Screen';
-import { getHeaders } from '../src/services/apiBase';
+// 2.0 Swiggy connect: real OAuth (opens Swiggy in the browser, re-checks on
+// return), saves the first address for ordering, supports unlinking.
+// ?onboarding=1 → "Step 2 of 2" with "Later", continuing to the check-in.
+import { useEffect, useState } from 'react';
+import { AppState, Linking, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { palette, space } from '@moodfood/tokens';
+import { Button, Icon, Screen, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
+import { LogoTile, TopBar } from '../src/components/v2';
 import { fetchCurrentUser } from '../src/services/auth';
-import { saveAddressId, fetchAddresses } from '../src/services/aiRecommendations';
+import { fetchAddresses, saveAddressId } from '../src/services/aiRecommendations';
+import { getHeaders } from '../src/services/apiBase';
 import { initiateSwiggyOAuth, unlinkSwiggy } from '../src/services/swiggy';
+import { trackEvent } from '../src/utils/analytics';
+
+const PERMS: Array<{ icon: IconName; t: string; d: string }> = [
+  { icon: 'history', t: 'Read order history', d: 'So picks start smart on day one' },
+  { icon: 'location_on', t: 'Use saved addresses', d: 'Home, work, that friend’s place' },
+  { icon: 'shopping_bag', t: 'Place orders for you', d: 'Only when you tap Place order' },
+];
 
 export default function SwiggyConnectScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
+  const isOnboarding = onboarding === '1';
+  const { colors, dark } = useTheme();
   const [linked, setLinked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const checkStatus = async () => {
-    setLoading(true);
     try {
       const user = await fetchCurrentUser();
       const isLinked = !!user?.swiggyLinked;
       setLinked(isLinked);
       if (isLinked) {
+        setConnecting(false);
         const addresses = await fetchAddresses();
-        if (addresses.length > 0) {
-          await saveAddressId(addresses[0].id);
-        }
+        if (addresses.length > 0) await saveAddressId(addresses[0].id);
       }
     } catch {
       setLinked(false);
@@ -39,149 +48,120 @@ export default function SwiggyConnectScreen() {
   };
 
   useEffect(() => {
-    checkStatus();
-
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') checkStatus();
-    });
+    void checkStatus();
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && void checkStatus());
     return () => sub.remove();
   }, []);
 
-  const handleConnect = async () => {
+  const done = () => {
+    if (isOnboarding) router.replace({ pathname: '/mood-checkin', params: { next: '/recommendations' } });
+    else if (router.canGoBack()) router.back();
+    else router.replace('/home');
+  };
+
+  const connect = async () => {
     setConnecting(true);
     setError(null);
+    trackEvent('swiggy_connect_started');
     try {
-      const headers = await getHeaders();
-      const authUrl = await initiateSwiggyOAuth(headers);
-      await Linking.openURL(authUrl);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Could not start Swiggy connection');
-    } finally {
+      const url = await initiateSwiggyOAuth(await getHeaders());
+      await Linking.openURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start the Swiggy connection');
       setConnecting(false);
     }
   };
 
-  const handleUnlink = async () => {
-    setConnecting(true);
+  const unlink = async () => {
     setError(null);
     try {
-      const headers = await getHeaders();
-      await unlinkSwiggy(headers);
+      await unlinkSwiggy(await getHeaders());
       setLinked(false);
-    } catch (e: unknown) {
+    } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not unlink Swiggy');
-    } finally {
-      setConnecting(false);
     }
   };
 
   return (
-    <Screen>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronLeft size={22} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>Connect Swiggy</Text>
-      </View>
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen>
+        {isOnboarding ? (
+          <View style={{ paddingHorizontal: space.gutter, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="label" tone="ink2">Step 2 of 2</Text>
+            <Button label="Later" variant="glass" size="sm" onPress={done} style={{ height: 34, borderRadius: 17 }} />
+          </View>
+        ) : (
+          <TopBar title="Swiggy account" />
+        )}
 
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={colors.orange} />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} showsVerticalScrollIndicator={false}>
-          <LinearGradient
-            colors={linked ? ['#f0fdf4', '#dcfce7'] : ['#fff7ed', '#fef3c7']}
-            style={{ borderRadius: 20, padding: 24, alignItems: 'center', gap: 12 }}
+        <View style={{ marginTop: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <LogoTile size={96} />
+          <View style={{ width: 70, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ position: 'absolute', left: 0, right: 0, top: '50%', borderTopWidth: 2, borderStyle: 'dashed', borderColor: colors.ink2, opacity: 0.5 }} />
+            <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: linked ? palette.success : colors.solid, borderWidth: 1, borderColor: colors.line }}>
+              <Icon name={linked ? 'check' : 'link'} size={20} color={linked ? palette.white : colors.ink} />
+            </View>
+          </View>
+          <View
+            accessibilityRole="image"
+            accessibilityLabel="Swiggy"
+            style={{ width: 96, height: 96, borderRadius: 28, backgroundColor: palette.swiggy, alignItems: 'center', justifyContent: 'center', boxShadow: '0px 20px 40px -18px rgba(252,128,25,0.7)' }}
           >
-            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: linked ? 'rgba(34,197,94,0.12)' : 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-              {linked ? <Check size={36} color={colors.green} /> : <Link2 size={36} color={colors.orange} />}
-            </View>
-            <Text style={[fw(900), { fontSize: 20, color: theme.text, textAlign: 'center' }]}>
-              {linked ? 'Swiggy Connected' : 'Connect your Swiggy'}
-            </Text>
-            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center', lineHeight: 20 }]}>
-              {linked
-                ? 'Your Swiggy account is linked. MoodFood uses your location and order history to recommend nearby restaurants.'
-                : 'Link your Swiggy account so MoodFood can show real restaurants near you, live ETAs, and actual menu prices.'}
-            </Text>
-          </LinearGradient>
+            <Text variant="display26" style={{ fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22 }} color={palette.white}>Swiggy</Text>
+          </View>
+        </View>
 
-          {!linked && (
-            <View style={{ gap: 10 }}>
-              {[
-                { icon: <MapPin size={24} color={colors.orange} />, title: 'Nearby restaurants', desc: 'See which places can deliver to you right now' },
-                { icon: <Clock size={24} color={colors.orange} />, title: 'Live ETAs', desc: 'Real delivery times, not estimates' },
-                { icon: <Coins size={24} color={colors.orange} />, title: 'Actual prices', desc: 'Menu prices from open restaurants near you' },
-              ].map((item) => (
-                <View
-                  key={item.title}
-                  style={{ padding: 16, borderRadius: 14, backgroundColor: theme.card, flexDirection: 'row', gap: 12, alignItems: 'center', borderWidth: 1, borderColor: theme.border }}
-                >
-                  <View style={{ width: 32, alignItems: 'center' }}>{item.icon}</View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>{item.title}</Text>
-                    <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 2 }]}>{item.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {error && (
-            <View style={{ padding: 14, borderRadius: 12, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
-              <Text style={[fw(600), { fontSize: 13, color: colors.red }]}>{error}</Text>
-            </View>
-          )}
-
-          {linked ? (
-            <TouchableOpacity
-              onPress={handleUnlink}
-              disabled={connecting}
-              activeOpacity={0.85}
-              style={{ padding: 16, borderRadius: 14, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: connecting ? 0.6 : 1 }}
-            >
-              {connecting
-                ? <ActivityIndicator size="small" color={colors.red} />
-                : <Unlink size={20} color={colors.red} />}
-              <Text style={[fw(700), { fontSize: 15, color: colors.red }]}>
-                {connecting ? 'Unlinking…' : 'Disconnect Swiggy'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={handleConnect}
-              disabled={connecting}
-              activeOpacity={0.85}
-              style={{
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: colors.orange,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 10,
-                opacity: connecting ? 0.7 : 1,
-              }}
-            >
-              {connecting
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Link2 size={20} color="#fff" />}
-              <Text style={[fw(900), { fontSize: 17, color: '#fff' }]}>
-                {connecting ? 'Opening Swiggy…' : 'Connect Swiggy'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <Text style={[fw(600), { fontSize: 11, color: theme.subtext, textAlign: 'center', lineHeight: 16 }]}>
-            MoodFood can place orders on Swiggy on your behalf once you confirm each one — you'll always see the address, items, and total before anything is ordered. We never see or store your card/UPI details; Swiggy handles payment directly.
+        <View style={{ paddingHorizontal: space.page, paddingTop: 30 }}>
+          <Text variant="display32" align="center" accessibilityRole="header">
+            {linked ? 'You’re connected.' : 'Connect Swiggy to order in one tap'}
           </Text>
-        </ScrollView>
-      )}
-    </Screen>
+          <Text variant="body15" tone="ink2" align="center" style={{ marginTop: 10 }}>
+            {linked
+              ? 'Your past orders are already teaching MoodFood what you like.'
+              : 'We use your order history to learn your taste, then place orders for you.'}
+          </Text>
+        </View>
+
+        <Surface style={{ marginHorizontal: space.gutter, marginTop: 24, paddingHorizontal: 16, paddingVertical: 6 }}>
+          {PERMS.map((p) => (
+            <View key={p.t} style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 14 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.accSoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={p.icon} size={21} tone="accText" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyStrong15">{p.t}</Text>
+                <Text variant="caption12" tone="ink2" style={{ marginTop: 3 }}>{p.d}</Text>
+              </View>
+              <Icon name="check_circle" size={22} filled color={linked ? palette.success : colors.track} />
+            </View>
+          ))}
+        </Surface>
+
+        <View style={{ marginHorizontal: space.page, marginTop: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Icon name="lock" size={17} tone="ink2" />
+          <Text variant="caption12" tone="ink2" style={{ flex: 1 }}>We never see card details. Disconnect any time in Settings.</Text>
+        </View>
+
+        {error ? (
+          <Text variant="caption13" color={palette.danger} style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">
+            {error}
+          </Text>
+        ) : null}
+
+        <View style={{ paddingHorizontal: space.gutter, paddingTop: 22, gap: 10 }}>
+          <Button
+            block
+            loading={loading}
+            label={linked ? 'Continue' : connecting ? 'Waiting for Swiggy…' : 'Connect Swiggy'}
+            onPress={linked ? done : connect}
+          />
+          {linked && !isOnboarding ? <Button block variant="outline" size="md" label="Disconnect Swiggy" onPress={unlink} /> : null}
+          {connecting && !linked ? (
+            <Text variant="caption12" tone="ink2" align="center">Finish in the browser, then come back. We'll pick it up automatically.</Text>
+          ) : null}
+        </View>
+      </Screen>
+    </View>
   );
 }

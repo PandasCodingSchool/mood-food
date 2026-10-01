@@ -239,18 +239,20 @@ export function Checkbox({ checked }: { checked: boolean }) {
 
 /* ───────────────────── Progress ───────────────────── */
 
-export function ProgressBar({ value, height = 6, color, style }: {
+export function ProgressBar({ value, height = 6, color, style, durationMs = duration.pop }: {
   /** 0..1 */
   value: number;
   height?: number;
   color?: string;
   style?: ViewStyle;
+  /** Fill animation length (launch bar uses ~2.7s). */
+  durationMs?: number;
 }) {
   const { colors } = useTheme();
   const w = useSharedValue(0);
   useEffect(() => {
-    w.value = withTiming(Math.max(0, Math.min(1, value)), { duration: duration.pop, easing: ease });
-  }, [value, w]);
+    w.value = withTiming(Math.max(0, Math.min(1, value)), { duration: durationMs, easing: ease });
+  }, [value, w, durationMs]);
   const fill = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
   return (
     <View

@@ -1,190 +1,135 @@
-import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, StatusBar } from 'react-native';
+// 2.0 Onboarding: three slides (mood-first, context-aware, never stuck) → login.
+import { useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Sparkles, Utensils } from 'lucide-react-native';
-import { useTheme } from '../src/context/ThemeContext';
-import { ONBOARD_STEPS, type OnboardIcon } from '../src/constants/onboarding';
-import { fw, colors } from '../src/constants/theme';
-import GradientButton from '../src/components/GradientButton';
-import { bounceIn, fadeUp, floatLoop } from '../src/utils/animations';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { MOOD_SPECS, MOODS, WEATHER_SPECS, oklch, space } from '@moodfood/tokens';
+import { AmbientBackground, Button, Icon, IconTile, MoodOrb, StepDots, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
+import { LogoPill } from '../src/components/v2';
+import { TIME_COPY } from '../src/constants/copy';
+import { useLiveMood } from '../src/context/LiveMood';
+import { trackEvent } from '../src/utils/analytics';
 
-const TOTAL = ONBOARD_STEPS.length;
+const SLIDES = [
+  { k: 'Mood-first', t: 'Food that matches how you feel.', d: 'A 20-second check-in, and every pick is tuned to your energy, stress and hunger.' },
+  { k: 'Context-aware', t: 'Rain, sun, 2 AM. It all counts.', d: 'Weather and time quietly reshape what we suggest, and how the app looks.' },
+  { k: 'Never stuck', t: "Can't decide? Play it out.", d: "Swipe, spin or vote with friends. Every game lands on something you'll love." },
+];
 
-function OrbitIcon({ Icon, size, style, duration, delay }: { Icon: OnboardIcon; size: number; style: object; duration: number; delay: number }) {
-  const translateY = useRef(new Animated.Value(0)).current;
+const GAMES: Array<{ t: string; icon: IconName; hue: number }> = [
+  { t: 'Swipe Vibe', icon: 'swipe', hue: 40 },
+  { t: 'Meal Roulette', icon: 'casino', hue: 350 },
+  { t: "Tonight's Story", icon: 'auto_stories', hue: 310 },
+  { t: 'Group decision', icon: 'groups', hue: 180 },
+];
 
-  useEffect(() => {
-    const timer = setTimeout(() => floatLoop(translateY, 10, duration), delay);
-    return () => clearTimeout(timer);
-  }, []);
+export default function OnboardingScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { dark } = useTheme();
+  const [i, setI] = useState(0);
+  const slide = SLIDES[i];
+  const last = i === SLIDES.length - 1;
+
+  const toLogin = (via: 'skip' | 'done') => {
+    trackEvent('onboarding_finished', { via, step: i });
+    router.replace('/login');
+  };
 
   return (
-    <Animated.View style={[styles.orbitIcon, style, { transform: [{ translateY }] }]}>
-      <Icon size={size} color={colors.orange} />
-    </Animated.View>
-  );
-}
-
-function OnboardContent({ step, index }: { step: (typeof ONBOARD_STEPS)[number]; index: number }) {
-  const { theme } = useTheme();
-  const MainIcon = step.mainIcon;
-  const mainScale = useRef(new Animated.Value(0.3)).current;
-  const bodyOpacity = useRef(new Animated.Value(0)).current;
-  const bodyTranslate = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    bounceIn(mainScale);
-    fadeUp(bodyOpacity, bodyTranslate, 150);
-  }, []);
-
-  return (
-    <View style={styles.illustrationContent}>
-      <View style={styles.orbitStage}>
-        <Animated.View style={[styles.mainIcon, { transform: [{ scale: mainScale }] }]}>
-          <MainIcon size={88} color={theme.text} />
-        </Animated.View>
-        <OrbitIcon Icon={step.orbit[0]} size={32} style={{ top: 10, left: 30, opacity: 0.8 }} duration={3000} delay={0} />
-        <OrbitIcon Icon={step.orbit[1]} size={28} style={{ top: 20, right: 25, opacity: 0.7 }} duration={2500} delay={400} />
-        <OrbitIcon Icon={step.orbit[2]} size={26} style={{ bottom: 30, left: 15, opacity: 0.6 }} duration={2800} delay={800} />
-        <OrbitIcon Icon={step.orbit[3]} size={30} style={{ bottom: 15, right: 35, opacity: 0.75 }} duration={3200} delay={200} />
-        <View style={{ position: 'absolute', top: 50, right: 10, opacity: 0.5 }}>
-          <Sparkles size={16} color={theme.subtext} />
-        </View>
-        <View style={{ position: 'absolute', bottom: 60, left: 50, opacity: 0.4 }}>
-          <Sparkles size={14} color={theme.subtext} />
-        </View>
+    <View style={{ flex: 1, paddingTop: insets.top + 8 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <AmbientBackground />
+      <View style={{ paddingHorizontal: space.page, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <LogoPill />
+        <Button label="Skip" variant="glass" size="sm" onPress={() => toLogin('skip')} style={{ height: 34, borderRadius: 17 }} />
       </View>
 
-      <Animated.View style={{ opacity: bodyOpacity, transform: [{ translateY: bodyTranslate }], alignItems: 'center', width: '100%' }}>
-        <View style={[styles.tagPill, { backgroundColor: step.accent + '18', borderColor: step.accent + '30' }]}>
-          <Text style={[styles.tagText, fw(800), { color: step.accent }]}>{step.tag}</Text>
-        </View>
-        <Text style={[styles.title, fw(900), { color: theme.text }]}>{step.title}</Text>
-        <Text style={[styles.desc, fw(600), { color: theme.subtext }]}>{step.desc}</Text>
+      <View style={{ flex: 1, marginHorizontal: space.gutter, marginTop: 16 }}>
+        <Animated.View key={i} entering={FadeIn.duration(500)} style={{ flex: 1 }}>
+          {i === 0 ? <MoodVisual /> : i === 1 ? <ContextVisual /> : <GamesVisual />}
+        </Animated.View>
+      </View>
 
-        {step.features && (
-          <View style={styles.featuresList}>
-            {step.features.map((feat, i) => (
-              <FeatureRow key={i} Icon={feat.Icon} text={feat.text} accent={step.accent} delay={i * 100} />
-            ))}
-          </View>
-        )}
-      </Animated.View>
+      <View style={{ paddingHorizontal: 24, paddingTop: 22 }}>
+        <Text variant="label" tone="accText">{slide.k}</Text>
+        <Text variant="display34" style={{ marginTop: 8 }} accessibilityRole="header">{slide.t}</Text>
+        <Text variant="body15" tone="ink2" style={{ marginTop: 10 }}>{slide.d}</Text>
+      </View>
+      <View style={{ paddingHorizontal: space.page, paddingTop: 26, paddingBottom: Math.max(40, insets.bottom + 16), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <StepDots count={SLIDES.length} index={i} />
+        <Button
+          label={last ? 'Get started' : 'Next'}
+          iconRight="arrow_forward"
+          onPress={() => (last ? toLogin('done') : setI(i + 1))}
+          style={{ height: 56 }}
+        />
+      </View>
     </View>
   );
 }
 
-function FeatureRow({ Icon, text, accent, delay }: { Icon: OnboardIcon; text: string; accent: string; delay: number }) {
-  const { theme } = useTheme();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateX = useRef(new Animated.Value(-30)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 400, delay, useNativeDriver: true }),
-      Animated.timing(translateX, { toValue: 0, duration: 400, delay, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
+function MoodVisual() {
+  const pos = [{ top: 30, left: 14 }, { top: 92, right: 6 }, { bottom: 70, left: 24 }, { bottom: 16, right: 30 }];
   return (
-    <Animated.View style={[styles.featureRow, { opacity, transform: [{ translateX }], backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}>
-      <View style={[styles.featureIcon, { backgroundColor: accent + '18' }]}>
-        <Icon size={18} color={accent} />
-      </View>
-      <Text style={[styles.featureText, fw(700), { color: theme.text }]}>{text}</Text>
-    </Animated.View>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <MoodOrb size={190} />
+      {MOODS.map((m, k) => (
+        <Surface key={m} kind="glassStrong" radius={20} style={[{ position: 'absolute', height: 40, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }, pos[k]]}>
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: oklch(0.76, MOOD_SPECS[m].chroma, MOOD_SPECS[m].hue) }} />
+          <Text variant="bodyStrong14" style={{ fontSize: 13.5 }}>{MOOD_SPECS[m].label}</Text>
+        </Surface>
+      ))}
+    </View>
   );
 }
 
-export default function OnboardingScreen() {
-  const router = useRouter();
-  const { theme } = useTheme();
-  const [stepIndex, setStepIndex] = useState(0);
-  const step = ONBOARD_STEPS[stepIndex];
-  const isLast = stepIndex === TOTAL - 1;
-
-  const goToAuth = () => router.replace('/login');
-
-  const handleNext = () => {
-    if (isLast) {
-      goToAuth();
-    } else {
-      setStepIndex((s) => s + 1);
-    }
-  };
-
+function ContextVisual() {
+  const { time, weather, temperature } = useLiveMood();
+  const w = WEATHER_SPECS[weather];
+  const clock = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   return (
-    <LinearGradient colors={[theme.bg, theme.surface]} style={styles.container}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.topRow}>
-          <View style={styles.dots}>
-            {ONBOARD_STEPS.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  {
-                    width: i === stepIndex ? 28 : 8,
-                    backgroundColor: i <= stepIndex ? theme.text : theme.border,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-          {!isLast && (
-            <TouchableOpacity onPress={goToAuth} activeOpacity={0.7}>
-              <Text style={[styles.skip, fw(700), { color: theme.subtext }]}>Skip</Text>
-            </TouchableOpacity>
-          )}
+    <View style={{ flex: 1, justifyContent: 'center', gap: 12, paddingHorizontal: 8 }}>
+      <Surface kind="glassStrong" radius={24} padding={18} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, transform: [{ rotate: '-2deg' }] }}>
+        <Icon name={w.icon as IconName} size={40} tone="accText" />
+        <View>
+          <Text variant="display26">{temperature != null ? `${Math.round(temperature)}°` : w.label}</Text>
+          <Text variant="caption13" tone="ink2">{`${w.label} right now`}</Text>
         </View>
-
-        <OnboardContent key={stepIndex} step={step} index={stepIndex} />
-
-        <View style={styles.ctaArea}>
-          <GradientButton
-            label={isLast ? "Let's eat!" : 'Continue'}
-            icon={isLast ? <Utensils size={18} color="#fff" /> : undefined}
-            colors={step.btnColors ?? [colors.orange, colors.orange]}
-            onPress={handleNext}
-          />
+      </Surface>
+      <Surface kind="glassStrong" radius={24} padding={18} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginLeft: 36, transform: [{ rotate: '2deg' }] }}>
+        <Icon name="schedule" size={40} tone="accText" />
+        <View>
+          <Text variant="display26">{clock}</Text>
+          <Text variant="caption13" tone="ink2">{`Time for ${TIME_COPY[time].meal}`}</Text>
         </View>
-      </ScrollView>
-    </LinearGradient>
+      </Surface>
+      <AccentNote />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingTop: 60, paddingHorizontal: 32, paddingBottom: 40, justifyContent: 'space-between' },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dots: { flexDirection: 'row', gap: 6 },
-  dot: { height: 6, borderRadius: 3 },
-  skip: { fontSize: 14, padding: 4 },
-  illustrationContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
-  orbitStage: { width: 260, height: 260, marginBottom: 16, overflow: 'visible', alignItems: 'center', justifyContent: 'center' },
-  mainIcon: { alignItems: 'center', justifyContent: 'center' },
-  orbitIcon: { position: 'absolute' },
-  tagPill: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 16, borderWidth: 1 },
-  tagText: { fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase' },
-  title: { fontSize: 26, lineHeight: 32, textAlign: 'center', maxWidth: 300 },
-  desc: { fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 280, marginTop: 12 },
-  featuresList: { gap: 10, marginTop: 20, width: '100%' },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 14,
-  },
-  featureIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureText: { flex: 1, fontSize: 13 },
-  ctaArea: { paddingBottom: 8 },
-});
+function AccentNote() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ paddingVertical: 16, paddingHorizontal: 18, borderRadius: 24, backgroundColor: colors.acc, flexDirection: 'row', alignItems: 'center', gap: 12, transform: [{ rotate: '-1deg' }], boxShadow: `0px 20px 40px -20px ${colors.acc}` }}>
+      <Icon name="auto_awesome" size={26} color={colors.onAcc} />
+      <Text variant="bodyStrong14" color={colors.onAcc} style={{ flex: 1 }}>The app re-themes itself to match</Text>
+    </View>
+  );
+}
+
+function GamesVisual() {
+  return (
+    <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignContent: 'center', gap: 10, paddingHorizontal: 4 }}>
+      {GAMES.map((g) => (
+        <Surface key={g.t} kind="glassStrong" radius={24} padding={16} style={{ flexBasis: '47%', flexGrow: 1, minHeight: 120, gap: 8 }}>
+          <IconTile icon={g.icon} hue={g.hue} />
+          <Text variant="title17" style={{ marginTop: 'auto' }}>{g.t}</Text>
+        </Surface>
+      ))}
+    </View>
+  );
+}

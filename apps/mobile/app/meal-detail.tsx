@@ -1,334 +1,239 @@
-import { useState, useRef, useEffect, useMemo, type ComponentType } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated, Image } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Heart, ShoppingCart, Sparkles, Leaf, Wallet, UtensilsCrossed, MapPin } from 'lucide-react-native';
+// 2.0 Meal detail. Params: rec (JSON), rank, optional variant
+// (healthier_swap | budget_swap) to open on a swap. Keeps v1 behaviour:
+// variant switching, save to history, live restaurant menu, DIY recipe.
+import { useMemo, useState, type ReactNode } from 'react';
+import { Pressable, Share, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { palette, space } from '@moodfood/tokens';
+import { Chip, DishImage, Icon, IconButton, MatchBadge, ProgressRing, Screen, Surface, Text, Button, useTheme, useToast, type IconName } from '@moodfood/ui';
+import { BottomBar } from '../src/components/v2';
+import { SwapRow } from '../src/components/v2/RecCards';
+import { MOOD_COPY, WEATHER_COPY } from '../src/constants/copy';
+import { useLiveMood } from '../src/context/LiveMood';
 import { getSavedAddressId } from '../src/services/aiRecommendations';
-import { useTheme } from '../src/context/ThemeContext';
-import { fw, colors } from '../src/constants/theme';
-import { dishIcon, dishGradient, resolveDishImage } from '../src/utils/dishVisuals';
-import { bounceIn, floatLoop } from '../src/utils/animations';
-import { formatTag } from '../src/utils/formatTag';
 import { saveOrder, toggleSaved } from '../src/services/history';
+import { startOrder } from '../src/services/orderFlow';
 import type { Recommendation } from '../src/types';
+import { imageCaption, recView } from '../src/utils/recView';
+
+type Variant = 'original' | 'healthier_swap' | 'budget_swap';
 
 export default function MealDetailScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
-  const { rec: rawRec, rank: rawRank } = useLocalSearchParams<{ rec: string; rank: string }>();
+  const toast = useToast();
+  const { colors, dark } = useTheme();
+  const { weather, mood } = useLiveMood();
+  const params = useLocalSearchParams<{ rec: string; rank?: string; variant?: Variant }>();
+  const rec = useMemo<Recommendation | null>(() => (params.rec ? JSON.parse(params.rec) : null), [params.rec]);
+  const rank = Number(params.rank || 0);
+  const [variant, setVariant] = useState<Variant>(params.variant ?? 'original');
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [savedHistoryId, setSavedHistoryId] = useState<string | null>(null);
-  const [savingDish, setSavingDish] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
-  const [activeVariant, setActiveVariant] = useState<'original' | 'healthier_swap' | 'budget_swap'>('original');
-  const iconScale = useRef(new Animated.Value(0.3)).current;
-  const dotBounce = useRef(new Animated.Value(0)).current;
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => { bounceIn(iconScale); }, []);
-  useEffect(() => { setImageFailed(false); }, [activeVariant]);
-  useEffect(() => { floatLoop(dotBounce, 5, 450); }, []);
-
-  if (!rawRec) return null;
-  const rec: Recommendation = JSON.parse(rawRec);
-  const rank = Number(rawRank || 0);
-
-  const currentRec = useMemo<Recommendation>(() => {
-    if (activeVariant === 'original') return rec;
-    const alt = rec.alternatives?.find((a) => a.type === activeVariant);
+  // Same projection v1 used: a swap borrows the original's restaurant context.
+  const current = useMemo<Recommendation | null>(() => {
+    if (!rec || variant === 'original') return rec;
+    const alt = rec.alternatives?.find((a) => a.type === variant);
     if (!alt) return rec;
     return {
       ...rec,
-      dish: {
-        ...rec.dish,
-        name: alt.name,
-        cuisine: alt.cuisine ?? rec.dish.cuisine,
-        category: alt.category ?? rec.dish.category,
-        tags: alt.tags ?? rec.dish.tags,
-      },
+      dish: { ...rec.dish, name: alt.name, cuisine: alt.cuisine ?? rec.dish.cuisine, category: alt.category ?? rec.dish.category, tags: alt.tags ?? rec.dish.tags },
       image_url: alt.image_url ?? null,
       swiggy: alt.swiggy ?? null,
-      practical_details: alt.practical_details
-        ? { ...rec.practical_details, ...alt.practical_details }
-        : rec.practical_details,
+      practical_details: alt.practical_details ? { ...rec.practical_details, ...alt.practical_details } : rec.practical_details,
       ai_reasoning: { ...rec.ai_reasoning, mood_match: alt.reason },
     };
-  }, [activeVariant, rec]);
+  }, [rec, variant]);
 
-  const heroGradient = dishGradient(rank);
-  const Icon = dishIcon(currentRec);
-  const imageUrl = !imageFailed ? resolveDishImage(currentRec) : null;
-  const matchPct = currentRec.confidence != null ? `${Math.round(currentRec.confidence * 100)}% match` : null;
+  if (!rec || !current) return null;
+  const v = recView(current);
+  const swaps = (rec.alternatives ?? []).filter((a) => a.type === 'healthier_swap' || a.type === 'budget_swap');
 
-  const healthierSwap = rec.alternatives?.find((a) => a.type === 'healthier_swap');
-  const budgetSwap = rec.alternatives?.find((a) => a.type === 'budget_swap');
+  const reasons: Array<{ icon: IconName; t: string }> = [
+    current.ai_reasoning?.mood_match && { icon: 'self_improvement' as IconName, t: current.ai_reasoning.mood_match },
+    current.ai_reasoning?.context_fit && { icon: 'schedule' as IconName, t: current.ai_reasoning.context_fit },
+    current.ai_reasoning?.psychological_hook && { icon: 'auto_awesome' as IconName, t: current.ai_reasoning.psychological_hook },
+    current.ai_reasoning?.nostalgia_factor && { icon: 'history' as IconName, t: current.ai_reasoning.nostalgia_factor },
+  ].filter(Boolean) as Array<{ icon: IconName; t: string }>;
 
-  const activeReason =
-    activeVariant === 'original'
-      ? rec.ai_reasoning?.mood_match
-      : rec.alternatives?.find((a) => a.type === activeVariant)?.reason;
-
-  const liveMatch = currentRec.swiggy?.matched ? currentRec.swiggy : null;
-  const liveRestaurantName = liveMatch?.item?.restaurant_name || liveMatch?.restaurant?.name;
-  const liveEta = liveMatch?.item?.eta_min ?? liveMatch?.restaurant?.eta_min;
-  const liveIsOpen = liveMatch?.restaurant?.is_open;
-  const liveRestaurantId = liveMatch?.item?.restaurant_id ?? liveMatch?.restaurant?.id;
-  const liveMenuItemId = liveMatch?.item?.id;
-
-  const handleToggleSave = async () => {
-    if (savingDish) return;
-    const nextSaved = !saved;
-    setSaved(nextSaved);
-    setSavingDish(true);
+  const toggleSave = async () => {
+    if (saving) return;
+    const next = !saved;
+    setSaved(next);
+    setSaving(true);
     try {
-      if (savedHistoryId) {
-        await toggleSaved(savedHistoryId, nextSaved);
-      } else {
-        const id = await saveOrder({
-          dishName: currentRec.dish.name,
-          cuisine: currentRec.dish.cuisine,
-          priceInr: currentRec.practical_details?.estimated_price ?? undefined,
-          ordered: false,
-          saved: nextSaved,
-        });
-        setSavedHistoryId(id);
-      }
+      if (savedId) await toggleSaved(savedId, next);
+      else
+        setSavedId(
+          await saveOrder({ dishName: v.name, cuisine: v.cuisine, priceInr: v.price ?? undefined, ordered: false, saved: next }),
+        );
+      toast(next ? 'Saved for later' : 'Removed from saved');
     } catch {
-      setSaved(!nextSaved);
+      setSaved(!next);
     } finally {
-      setSavingDish(false);
+      setSaving(false);
     }
   };
 
-  const handleBrowseMenu = async () => {
-    if (!liveRestaurantId) return;
+  const browseMenu = async () => {
     const addressId = await getSavedAddressId();
-    if (!addressId) return;
+    if (!v.restaurantId || !addressId) return;
     router.push({
       pathname: '/restaurant-menu',
       params: {
-        restaurantId: liveRestaurantId,
+        restaurantId: v.restaurantId,
         addressId,
-        restaurantName: liveRestaurantName || '',
-        dishId: currentRec.dish.id || '',
-        dishName: currentRec.dish.name,
-        why: currentRec.ai_reasoning?.mood_match || '',
-        initialMenuItemId: liveMenuItemId || '',
+        restaurantName: v.restaurantName || '',
+        dishId: current.dish.id || '',
+        dishName: v.name,
+        why: v.why || '',
+        initialMenuItemId: v.menuItemId || '',
       },
     });
   };
 
+  const stats: Array<{ key: string; node: ReactNode; label: string }> = [];
+  if (v.health != null) stats.push({ key: 'h', node: <ProgressRing value={Math.round(v.health)} size={58} />, label: 'Health score' });
+  if (v.kcal != null) stats.push({ key: 'k', node: <Text variant="display26" style={{ fontSize: 24 }}>{Math.round(v.kcal)}</Text>, label: 'kcal' });
+  if (v.prepMin != null) stats.push({ key: 'p', node: <Text variant="display26" style={{ fontSize: 24 }}>{`${v.prepMin}m`}</Text>, label: 'prep time' });
+
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar barStyle="light-content" />
-      <View style={{ height: 300 }}>
-        {imageUrl ? (
-          <Image
-            source={{ uri: imageUrl }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <LinearGradient colors={heroGradient} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-            <Animated.View style={{ transform: [{ scale: iconScale }] }}>
-              <Icon size={100} color="#fff" />
-            </Animated.View>
-          </LinearGradient>
-        )}
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ position: 'absolute', top: 60, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronLeft size={22} color="#fff" />
-        </TouchableOpacity>
-        {matchPct && (
-          <View style={{ position: 'absolute', top: 60, right: 20, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.2)' }}>
-            <Text style={[fw(800), { fontSize: 13, color: '#fff' }]}>{matchPct}</Text>
+    <View style={{ flex: 1 }}>
+      <StatusBar style="light" />
+      <Screen edgeToEdge contentContainerStyle={{ paddingBottom: 140 }}>
+        <DishImage uri={v.imageUrl} caption={`hero photo · ${imageCaption(v)}`} height={370} scrim={0.55}>
+          <View style={{ position: 'absolute', top: 56, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
+            <IconButton icon="arrow_back" label="Back" variant="photo" onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))} />
+            <IconButton icon="ios_share" label="Share" variant="photo" onPress={() => void Share.share({ message: `${v.name} — picked for my mood on MoodFood.` })} />
           </View>
-        )}
-      </View>
+        </DishImage>
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>{currentRec.dish.name}</Text>
-            <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>
-              {currentRec.dish.cuisine}{currentRec.dish.category ? ` · ${formatTag(currentRec.dish.category)}` : ''}
-            </Text>
+        <Surface kind="solid" radius={30} style={{ marginTop: -52, marginHorizontal: 12, paddingHorizontal: 18, paddingTop: 22, paddingBottom: 20, boxShadow: '0px -10px 40px -20px rgba(0,0,0,0.45)' }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {v.match != null ? <MatchBadge percent={v.match} icon="auto_awesome" /> : null}
+            {rank === 0 && variant === 'original' ? <Chip label={WEATHER_COPY[weather].topFor} /> : null}
+            <Chip label={variant === 'healthier_swap' ? 'Healthier swap' : variant === 'budget_swap' ? 'Budget pick' : MOOD_COPY[mood].chip} />
           </View>
-          {currentRec.practical_details?.estimated_price != null && (
-            <Text style={[fw(900), { fontSize: 22, color: colors.orange }]}>₹{currentRec.practical_details.estimated_price}</Text>
-          )}
-        </View>
+          <Text variant="display30" style={{ marginTop: 14 }} accessibilityRole="header">{v.name}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 10, alignItems: 'center' }}>
+            <Text variant="body13" tone="ink2">{v.cuisine}</Text>
+            {v.rating != null ? <Meta icon="star" text={v.rating.toFixed(1)} accent /> : null}
+            {v.eta != null ? <Meta icon="schedule" text={`${v.eta} min`} /> : null}
+            {v.priceTxt ? <Text variant="bodyStrong14" style={{ fontSize: 13.5 }}>{v.priceTxt}</Text> : null}
+          </View>
 
-        {liveRestaurantName && (
-          <View
-            style={{
-              flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10,
-              paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14,
-              backgroundColor: colors.orange + '14',
-            }}
-          >
-            <MapPin size={16} color={colors.orange} style={{ marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={[fw(800), { fontSize: 15, color: colors.orange }]}>{liveRestaurantName}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: liveIsOpen === false ? theme.subtext : colors.green }} />
-                <Text style={[fw(700), { fontSize: 11, color: theme.subtext }]}>
-                  Live on Swiggy{liveEta != null ? ` · ${liveEta} min` : ''}
-                </Text>
+          {reasons.length ? (
+            <Surface kind="tint" radius={22} padding={16} style={{ marginTop: 20, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Icon name="auto_awesome" size={20} tone="accText" />
+                <Text variant="bodyStrong15">Why this fits you</Text>
               </View>
-            </View>
-          </View>
-        )}
+              {reasons.map((r) => (
+                <View key={r.t} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                  <Icon name={r.icon} size={18} tone="ink2" style={{ marginTop: 1 }} />
+                  <Text variant="body13" style={{ flex: 1 }}>{r.t}</Text>
+                </View>
+              ))}
+            </Surface>
+          ) : null}
 
-        {currentRec.dish.tags && currentRec.dish.tags.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            {currentRec.dish.tags.map((tag) => (
-              <View key={tag} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, backgroundColor: colors.orange + '18' }}>
-                <Text style={[fw(700), { fontSize: 12, color: colors.orange }]}>{formatTag(tag)}</Text>
+          {stats.length ? (
+            <View style={{ marginTop: 12, flexDirection: 'row', gap: 8 }}>
+              {stats.map((s) => (
+                <Surface key={s.key} kind="tint" radius={20} style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  {s.node}
+                  <Text variant="micro11" tone="ink2">{s.label}</Text>
+                </Surface>
+              ))}
+            </View>
+          ) : null}
+
+          {v.tags.length ? (
+            <>
+              <Text variant="bodyStrong15" style={{ marginTop: 20 }}>What it's like</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                {v.tags.slice(0, 8).map((t) => (
+                  <View key={t} style={{ height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.line, justifyContent: 'center' }}>
+                    <Text variant="caption13">{t.replace(/_/g, ' ')}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-        )}
+            </>
+          ) : null}
 
-        <LinearGradient colors={[theme.surface, theme.card]} style={{ marginTop: 24, padding: 16, borderRadius: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <Sparkles size={16} color={colors.orange} />
-            <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>Why this pick</Text>
-          </View>
-          <Text style={[fw(600), { fontSize: 13, color: theme.subtext, lineHeight: 20 }]}>
-            {activeReason || 'This pick matches your current mood and cravings based on what you told us.'}
-          </Text>
-        </LinearGradient>
+          {v.restaurantName ? (
+            <Surface kind="tint" radius={22} padding={14} style={{ marginTop: 20, gap: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <DishImage height={52} radius={16} stripe={7} style={{ width: 52 }} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="bodyStrong15" numberOfLines={1}>{v.restaurantName}</Text>
+                  <Text variant="caption12" tone="ink2" style={{ marginTop: 2 }}>
+                    {[v.rating != null ? `${v.rating.toFixed(1)} ★` : null, v.distanceKm != null ? `${v.distanceKm.toFixed(1)} km` : null, v.eta != null ? `${v.eta} min` : null].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                {v.live ? <Button label="Menu" variant="glass" size="sm" onPress={browseMenu} /> : null}
+              </View>
+              {v.live ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: v.isOpen === false ? palette.danger : palette.success }} />
+                  <Text variant="caption12" tone="ink2">{v.isOpen === false ? 'Closed right now' : 'Live on Swiggy · open now'}</Text>
+                </View>
+              ) : null}
+            </Surface>
+          ) : null}
 
-        <View style={{ marginTop: 24, gap: 12 }}>
-          <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>Choose your vibe</Text>
-          <VariantCard
-            icon={Sparkles}
-            title="Original"
-            subtitle={rec.dish.name}
-            active={activeVariant === 'original'}
-            accent={colors.orange}
-            onPress={() => setActiveVariant('original')}
-          />
-          {healthierSwap && (
-            <VariantCard
-              icon={Leaf}
-              title="Healthier swap"
-              subtitle={healthierSwap.name}
-              active={activeVariant === 'healthier_swap'}
-              accent={colors.green}
-              onPress={() => setActiveVariant('healthier_swap')}
-            />
-          )}
-          {budgetSwap && (
-            <VariantCard
-              icon={Wallet}
-              title="Budget pick"
-              subtitle={budgetSwap.name}
-              active={activeVariant === 'budget_swap'}
-              accent={colors.blue}
-              onPress={() => setActiveVariant('budget_swap')}
-            />
-          )}
-        </View>
+          <Pressable onPress={() => router.push({ pathname: '/diy/recipe', params: { rec: JSON.stringify(current), rank: String(rank) } })} accessibilityRole="button">
+            <Surface kind="accentSoft" radius={22} padding={14} style={{ marginTop: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.solid, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="skillet" size={22} tone="accText" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyStrong15">Cook it yourself</Text>
+                <Text variant="caption12" tone="ink2" style={{ marginTop: 2 }}>Step-by-step recipe and a shopping list</Text>
+              </View>
+              <Icon name="chevron_right" size={22} tone="accText" />
+            </Surface>
+          </Pressable>
 
-        {liveRestaurantId && (
-          <TouchableOpacity onPress={handleBrowseMenu} activeOpacity={0.8} style={{ marginTop: 16 }}>
-            <View
-              style={{
-                height: 46, borderRadius: 23, backgroundColor: theme.surface,
-                borderWidth: 1.5, borderColor: 'rgba(124,58,237,0.3)',
-                alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
-              }}
-            >
-              <UtensilsCrossed size={16} color={colors.purple} />
-              <Text style={[fw(800), { fontSize: 14, color: colors.purple }]}>Ask Captain · Browse the menu!</Text>
-              <Animated.View
-                style={{
-                  width: 9, height: 9, borderRadius: 5, backgroundColor: '#ef4444',
-                  borderWidth: 1.5, borderColor: theme.surface,
-                  transform: [{ translateY: dotBounce }],
-                }}
-              />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: '/order/app-select', params: { rec: JSON.stringify(currentRec), rank: rawRank } })}
-            activeOpacity={0.85}
-            style={{ flex: 1 }}
-          >
-            <View style={{ height: 52, borderRadius: 26, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-              <ShoppingCart size={18} color="#fff" />
-              <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Order now</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: '/diy/recipe', params: { rec: JSON.stringify(currentRec), rank: rawRank } })}
-            activeOpacity={0.85}
-            style={{ flex: 1 }}
-          >
-            <View style={{ height: 52, borderRadius: 26, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-              <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>👨‍🍳 DIY it!</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleToggleSave}
-            disabled={savingDish}
-            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', opacity: savingDish ? 0.6 : 1 }}
-          >
-            <Heart size={22} color={saved ? colors.rose : theme.subtext} fill={saved ? colors.rose : 'transparent'} />
-          </TouchableOpacity>
-        </View>
-        <Text style={[fw(600), { fontSize: 11, color: theme.subtext, textAlign: 'center', marginTop: 8 }]}>
-          {saved ? 'Saved — find it under History › Saved to order again later' : 'Tap the heart to save this dish and order it again later'}
-        </Text>
-      </ScrollView>
+          {swaps.length ? (
+            <>
+              <Text variant="bodyStrong15" style={{ marginTop: 20 }}>Explore alternatives</Text>
+              <View style={{ gap: 8, marginTop: 10 }}>
+                {variant !== 'original' ? (
+                  <SwapRow compact label="Original pick" name={rec.dish.name} onPress={() => setVariant('original')} />
+                ) : null}
+                {swaps
+                  .filter((a) => a.type !== variant)
+                  .map((a) => (
+                    <SwapRow
+                      key={a.dish_id}
+                      compact
+                      label={a.type === 'healthier_swap' ? 'Healthier swap' : 'Budget pick'}
+                      name={a.name}
+                      delta={a.practical_details?.estimated_price != null ? `₹${Math.round(a.practical_details.estimated_price)}` : null}
+                      onPress={() => setVariant(a.type as Variant)}
+                    />
+                  ))}
+              </View>
+            </>
+          ) : null}
+        </Surface>
+      </Screen>
+      <BottomBar>
+        <IconButton icon="bookmark" label={saved ? 'Remove from saved' : 'Save'} variant="solid" square size={56} filled={saved} iconColor={saved ? colors.accText : undefined} onPress={toggleSave} style={{ borderRadius: 18 }} />
+        <Button label={v.priceTxt ? `Order now · ${v.priceTxt}` : 'Order now'} style={{ flex: 1, height: 56, borderRadius: 18 }} onPress={() => void startOrder(router, current, rank)} />
+      </BottomBar>
     </View>
   );
 }
 
-function VariantCard({
-  icon: Icon,
-  title,
-  subtitle,
-  active,
-  accent,
-  onPress,
-}: {
-  icon: ComponentType<{ size?: number; color?: string }>;
-  title: string;
-  subtitle: string;
-  active: boolean;
-  accent: string;
-  onPress: () => void;
-}) {
-  const { theme } = useTheme();
+function Meta({ icon, text, accent }: { icon: IconName; text: string; accent?: boolean }) {
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={onPress}
-      style={{
-        padding: 14,
-        borderRadius: 14,
-        backgroundColor: theme.surface,
-        borderWidth: 2,
-        borderColor: active ? accent : theme.border,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-      }}
-    >
-      <Icon size={20} color={accent} />
-      <View style={{ flex: 1 }}>
-        <Text style={[fw(800), { fontSize: 15, color: theme.text }]}>{title}</Text>
-        <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]} numberOfLines={1}>{subtitle}</Text>
-      </View>
-      {active && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: accent }} />}
-    </TouchableOpacity>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      <Icon name={icon} size={16} tone={accent ? 'accText' : 'ink2'} />
+      <Text variant="body13" tone="ink2">{text}</Text>
+    </View>
   );
 }

@@ -1,10 +1,17 @@
+// 2.0 Checkout. Logic is v1's unchanged (live Swiggy cart via MCP: address,
+// coupons, payment method, ₹1000 beta cap → Swiggy app fallback; demo path
+// for non-live apps; history + signals + quests). Only the UI is new.
+// Params: single-dish mode {rec, rank, appName} or cart mode {restaurantId, restaurantName, addressId}.
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image, Modal, ActivityIndicator } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../../src/context/ThemeContext';
-import { fw, colors } from '../../src/constants/theme';
+import { palette, space } from '@moodfood/tokens';
+import { Button, Icon, Radio, Screen, Surface, Text, useTheme } from '@moodfood/ui';
+import { BottomBar, LoadingBlock, TopBar } from '../../src/components/v2';
+import { WEATHER_COPY } from '../../src/constants/copy';
+import { useLiveMood } from '../../src/context/LiveMood';
 import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
 import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import type { Recommendation } from '../../src/types';
@@ -43,7 +50,7 @@ export default function OrderConfirmScreen() {
     addressId?: string;
   }>();
   const { bottom: safeBottom, top: safeTop } = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { colors: c, dark } = useTheme();
 
   const [imageFailed, setImageFailed] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -280,282 +287,190 @@ export default function OrderConfirmScreen() {
     setPlacing(false);
   };
 
+  const { weather } = useLiveMood();
+  const fmt = (n: number) => `₹${Math.round(n)}`;
+  const lines = isLiveOrder
+    ? (cart?.items ?? []).map((i) => ({ key: i.id, name: i.name, qty: i.quantity, total: i.price != null ? fmt(i.price * i.quantity) : '' }))
+    : rec
+      ? [{ key: 'dish', name: rec.dish.name, qty: 1, total: fmt(priceNum) }]
+      : [];
+  const deliveryTxt = isLiveOrder
+    ? liveDelivery === 0 ? 'Included' : fmt(liveDelivery)
+    : delivFee === 0 ? (app.isLive ? 'Included' : 'Free') : fmt(delivFee);
+  const canPlace = !placing && !cartLoading && !(isLiveOrder && !addressId);
+
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ paddingTop: safeTop + 12, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Text style={{ fontSize: 18, lineHeight: 22 }}>←</Text>
-        </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 18, color: theme.text, flex: 1, textAlign: 'center', marginRight: 40 }]}>
-          Confirm Order
-        </Text>
-      </View>
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen contentContainerStyle={{ paddingBottom: 150 + safeBottom }}>
+        <TopBar title="Checkout" subtitle={isLiveOrder ? app.restaurantName || params.restaurantName || 'Swiggy' : `Demo · ${app.name}`} />
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 + safeBottom, gap: 16 }} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
-
-            <app.icon size={20} color={theme.text} />
-
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[fw(700), { fontSize: 14, color: theme.subtext }]}>Ordering via {app.name}</Text>
-              {app.isLive && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(34,197,94,0.12)' }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.green }} />
-                  <Text style={[fw(800), { fontSize: 9, color: colors.green, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Live</Text>
-                </View>
-              )}
-            </View>
-            {app.isLive && (params.restaurantName || app.restaurantName) && (
-              <Text style={[fw(600), { fontSize: 12, color: theme.muted, marginTop: 1 }]} numberOfLines={1}>
-                {params.restaurantName || app.restaurantName}
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {!cartMode && rec && (
-          <View style={{ borderRadius: 20, overflow: 'hidden' }}>
-            {imageUrl ? (
-              <Image
-                source={{ uri: imageUrl }}
-                style={{ width: '100%', height: 140 }}
-                resizeMode="cover"
-                onError={() => setImageFailed(true)}
-              />
-            ) : (
-              <LinearGradient colors={dishGradient(rank)} style={{ height: 140, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 72 }}>{emoji}</Text>
-              </LinearGradient>
-            )}
-            <View style={{ padding: 16, paddingHorizontal: 20, backgroundColor: theme.card }}>
-              <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>{rec.dish.name}</Text>
-              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4 }]}>{rec.dish.cuisine}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Itemized cart — the single-dish path shows its one item here too, so
-            both modes render the actual cart contents, not just a total. */}
-        {!cartLoading && cart && cart.items.length > 0 && (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
-            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>
-              🧾 {cartItemCount} item{cartItemCount === 1 ? '' : 's'}
-            </Text>
-            <View style={{ gap: 8 }}>
-              {cart.items.map((item) => (
-                <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={[fw(600), { fontSize: 13, color: theme.text, flex: 1 }]} numberOfLines={1}>
-                    {item.quantity}× {item.name}
-                  </Text>
-                  {item.price != null && (
-                    <Text style={[fw(700), { fontSize: 13, color: theme.subtext }]}>₹{(item.price * item.quantity).toFixed(0)}</Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text style={{ fontSize: 18 }}>📍</Text>
-              <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>Delivery to</Text>
-            </View>
-            {isLiveOrder && addresses.length > 0 && (
-              <TouchableOpacity onPress={() => setAddressPickerOpen(true)}>
-                <Text style={[fw(600), { fontSize: 13, color: colors.orange }]}>Change</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={{ padding: 12, borderRadius: 12, backgroundColor: theme.card }}>
-            <Text style={[fw(600), { fontSize: 13, color: theme.subtext, lineHeight: 18 }]}>
-              {isLiveOrder
-                ? selectedAddress
-                  ? `${selectedAddress.label}\n${selectedAddress.line}`
-                  : 'Loading address…'
-                : '123 Main Street, Apt 4B\nNew York, NY 10001'}
-            </Text>
-          </View>
-        </View>
-
-        {isLiveOrder && (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
-            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>🎟️ Coupons</Text>
-            {coupons.length === 0 ? (
-              <Text style={[fw(600), { fontSize: 12, color: theme.muted }]}>No coupons available right now.</Text>
-            ) : (
-              <View style={{ gap: 8 }}>
-                {coupons.map((c) => (
-                  <TouchableOpacity
-                    key={c.couponCode}
-                    onPress={() => handleApplyCoupon(c.couponCode)}
-                    disabled={cartLoading}
-                    style={{
-                      padding: 12,
-                      borderRadius: 12,
-                      backgroundColor: appliedCoupon === c.couponCode ? 'rgba(34,197,94,0.08)' : theme.card,
-                      borderWidth: 2,
-                      borderColor: appliedCoupon === c.couponCode ? colors.green : theme.border,
-                    }}
-                  >
-                    <Text style={[fw(800), { fontSize: 13, color: theme.text }]}>{c.couponCode}</Text>
-                    <Text style={[fw(600), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>{c.description}</Text>
-                  </TouchableOpacity>
-                ))}
+        <Surface kind="solid" radius={24} padding={16} style={{ marginHorizontal: space.gutter, marginTop: 12, gap: 14 }}>
+          {isLiveOrder ? (
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+              <Icon name="home" size={22} tone="accText" />
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyStrong15">{selectedAddress?.label || 'Delivery address'}</Text>
+                <Text variant="caption12" tone="ink2" style={{ marginTop: 3 }}>{selectedAddress?.line || (addressId ? 'Saved Swiggy address' : 'No address linked yet')}</Text>
               </View>
-            )}
+              {addresses.length > 1 ? (
+                <Pressable onPress={() => setAddressPickerOpen(true)} hitSlop={10} accessibilityRole="button">
+                  <Text variant="button13" tone="accText">Change</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+              <Icon name="info" size={22} tone="accText" />
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyStrong15">Demo order</Text>
+                <Text variant="caption12" tone="ink2" style={{ marginTop: 3 }}>{`${app.name} isn't connected yet, so no restaurant is contacted.`}</Text>
+              </View>
+            </View>
+          )}
+          <View style={{ height: 1, backgroundColor: c.line }} />
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            <Icon name="schedule" size={22} tone="accText" />
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyStrong15">{`Arriving in ${app.eta}`}</Text>
+              <Text variant="caption12" tone="ink2" style={{ marginTop: 3 }}>{WEATHER_COPY[weather].packNote}</Text>
+            </View>
           </View>
-        )}
+        </Surface>
 
-        {isLiveOrder && cart && cart.availablePaymentMethods.length > 0 && (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
-            <Text style={[fw(700), { fontSize: 13, color: theme.text }]}>💳 Payment method</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {cart.availablePaymentMethods.map((method) => (
-                <TouchableOpacity
-                  key={method}
-                  onPress={() => setPaymentMethod(method)}
-                  style={{
-                    paddingHorizontal: 14,
-                    paddingVertical: 8,
-                    borderRadius: 14,
-                    backgroundColor: paymentMethod === method ? theme.text : theme.card,
-                    borderWidth: 2,
-                    borderColor: paymentMethod === method ? theme.text : theme.border,
-                  }}
-                >
-                  <Text style={[fw(700), { fontSize: 12, color: paymentMethod === method ? theme.bg : theme.text }]}>{method}</Text>
-                </TouchableOpacity>
+        <Surface radius={24} style={{ marginHorizontal: space.gutter, marginTop: 12, paddingHorizontal: 16, paddingVertical: 6 }}>
+          {cartLoading ? (
+            <LoadingBlock label="Checking your cart" style={{ paddingVertical: 24 }} />
+          ) : lines.length ? (
+            lines.map((l) => (
+              <View key={l.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }}>
+                <View style={{ height: 32, minWidth: 34, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1, borderColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text variant="button13">{`${l.qty}×`}</Text>
+                </View>
+                <Text variant="bodyStrong14" style={{ flex: 1 }} numberOfLines={2}>{l.name}</Text>
+                <Text variant="bodyStrong14">{l.total}</Text>
+              </View>
+            ))
+          ) : (
+            <Text variant="caption13" tone="ink2" style={{ paddingVertical: 14 }}>Your cart is empty.</Text>
+          )}
+          {cartMode && !cartLoading ? (
+            <Pressable onPress={() => router.back()} accessibilityRole="button" style={{ paddingBottom: 12 }}>
+              <Text variant="button13" tone="accText">Edit items</Text>
+            </Pressable>
+          ) : null}
+        </Surface>
+
+        {isLiveOrder && coupons.length > 0 ? (
+          <View style={{ paddingHorizontal: space.gutter, marginTop: 12, gap: 8 }}>
+            {coupons.map((cp) => {
+              const on = appliedCoupon === cp.couponCode;
+              return (
+                <Pressable key={cp.couponCode} onPress={() => !on && handleApplyCoupon(cp.couponCode)} accessibilityRole="button" accessibilityState={{ selected: on }}>
+                  <Surface kind={on ? 'accentSoft' : 'glass'} radius={18} style={{ paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                    <Icon name="sell" size={20} tone="accText" />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="bodyStrong14" tone={on ? 'accText' : 'ink'}>{on ? `${cp.couponCode} applied` : cp.couponCode}</Text>
+                      {cp.description ? <Text variant="caption12" tone="ink2" numberOfLines={2} style={{ marginTop: 2 }}>{cp.description}</Text> : null}
+                    </View>
+                    {!on ? <Text variant="button13" tone="accText">Apply</Text> : <Icon name="check_circle" size={20} tone="accText" filled />}
+                  </Surface>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        <Surface kind="solid" radius={24} style={{ marginHorizontal: space.gutter, marginTop: 12, paddingVertical: 14, paddingHorizontal: 16, gap: 9 }}>
+          <BillRow label="Item total" value={fmt(isLiveOrder ? liveSubtotal : priceNum)} />
+          <BillRow label="Delivery" value={deliveryTxt} />
+          {isLiveOrder ? (
+            liveDiscount > 0 ? <BillRow label={`Coupon (${appliedCoupon})`} value={`−${fmt(liveDiscount)}`} accent /> : null
+          ) : (
+            <BillRow label="Promo (MOODFOOD15)" value={`−${fmt(discount)}`} accent />
+          )}
+          <View style={{ height: 1, backgroundColor: c.line, marginVertical: 3 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text variant="bodyStrong16">To pay</Text>
+            <Text variant="bodyStrong16">{fmt(total)}</Text>
+          </View>
+        </Surface>
+
+        {isLiveOrder && cart && cart.availablePaymentMethods.length > 0 ? (
+          <>
+            <Text variant="bodyStrong15" style={{ paddingHorizontal: space.page, paddingTop: 22, paddingBottom: 10 }}>Pay with</Text>
+            <View style={{ paddingHorizontal: space.gutter, gap: 8 }}>
+              {cart.availablePaymentMethods.map((m) => (
+                <Pressable key={m} onPress={() => setPaymentMethod(m)} accessibilityRole="radio" accessibilityState={{ selected: paymentMethod === m }}>
+                  <Surface radius={18} style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Icon name={/cash|cod/i.test(m) ? 'payments' : /upi/i.test(m) ? 'qr_code_2' : 'credit_card'} size={22} tone="ink2" />
+                    <Text variant="bodyStrong14" style={{ flex: 1 }}>{m}</Text>
+                    <Radio selected={paymentMethod === m} />
+                  </Surface>
+                </Pressable>
               ))}
             </View>
-          </View>
-        )}
+          </>
+        ) : null}
 
-        {!cartMode && (
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(34,197,94,0.06)', alignItems: 'center' }}>
-              <Text style={{ fontSize: 24 }}>🕐</Text>
-              <Text style={[fw(900), { fontSize: 18, color: theme.text, marginTop: 4 }]}>{app.eta}</Text>
-              <Text style={[fw(700), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>Estimated time</Text>
-            </View>
-            <View style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.06)', alignItems: 'center' }}>
-              <Text style={{ fontSize: 24 }}>🚗</Text>
-              <Text style={[fw(900), { fontSize: 18, color: theme.text, marginTop: 4 }]}>
-                {app.distanceKm != null ? `${app.distanceKm.toFixed(1)} km` : '1.2 mi'}
-              </Text>
-              <Text style={[fw(700), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>Distance</Text>
-            </View>
+        {isLiveOrder ? (
+          <View style={{ marginHorizontal: space.gutter, marginTop: 14, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Icon name="link" size={18} color={palette.success} />
+            <Text variant="caption12" tone="ink2" style={{ flex: 1 }}>Ordering through your connected Swiggy account</Text>
           </View>
-        )}
+        ) : null}
 
-        {cartLoading ? (
-          <View style={{ padding: 24, alignItems: 'center' }}>
-            <ActivityIndicator color={colors.orange} />
-          </View>
-        ) : (
-          <View style={{ padding: 16, borderRadius: 16, backgroundColor: theme.overlay, gap: 10 }}>
-            <Row label="Subtotal" value={`₹${liveSubtotal.toFixed(0)}`} />
-            <Row
-              label="Delivery fee"
-              value={
-                isLiveOrder
-                  ? liveDelivery === 0
-                    ? 'Included'
-                    : `₹${liveDelivery.toFixed(0)}`
-                  : delivFee === 0
-                    ? app.isLive
-                      ? 'Included'
-                      : 'Free'
-                    : `₹${delivFee.toFixed(0)}`
-              }
-            />
-            {isLiveOrder ? (
-              liveDiscount > 0 && <Row label={`Coupon (${appliedCoupon})`} value={`-₹${liveDiscount.toFixed(0)}`} valueColor={colors.green} />
-            ) : (
-              <Row label="Promo (MOODFOOD15)" value={`-₹${discount.toFixed(0)}`} valueColor={colors.green} />
-            )}
-            <View style={{ height: 1, backgroundColor: theme.border }} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>Total</Text>
-              <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>₹{total.toFixed(0)}</Text>
-            </View>
-          </View>
-        )}
-
-        {orderError && (
-          <View style={{ padding: 12, borderRadius: 12, backgroundColor: 'rgba(220,38,38,0.06)' }}>
-            <Text style={[fw(600), { fontSize: 12, color: '#dc2626' }]}>{orderError}</Text>
-          </View>
-        )}
-
-        {capExceeded && (
-          <View style={{ padding: 12, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.06)' }}>
-            <Text style={[fw(700), { fontSize: 12, color: colors.orange }]}>
-              Orders of ₹1000 or more need the Swiggy app for now (beta limit).
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-
-
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24 + safeBottom, backgroundColor: theme.navBg }}>
         {capExceeded ? (
-          <TouchableOpacity activeOpacity={0.85} onPress={handleOpenInSwiggyApp}>
-            <LinearGradient colors={['#f97316', '#fbbf24']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>Open in Swiggy app</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={placing || cartLoading || (isLiveOrder && !addressId)}
-            onPress={handlePlaceOrder}
-            style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.orange, opacity: placing || cartLoading ? 0.7 : 1 }}
-          >
-            <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>{placing ? 'Placing…' : `🛒 Place Order · ₹${total.toFixed(0)}`}</Text>
-          </TouchableOpacity>
-        )}
+          <Surface kind="accentSoft" radius={18} style={{ marginHorizontal: space.gutter, marginTop: 12, padding: 14 }}>
+            <Text variant="caption13">Orders of ₹1000 or more need the Swiggy app for now (beta limit).</Text>
+          </Surface>
+        ) : null}
+        {orderError ? (
+          <Text variant="caption13" color={palette.danger} style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">{orderError}</Text>
+        ) : null}
+      </Screen>
 
-      </View>
+      <BottomBar>
+        {capExceeded ? (
+          <Button block label="Open in Swiggy app" iconRight="arrow_forward" style={{ flex: 1 }} onPress={handleOpenInSwiggyApp} />
+        ) : (
+          <Button
+            block
+            style={{ flex: 1 }}
+            loading={placing}
+            disabled={!canPlace}
+            label={`Place order · ${fmt(total)}`}
+            onPress={handlePlaceOrder}
+          />
+        )}
+      </BottomBar>
 
       <Modal visible={addressPickerOpen} transparent animationType="slide" onRequestClose={() => setAddressPickerOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 12 }}>
-            <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>Choose delivery address</Text>
-            {addresses.map((a) => (
-              <TouchableOpacity
-                key={a.id}
-                onPress={() => handleSelectAddress(a.id)}
-                style={{ padding: 14, borderRadius: 14, backgroundColor: a.id === addressId ? 'rgba(249,115,22,0.08)' : theme.overlay }}
-              >
-                <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>{a.label}</Text>
-                <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 2 }]}>{a.line}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setAddressPickerOpen(false)} style={{ alignItems: 'center', paddingTop: 8 }}>
-              <Text style={[fw(700), { fontSize: 13, color: theme.muted }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} onPress={() => setAddressPickerOpen(false)} accessibilityLabel="Close address picker" />
+        <Surface kind="solid" radius={28} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 24 + safeBottom, gap: 8, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+          <Text variant="title19" style={{ marginBottom: 6 }}>Deliver to</Text>
+          {addresses.map((a) => (
+            <Pressable key={a.id} onPress={() => handleSelectAddress(a.id)} accessibilityRole="radio" accessibilityState={{ selected: a.id === addressId }}>
+              <Surface kind="tint" radius={18} style={{ padding: 14, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyStrong14">{a.label}</Text>
+                  <Text variant="caption12" tone="ink2" numberOfLines={2} style={{ marginTop: 2 }}>{a.line}</Text>
+                </View>
+                <Radio selected={a.id === addressId} />
+              </Surface>
+            </Pressable>
+          ))}
+        </Surface>
       </Modal>
     </View>
   );
 }
 
-function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
-  const { theme } = useTheme();
+function BillRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-      <Text style={[fw(600), { fontSize: 14, color: theme.subtext }]}>{label}</Text>
-      <Text style={[fw(600), { fontSize: 14, color: valueColor || theme.subtext }]}>{value}</Text>
+      <Text variant="body13" tone="ink2">{label}</Text>
+      <Text variant="bodyStrong14" style={{ fontSize: 13.5 }} tone={accent ? 'accText' : 'ink'}>{value}</Text>
     </View>
   );
 }

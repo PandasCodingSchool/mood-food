@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as Location from 'expo-location';
 import { timeOfDayForHour, type Mood, type TimeOfDay, type Weather } from '@moodfood/tokens';
 import { API_BASE_URL } from '../services/apiBase';
@@ -12,6 +12,8 @@ export interface LiveMoodContext {
   temperature: number | null;
   /** True once weather has been resolved (or given up on). */
   ready: boolean;
+  /** Re-reads today's check-in (call after saving one). */
+  refreshMood: () => Promise<void>;
 }
 
 const DEFAULT_WEATHER: Weather = 'cloudy';
@@ -68,11 +70,14 @@ export function useLiveMoodContext(): LiveMoodContext {
     return () => clearInterval(id);
   }, []);
 
+  const refreshMood = useCallback(async () => {
+    const c = await getTodayCheckin();
+    if (c) setMood(moodFromCheckin(c));
+  }, []);
+
   useEffect(() => {
     let alive = true;
-    getTodayCheckin().then((c) => {
-      if (alive && c) setMood(moodFromCheckin(c));
-    });
+    void refreshMood();
     fetchWeather()
       .then((w) => {
         if (alive && w) {
@@ -85,7 +90,7 @@ export function useLiveMoodContext(): LiveMoodContext {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refreshMood]);
 
-  return { time, weather, mood, temperature, ready };
+  return { time, weather, mood, temperature, ready, refreshMood };
 }
