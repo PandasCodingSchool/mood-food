@@ -145,8 +145,18 @@ export default function OrderSuccessScreen() {
         )}
       </View>
       <View style={{ paddingHorizontal: space.gutter, paddingBottom: Math.max(36, insets.bottom + 16), gap: 10 }}>
-        <Button block label="Back home" onPress={() => router.replace('/home')} />
-        <Button block variant="glass" size="md" label="View my orders" onPress={() => router.push('/history')} />
+        {isRealOrder && !cancelled ? (
+          <>
+            {/* Replace, so this screen's poller stops before tracking starts its own. */}
+            <Button block label="Track order" iconRight="arrow_forward" onPress={() => router.replace({ pathname: '/order/track', params: { orderId: orderId! } })} />
+            <Button block variant="glass" size="md" label="Back home" onPress={() => router.replace('/home')} />
+          </>
+        ) : (
+          <>
+            <Button block label="Back home" onPress={() => router.replace('/home')} />
+            <Button block variant="glass" size="md" label="View my orders" onPress={() => router.push('/history')} />
+          </>
+        )}
       </View>
     </View>
   );

@@ -1,125 +1,156 @@
-import { useState, useRef, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Animated, StatusBar } from 'react-native';
+// 2.0 Mood Scoop: three scoops (base, feel, kick) fill a bowl. The feel and
+// kick become real craving tags; we fetch real recommendations for them and
+// show the top dish as "your bowl".
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft } from 'lucide-react-native';
-import { useTheme } from '../../src/context/ThemeContext';
-import { buildDynamicQuestions, getTotalQuestions, type QuizQuestion } from '../../src/utils/quizEngine';
-import { fw, colors } from '../../src/constants/theme';
+import { StatusBar } from 'expo-status-bar';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { hueTile, palette, space } from '@moodfood/tokens';
+import { Icon, IconTile, Screen, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
+import { ErrorBlock, LoadingBlock } from '../../src/components/v2';
+import { GameHeader, GameResult, useGameRecs } from '../../src/components/v2/GameKit';
+import { useLiveMood } from '../../src/context/LiveMood';
+import { openMeal } from '../../src/services/orderFlow';
+import { logSignal } from '../../src/services/signals';
+import type { QuizResults } from '../../src/types';
 import { trackEvent } from '../../src/utils/analytics';
-import { playPopSound } from '../../src/utils/sounds';
-import { hapticSelect } from '../../src/utils/haptics';
+
+type Opt = { t: string; icon: IconName; hue: number; craving?: string; veg?: boolean };
+const SCOOPS: Array<{ q: string; opts: Opt[] }> = [
+  { q: 'Pick a base', opts: [
+    { t: 'Rice', icon: 'rice_bowl', hue: 60 },
+    { t: 'Noodles', icon: 'ramen_dining', hue: 30 },
+    { t: 'Bread', icon: 'bakery_dining', hue: 75 },
+    { t: 'Greens', icon: 'eco', hue: 140, veg: true },
+  ] },
+  { q: 'How should it feel?', opts: [
+    { t: 'Brothy', icon: 'soup_kitchen', hue: 220, craving: 'brothy' },
+    { t: 'Crispy', icon: 'grain', hue: 50, craving: 'crispy' },
+    { t: 'Creamy', icon: 'water_drop', hue: 85, craving: 'creamy' },
+    { t: 'Fresh', icon: 'spa', hue: 160, craving: 'fresh' },
+  ] },
+  { q: 'Add a kick', opts: [
+    { t: 'Spicy', icon: 'local_fire_department', hue: 25, craving: 'spicy' },
+    { t: 'Tangy', icon: 'nutrition', hue: 110, craving: 'tangy' },
+    { t: 'Mild', icon: 'cloud', hue: 250 },
+    { t: 'Sweet', icon: 'cake', hue: 350, craving: 'sweet' },
+  ] },
+];
 
 export default function QuizScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const { colors, dark } = useTheme();
+  const { mood } = useLiveMood();
+  const [picks, setPicks] = useState<number[]>([]);
+  const done = picks.length >= 3;
+  const chosen = picks.map((p, i) => SCOOPS[i].opts[p]);
+  const cravings = chosen.map((o) => o.craving).filter(Boolean) as string[];
+  const query: QuizResults | undefined = done
+    ? { mood, craving: cravings[0] || 'comfort', budget: 'medium', preference: chosen[0]?.veg ? 'veg' : 'both' }
+    : undefined;
 
-  const questions = useMemo(() => buildDynamicQuestions(answers), [answers]);
-  const question: QuizQuestion = questions[step];
-  const totalQuestions = getTotalQuestions();
-
-  const animateNext = (cb: () => void) => {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
-      cb();
-      Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
-    });
+  const pick = (j: number) => {
+    if (done) return;
+    const next = [...picks, j];
+    setPicks(next);
+    if (next.length === 3) {
+      const opts = next.map((p, i) => SCOOPS[i].opts[p]);
+      const tags = opts.map((o) => o.craving).filter(Boolean) as string[];
+      if (tags.length) void logSignal('craving', { tags });
+      trackEvent('game_completed', { game: 'mood_scoop', scoops: opts.map((o) => o.t) });
+    }
   };
 
-  const handleSelect = (value: string) => {
-    hapticSelect();
-    playPopSound();
-    const newAnswers = { ...answers, [question.outputKey]: value };
-    setAnswers(newAnswers);
-
-    setTimeout(() => {
-      if (step < questions.length - 1) {
-        animateNext(() => setStep((s) => s + 1));
-      } else {
-        trackEvent('quiz_completed', newAnswers);
-        const results = {
-          mood: newAnswers.mood || 'relaxed',
-          craving: newAnswers.craving || 'comfort',
-          budget: newAnswers.budget || 'medium',
-          preference: 'both',
-          gameData: { type: 'mood_scoop', time: newAnswers.time },
-        };
-        router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
-      }
-    }, 400);
-  };
-
-  const progress = ((step + 1) / totalQuestions) * 100;
+  const reset = () => setPicks([]);
+  const step = Math.min(picks.length, 2);
 
   return (
-    <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.push('/home')}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronLeft size={22} color={theme.text} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, height: 6, backgroundColor: theme.surface, borderRadius: 3, overflow: 'hidden' }}>
-          <LinearGradient
-            colors={['#f97316', '#fbbf24']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ height: '100%', width: `${progress}%`, borderRadius: 3 }}
-          />
-        </View>
-        <Text style={[fw(800), { fontSize: 13, color: theme.subtext }]}>
-          {step + 1}/{totalQuestions}
-        </Text>
-      </View>
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen>
+        <GameHeader title="Mood Scoop" subtitle={done ? 'Your bowl is ready' : `${picks.length} of 3 scooped`} onReset={reset} />
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 32 }} showsVerticalScrollIndicator={false}>
-        <Animated.View style={{ opacity: fadeAnim, gap: 24 }}>
-          {(() => {
-            const QuestionIcon = question.Icon;
-            return <QuestionIcon size={40} color={colors.orange} />;
-          })()}
-          <Text style={[fw(900), { fontSize: 24, color: theme.text, lineHeight: 30 }]}>{question.question}</Text>
-
-          <View style={{ gap: 12, marginTop: 8 }}>
-            {question.options.map((opt, i) => {
-              const isSelected = answers[question.outputKey] === opt.value;
-              const OptionIcon = opt.Icon;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  activeOpacity={0.8}
-                  onPress={() => handleSelect(opt.value)}
-                  style={{
-                    padding: 16,
-                    paddingHorizontal: 20,
-                    borderRadius: 16,
-                    backgroundColor: isSelected ? colors.orange + '18' : theme.card,
-                    borderWidth: 1.5,
-                    borderColor: isSelected ? colors.orange : theme.border,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 14,
-                  }}
-                >
-                  <OptionIcon size={24} color={isSelected ? colors.orange : theme.text} />
-                  <View>
-                    <Text style={[fw(800), { fontSize: 15, color: isSelected ? colors.orange : theme.text }]}>
-                      {opt.label}
-                    </Text>
-                    <Text style={[fw(600), { fontSize: 12, color: isSelected ? colors.orange : theme.subtext, marginTop: 2 }]}>
-                      {opt.sub}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+        {/* The bowl fills from the bottom with each scoop. */}
+        <View style={{ alignItems: 'center', paddingTop: 30 }}>
+          <View style={{ width: 250, height: 160 }}>
+            <Surface
+              kind="glassStrong"
+              radius={0}
+              accessibilityLabel={chosen.length ? `Bowl with ${chosen.map((o) => o.t).join(', ')}` : 'Empty bowl'}
+              style={{ position: 'absolute', left: 5, right: 5, bottom: 0, height: 140, borderBottomLeftRadius: 125, borderBottomRightRadius: 125, borderTopWidth: 0, flexDirection: 'column-reverse', boxShadow: '0px 30px 50px -28px rgba(0,0,0,0.55)' }}
+            >
+              {chosen.map((o, i) => (
+                <Animated.View key={i} entering={FadeInDown.springify().damping(12)} style={{ height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: hueTile(o.hue) }}>
+                  <Text variant="button13" style={{ fontSize: 12.5 }} color={palette.onAccent}>{o.t}</Text>
+                </Animated.View>
+              ))}
+            </Surface>
+            {!chosen.length ? (
+              <Text variant="label" tone="ink2" align="center" style={{ position: 'absolute', left: 0, right: 0, top: 70 }}>Empty bowl</Text>
+            ) : null}
+            <View style={{ position: 'absolute', left: -6, right: -6, top: 14, height: 12, borderRadius: 6, backgroundColor: colors.ink, opacity: 0.9 }} />
           </View>
-        </Animated.View>
-      </ScrollView>
-    </LinearGradient>
+        </View>
+
+        {!done ? (
+          <>
+            <View style={{ paddingHorizontal: space.page, paddingTop: 30 }}>
+              <Text variant="label" tone="ink2">{`Scoop ${step + 1} of 3`}</Text>
+              <Text variant="display32" style={{ marginTop: 6 }}>{SCOOPS[step].q}</Text>
+            </View>
+            <View style={{ paddingHorizontal: space.gutter, paddingTop: 16, paddingBottom: 36, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {SCOOPS[step].opts.map((o, j) => (
+                <Pressable key={o.t} onPress={() => pick(j)} accessibilityRole="button" accessibilityLabel={o.t} style={{ flexBasis: '47%', flexGrow: 1 }}>
+                  <Surface radius={24} padding={16} style={{ height: 112, justifyContent: 'space-between' }}>
+                    <IconTile icon={o.icon} hue={o.hue} size={44} />
+                    <Text variant="title17">{o.t}</Text>
+                  </Surface>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : (
+          <ScoopResult
+            line={`${chosen.map((o) => o.t).join(', ')}. That's your kind of bowl tonight.`}
+            query={query!}
+            onAgain={reset}
+            onOpen={(rec) => openMeal(router, rec, 0)}
+            onAll={() => router.push({ pathname: '/recommendations', params: { results: JSON.stringify({ ...query, gameData: { type: 'mood_scoop', scoops: chosen.map((o) => o.t) } }) } })}
+          />
+        )}
+      </Screen>
+    </View>
+  );
+}
+
+function ScoopResult({ line, query, onAgain, onOpen, onAll }: {
+  line: string;
+  query: QuizResults;
+  onAgain: () => void;
+  onOpen: (rec: NonNullable<ReturnType<typeof useGameRecs>['recs']>[number]) => void;
+  onAll: () => void;
+}) {
+  const { recs, error, reload } = useGameRecs(query);
+  if (error) return <ErrorBlock message={error} onRetry={reload} />;
+  if (!recs) return <LoadingBlock label="Filling your bowl" />;
+  const top = recs[0] ?? null;
+  return (
+    <GameResult
+      eyebrow="Your scoop"
+      line={line}
+      rec={top}
+      badge="Your bowl"
+      onAgain={onAgain}
+      onEat={() => (top ? onOpen(top) : onAll())}
+      extra={
+        recs.length > 1 ? (
+          <Pressable onPress={onAll} accessibilityRole="button" style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text variant="button13" tone="accText">{`See all ${recs.length} matches`}</Text>
+            <Icon name="chevron_right" size={18} tone="accText" />
+          </Pressable>
+        ) : null
+      }
+    />
   );
 }

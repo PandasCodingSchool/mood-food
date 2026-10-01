@@ -16,6 +16,7 @@ import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishV
 import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import type { Recommendation } from '../../src/types';
 import { saveOrder } from '../../src/services/history';
+import { saveActiveOrder } from '../../src/services/activeOrder';
 import { logSignal } from '../../src/services/signals';
 import { bumpQuestProgress } from '../../src/services/quests';
 import {
@@ -249,6 +250,21 @@ export default function OrderConfirmScreen() {
         return;
       }
       await saveOrderHistory(result.orderId);
+      if (result.orderId) {
+        // Powers the home "live order" banner and /order/track.
+        await saveActiveOrder({
+          orderId: result.orderId,
+          restaurant: app.restaurantName || params.restaurantName || 'Swiggy',
+          dishId: rec?.dish.id ?? null,
+          dishName: rec?.dish.name ?? null,
+          items: (cart?.items ?? []).map((i) => ({ label: `${i.quantity}× ${i.name}`, total: i.price != null ? `₹${Math.round(i.price * i.quantity)}` : '' })),
+          total: `₹${Math.round(total)}`,
+          eta: result.estimatedDeliveryTime || app.eta,
+          placedAt: new Date().toISOString(),
+          step: 'placed',
+          events: [{ step: 'placed', status: result.status ?? null, at: new Date().toISOString() }],
+        });
+      }
       void logSignal('order', {
         dish_id: rec?.dish.id, dish_name: rec?.dish.name || params.restaurantName,
         price: Math.round(total),

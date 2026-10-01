@@ -1,196 +1,145 @@
-import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native';
+// 2.0 Story mode: write your day like a text to a friend. Keyword rules run
+// on-device; only the matched tags (never the text) are sent. Tags become a
+// real recommendations query, and the top dish is "plated for you".
+import { useState } from 'react';
+import { TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Utensils } from 'lucide-react-native';
-import { DAY_SCENES, type DayMood } from '../../src/constants/storyBeats';
-import { getDayMood } from '../../src/utils/storyEngine';
-import { fw, colors } from '../../src/constants/theme';
-import { trackEvent } from '../../src/utils/analytics';
-import { floatLoop } from '../../src/utils/animations';
+import { StatusBar } from 'expo-status-bar';
+import Animated, { ZoomIn } from 'react-native-reanimated';
+import { fontFamily, space } from '@moodfood/tokens';
+import { Button, Chip, MoodOrb, Screen, Surface, Text, useTheme, useToast, type IconName } from '@moodfood/ui';
+import { ErrorBlock } from '../../src/components/v2';
+import { ChoiceChip, GameHeader, GameResult, useGameRecs } from '../../src/components/v2/GameKit';
+import { useLiveMood } from '../../src/context/LiveMood';
+import { openMeal } from '../../src/services/orderFlow';
 import { logSignal } from '../../src/services/signals';
+import type { QuizResults } from '../../src/types';
+import { trackEvent } from '../../src/utils/analytics';
 
-function Reveal({ mood, onContinue }: { mood: DayMood; onContinue: () => void }) {
-  return (
-    <LinearGradient colors={['#0f172a', '#1e293b', '#334155']} style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" />
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 }}>
-        <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: 3, textTransform: 'uppercase' }]}>
-          Your day says you're feeling
-        </Text>
-        {(() => {
-          const MoodIcon = mood.Icon;
-          return <MoodIcon size={64} color="#fff" />;
-        })()}
-        <Text style={[fw(900), { fontSize: 30, color: '#fff', textAlign: 'center' }]}>{mood.label}</Text>
-        <Text style={[fw(600), { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', maxWidth: 280, lineHeight: 20, marginTop: 4 }]}>
-          {mood.desc}
-        </Text>
-
-        <View style={{ marginTop: 24, width: '100%', flexDirection: 'row', gap: 10 }}>
-          {mood.tags.map((tag, i) => (
-            <View key={i} style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center' }}>
-              {(() => {
-                const TagIcon = tag.Icon;
-                return <TagIcon size={24} color="rgba(255,255,255,0.9)" />;
-              })()}
-              <Text style={[fw(700), { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>{tag.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TouchableOpacity onPress={onContinue} activeOpacity={0.85} style={{ width: '100%', marginTop: 28 }}>
-          <LinearGradient colors={['#0891b2', '#22d3ee']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-            <Utensils size={20} color="#fff" />
-            <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>Get my meal picks</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-    </LinearGradient>
-  );
-}
+type Rule = { re: RegExp; label: string; icon: IconName; mood?: string; craving?: string; budget?: string };
+const RULES: Rule[] = [
+  { re: /rain|drench|wet|soak|pour/i, label: 'Rain', icon: 'rainy', mood: 'tired', craving: 'brothy' },
+  { re: /meeting|deadline|stress|work|boss|long day|hectic/i, label: 'Long day', icon: 'work', mood: 'stressed', craving: 'comfort' },
+  { re: /gym|workout|run|yoga|protein/i, label: 'Worked out', icon: 'fitness_center', mood: 'happy', craving: 'fresh' },
+  { re: /promot|celebrat|birthday|good news|won /i, label: 'Celebrating', icon: 'celebration', mood: 'celebrating', craving: 'cheesy' },
+  { re: /new|bored|adventur|different/i, label: 'Craving new', icon: 'explore', mood: 'adventurous', craving: 'spicy' },
+  { re: /tired|sleep|exhaust|drained|lazy/i, label: 'Tired', icon: 'bedtime', mood: 'tired', craving: 'comfort' },
+  { re: /friend|guest|party|flatmate/i, label: 'Company', icon: 'group', mood: 'happy', craving: 'cheesy' },
+  { re: /cheap|broke|budget|month end/i, label: 'On a budget', icon: 'savings', budget: 'low' },
+];
+const LINES = ['Got drenched on the way home.', 'Back-to-back meetings all day.', 'Hit the gym this morning.', 'Got some good news today!', 'Bored of my usual order.', "It's month end, keeping it cheap."];
 
 export default function DayStoryScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
-  const [mood, setMood] = useState<DayMood | null>(null);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const sceneFloat = useRef(new Animated.Value(0)).current;
+  const toast = useToast();
+  const { colors, dark } = useTheme();
+  const { mood } = useLiveMood();
+  const [text, setText] = useState('');
+  const [query, setQuery] = useState<QuizResults | null>(null);
+  const tags = RULES.filter((r) => r.re.test(text));
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
 
-  const scene = DAY_SCENES[step];
+  const toggleLine = (l: string) =>
+    setText((t) => (t.includes(l) ? t.replace(l, '').replace(/\s{2,}/g, ' ').trim() : `${t.trim() ? `${t.trim()} ` : ''}${l}`));
 
-  useEffect(() => {
-    const loop = floatLoop(sceneFloat, 8, 1500);
-    return () => loop.stop();
-  }, [step]);
-
-  const animateNext = (cb: () => void) => {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
-      cb();
-      Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
-    });
+  const plate = () => {
+    if (!text.trim()) return toast('Write a line, or tap one below');
+    const q: QuizResults = {
+      mood: tags.find((t) => t.mood)?.mood ?? mood,
+      craving: tags.find((t) => t.craving)?.craving ?? 'comfort',
+      budget: tags.some((t) => t.budget === 'low') ? 'low' : 'medium',
+      preference: 'both',
+    };
+    void logSignal('day_story', { path: tags.map((t) => t.label), mood_vector: { label: tags.map((t) => t.label).join(' + ') || 'just_hungry' } });
+    trackEvent('game_completed', { game: 'story', tags: tags.map((t) => t.label) });
+    setQuery(q);
   };
-
-  const handleChoice = (choiceIndex: number) => {
-    const newAnswers = [...answers, choiceIndex];
-    setAnswers(newAnswers);
-    trackEvent('story_beat_answered', { beat: scene.location, choice: choiceIndex });
-
-    setTimeout(() => {
-      if (step < DAY_SCENES.length - 1) {
-        animateNext(() => setStep((s) => s + 1));
-      } else {
-        setMood(getDayMood(newAnswers));
-      }
-    }, 500);
-  };
-
-  if (mood) {
-    return (
-      <Reveal
-        mood={mood}
-        onContinue={() => {
-          const results = {
-            mood: mood.mood,
-            craving: mood.craving,
-            budget: mood.budget,
-            preference: mood.preference,
-            gameData: { type: 'day_story', dayMood: mood.label },
-          };
-          trackEvent('game_completed', { game: 'story', results });
-          void logSignal('day_story', { path: answers, mood_vector: { label: mood.label } });
-          router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
-        }}
-      />
-    );
-  }
 
   return (
-    <LinearGradient colors={scene.colors} locations={scene.locations} style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.push('/home')}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronLeft size={22} color="#fff" />
-        </TouchableOpacity>
-        <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
-          {DAY_SCENES.map((_, i) => (
-            <View
-              key={i}
-              style={{
-                flex: 1,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: i <= step ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)',
-              }}
-            />
-          ))}
-        </View>
-      </View>
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+        <GameHeader title="Story mode" subtitle={query ? 'Plated' : 'Tell us your day'} onReset={() => setQuery(null)} />
+        {!query ? (
+          <>
+            <View style={{ paddingHorizontal: space.page, paddingTop: 16 }}>
+              <Text variant="display30" accessibilityRole="header">How was your day?</Text>
+              <Text variant="body14" tone="ink2" style={{ marginTop: 8 }}>Write it like you'd text a friend. We'll plate it.</Text>
+            </View>
+            <Surface kind="solid" bordered radius={24} padding={16} style={{ marginHorizontal: space.gutter, marginTop: 16, gap: 10 }}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                multiline
+                placeholder="Got caught in the rain after a crazy day at work…"
+                placeholderTextColor={colors.ink2}
+                accessibilityLabel="Your day"
+                style={{ height: 140, color: colors.ink, fontFamily: fontFamily.body, fontSize: 16, lineHeight: 24, textAlignVertical: 'top' }}
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text variant="micro12" tone="ink2">{`${words} ${words === 1 ? 'word' : 'words'}`}</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {tags.slice(0, 3).map((t) => (
+                    <Chip key={t.label} size="sm" icon={t.icon} label={t.label} />
+                  ))}
+                </View>
+              </View>
+            </Surface>
+            <Text variant="label" tone="ink2" style={{ paddingHorizontal: space.page, paddingTop: 18, paddingBottom: 8 }}>Add a line</Text>
+            <View style={{ paddingHorizontal: space.gutter, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {LINES.map((l) => (
+                <ChoiceChip key={l} label={l} on={text.includes(l)} onPress={() => toggleLine(l)} />
+              ))}
+            </View>
+            <View style={{ paddingHorizontal: space.gutter, paddingTop: 22, paddingBottom: 36 }}>
+              <Button block label="Plate my day" onPress={plate} />
+            </View>
+          </>
+        ) : (
+          <Plated query={query} tags={tags} onAgain={() => setQuery(null)} onOpen={(r) => openMeal(router, r, 0)} />
+        )}
+      </Screen>
+    </View>
+  );
+}
 
-      <View style={{ paddingTop: 16, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <View style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)' }}>
-          <Text style={[fw(800), { fontSize: 12, color: 'rgba(255,255,255,0.9)' }]}>{scene.time}</Text>
-        </View>
-        <Text style={[fw(700), { fontSize: 12, color: 'rgba(255,255,255,0.5)' }]}>{scene.location}</Text>
-      </View>
-
-      <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-        <Animated.View
-          style={{
-            width: 120,
-            height: 120,
-            borderRadius: 60,
-            backgroundColor: 'rgba(255,255,255,0.1)',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transform: [{ translateY: sceneFloat }],
-          }}
-        >
-          {(() => {
-            const SceneIcon = scene.Icon;
-            return <SceneIcon size={64} color="#fff" />;
-          })()}
+function Plated({ query, tags, onAgain, onOpen }: {
+  query: QuizResults;
+  tags: Rule[];
+  onAgain: () => void;
+  onOpen: (r: NonNullable<ReturnType<typeof useGameRecs>['recs']>[number]) => void;
+}) {
+  const { recs, error, reload } = useGameRecs(query);
+  const shown = tags.length ? tags : [{ label: 'Just hungry', icon: 'restaurant' as IconName }];
+  const tagRow = (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+      {shown.map((t) => (
+        <Animated.View key={t.label} entering={ZoomIn.springify().damping(14)}>
+          <Chip icon={t.icon} label={t.label} />
         </Animated.View>
+      ))}
+    </View>
+  );
+  if (error) return <ErrorBlock message={error} onRetry={reload} />;
+  if (!recs) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 22, paddingHorizontal: 32, paddingBottom: 80 }}>
+        <MoodOrb />
+        <Text variant="display26" align="center">Reading between the lines…</Text>
+        {tagRow}
       </View>
-
-      <Animated.View style={{ opacity: fadeAnim, paddingHorizontal: 28 }}>
-        <Text style={[fw(900), { fontSize: 20, color: '#fff', lineHeight: 26, marginBottom: 8 }]}>{scene.narrative}</Text>
-        <Text style={[fw(600), { fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 20 }]}>{scene.subtext}</Text>
-
-        <View style={{ gap: 10, marginTop: 20 }}>
-          {scene.choices.map((choice, i) => {
-            const isSelected = answers[step] === i;
-            return (
-              <TouchableOpacity
-                key={i}
-                activeOpacity={0.8}
-                onPress={() => handleChoice(i)}
-                style={{
-                  padding: 14,
-                  paddingHorizontal: 18,
-                  borderRadius: 16,
-                  backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                {(() => {
-                  const ChoiceIcon = choice.Icon;
-                  return <ChoiceIcon size={24} color="#fff" />;
-                })()}
-                <Text style={[fw(700), { fontSize: 14, color: '#fff', flex: 1, lineHeight: 18 }]}>{choice.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </Animated.View>
-    </LinearGradient>
+    );
+  }
+  const top = recs[0] ?? null;
+  return (
+    <GameResult
+      eyebrow="What we heard"
+      extra={tagRow}
+      line={tags.length ? `${tags.slice(0, 2).map((t) => t.label).join(' + ')} → ${top?.dish.name.toLowerCase() ?? 'comfort'}.` : "Nothing jumped out, so here's your safest bet."}
+      rec={top}
+      badge="Plated for you"
+      onAgain={onAgain}
+      onEat={() => top && onOpen(top)}
+    />
   );
 }

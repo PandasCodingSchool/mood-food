@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { WEATHER_SPECS, space } from '@moodfood/tokens';
+import { WEATHER_SPECS, palette, space } from '@moodfood/tokens';
 import { Button, Icon, IconButton, IconTile, Screen, SectionHeader, Surface, Text, useTheme, useToast, type IconName } from '@moodfood/ui';
 import { AppTabBar, ErrorBlock, LoadingBlock, LogoPill } from '../src/components/v2';
 import { HeroPick, QuickChip, RailCard } from '../src/components/v2/RecCards';
@@ -14,6 +14,7 @@ import TwinTasteSection from '../src/components/TwinTasteSection';
 import { GAMES } from '../src/constants/games';
 import { MOOD_COPY, TIME_COPY, WEATHER_COPY } from '../src/constants/copy';
 import { useLiveMood } from '../src/context/LiveMood';
+import { getActiveOrder, isTerminal, type ActiveOrder } from '../src/services/activeOrder';
 import { fetchCurrentUser } from '../src/services/auth';
 import { hasCheckedInToday } from '../src/services/moodState';
 import { getMoodRecommendations } from '../src/services/moodRecs';
@@ -43,6 +44,7 @@ export default function HomeScreen() {
   const [recs, setRecs] = useState<RecommendationResponse | null>(null);
   const [recsError, setRecsError] = useState<string | null>(null);
   const [allGames, setAllGames] = useState(false);
+  const [liveOrder, setLiveOrder] = useState<ActiveOrder | null>(null);
   const loadedFor = useRef<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function HomeScreen() {
       let cancelled = false;
       (async () => {
         void flushSignals();
+        getActiveOrder().then((o) => !cancelled && setLiveOrder(o && !isTerminal(o.step) ? o : null));
         const done = await hasCheckedInToday();
         if (cancelled) return;
         setCheckedIn(done);
@@ -135,6 +138,8 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {liveOrder ? <LiveOrderBanner order={liveOrder} onPress={() => router.push({ pathname: '/order/track', params: { orderId: liveOrder.orderId } })} /> : null}
 
         <View style={{ paddingHorizontal: space.page, paddingTop: 24 }}>
           <Text variant="body15" tone="ink2">{t.greet(name)}</Text>
@@ -249,5 +254,43 @@ export default function HomeScreen() {
         <TwinTasteSection />
       </Screen>
     </View>
+  );
+}
+
+const STAGE: Record<string, { label: string; progress: number }> = {
+  placed: { label: 'Order confirmed', progress: 0.08 },
+  preparing: { label: "Kitchen's on it", progress: 0.3 },
+  on_the_way: { label: 'On the way', progress: 0.7 },
+};
+
+/** Dark "live order" strip at the top of home (design: home live banner). */
+function LiveOrderBanner({ order, onPress }: { order: ActiveOrder; onPress: () => void }) {
+  const { colors } = useTheme();
+  const stage = STAGE[order.step] ?? STAGE.placed;
+  const eta = order.liveEta || order.eta;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Live order from ${order.restaurant}. ${stage.label}. Open tracking.`}
+      style={{ marginHorizontal: space.gutter, marginTop: 16, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 20, backgroundColor: palette.night, gap: 10, boxShadow: '0px 16px 30px -16px rgba(0,0,0,0.6)' }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.acc, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="two_wheeler" size={22} color={palette.onAccent} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text variant="bodyStrong14" color={palette.white}>{eta ? `Arriving in ${eta}` : stage.label}</Text>
+          <Text variant="micro12" color="rgba(255,255,255,0.65)" numberOfLines={1} style={{ marginTop: 2 }}>{`${stage.label} · ${order.restaurant}`}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: palette.success }} />
+          <Text variant="labelSmall" color={palette.success} style={{ fontFamily: 'GeistMono_500Medium' }}>LIVE</Text>
+        </View>
+      </View>
+      <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.14)', overflow: 'hidden' }}>
+        <View style={{ height: '100%', width: `${stage.progress * 100}%`, borderRadius: 2, backgroundColor: colors.acc }} />
+      </View>
+    </Pressable>
   );
 }
