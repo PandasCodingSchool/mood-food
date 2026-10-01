@@ -97,7 +97,8 @@ export function ErrorBlock({ message, onRetry }: { message: string; onRetry?: ()
   return (
     <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 32, gap: 14 }}>
       <Text variant="bodyStrong16" align="center">Something went sideways</Text>
-      <Text variant="body13" tone="ink2" align="center">{message}</Text>
+      {/* Raw messages can be technical; only show them in development. */}
+      <Text variant="body13" tone="ink2" align="center">{__DEV__ ? message : 'Check your connection and try again.'}</Text>
       {onRetry ? <Button label="Try again" variant="glass" size="md" onPress={onRetry} /> : null}
     </View>
   );

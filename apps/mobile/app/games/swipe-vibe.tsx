@@ -1,256 +1,30 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, Dimensions, PanResponder, Animated } from 'react-native';
+// 2.0 Swipe Vibe ("Snack Match"). Same cards, signals and result hand-off as
+// v1 (swipe log with reaction times → /recommendations with the top
+// craving), now drag-to-swipe with undo, sending the real current mood.
+import { useEffect, useRef, useState } from 'react';
+import { useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Target, X, Heart, Star, ArrowRight } from 'lucide-react-native';
-import { useTheme } from '../../src/context/ThemeContext';
+import { StatusBar } from 'expo-status-bar';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { FadeIn, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { space } from '@moodfood/tokens';
+import { Button, DishImage, IconButton, Screen, SegmentProgress, Surface, Text, useTheme } from '@moodfood/ui';
+import { TopBar } from '../../src/components/v2';
 import { SNACK_CARDS } from '../../src/constants/snackCards';
-import { fw, colors } from '../../src/constants/theme';
-import { playSwipeSound, playSuccessSound } from '../../src/utils/sounds';
-import { hapticSelect, hapticSuccess, hapticWarning } from '../../src/utils/haptics';
-import { trackEvent } from '../../src/utils/analytics';
+import { useLiveMood } from '../../src/context/LiveMood';
 import { logSignals } from '../../src/services/signals';
-import { formatTag } from '../../src/utils/formatTag';
 import type { GameSwipe } from '../../src/types';
+import { trackEvent } from '../../src/utils/analytics';
+import { hapticSelect, hapticSuccess, hapticWarning } from '../../src/utils/haptics';
+import { playSuccessSound, playSwipeSound } from '../../src/utils/sounds';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = 80;
-
-export default function SnackMatchScreen() {
-  const router = useRouter();
-  const { theme } = useTheme();
-  const [idx, setIdx] = useState(0);
-  const [liked, setLiked] = useState<string[]>([]);
-  const [swipes, setSwipes] = useState<GameSwipe[]>([]);
-  const position = useRef(new Animated.ValueXY()).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const cardShownAt = useRef(Date.now());
-
-  const card = SNACK_CARDS[idx];
-  const done = idx >= SNACK_CARDS.length;
-
-  useEffect(() => {
-    cardShownAt.current = Date.now();
-  }, [idx]);
-
-  const finishSwipe = useCallback(
-    (direction: 'left' | 'right' | 'super') => {
-      if (direction === 'left') hapticWarning();
-      else hapticSelect();
-      playSwipeSound();
-
-      const isLike = direction !== 'left';
-      const newLiked = isLike ? [...liked, card.name] : liked;
-      if (isLike) setLiked(newLiked);
-
-      const reactionTime = Date.now() - cardShownAt.current;
-      const newSwipes = [...swipes, { item: card.name, liked: isLike, reactionTime }];
-      setSwipes(newSwipes);
-
-      const toX = direction === 'left' ? -SCREEN_WIDTH * 1.5 : direction === 'right' ? SCREEN_WIDTH * 1.5 : 0;
-      const toY = direction === 'super' ? -SCREEN_WIDTH * 1.5 : 0;
-
-      Animated.parallel([
-        Animated.timing(position, { toValue: { x: toX, y: toY }, duration: 300, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-      ]).start(() => {
-        position.setValue({ x: 0, y: 0 });
-        opacity.setValue(1);
-        const nextIdx = idx + 1;
-        setIdx(nextIdx);
-        if (nextIdx >= SNACK_CARDS.length) {
-          hapticSuccess();
-          playSuccessSound();
-          trackEvent('game_completed', { game: 'snack_match', liked: newLiked });
-          void logSignals([
-            {
-              type: 'swipe',
-              payload: {
-                swipes: newSwipes.map((s) => ({
-                  item: s.item,
-                  liked: s.liked,
-                  reaction_time: s.reactionTime,
-                })),
-              },
-            },
-          ]);
-        }
-      });
-    },
-    [idx, liked, swipes, card],
-  );
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gesture) => position.setValue({ x: gesture.dx, y: gesture.dy }),
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx > SWIPE_THRESHOLD) finishSwipe('right');
-        else if (gesture.dx < -SWIPE_THRESHOLD) finishSwipe('left');
-        else Animated.spring(position, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
-      },
-    }),
-  ).current;
-
-  const rotate = position.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-    outputRange: ['-20deg', '0deg', '20deg'],
-    extrapolate: 'clamp',
-  });
-  const yumOpacity = position.x.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1], extrapolate: 'clamp' });
-  const nopeOpacity = position.x.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0], extrapolate: 'clamp' });
-
-  const handleGetResults = () => {
-    const results = {
-      mood: 'happy',
-      craving: topCraving(liked),
-      budget: 'medium',
-      preference: 'both',
-      gameData: { type: 'snack_match', likedCount: liked.length },
-    };
-    router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
-  };
-
-  return (
-    <LinearGradient colors={[theme.bg, theme.surface, theme.surface]} locations={[0, 0.5, 1]} style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.push('/home')}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronLeft size={22} color={theme.text} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={[fw(900), { fontSize: 18, color: theme.text }]}>Snack Match</Text>
-          <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 1 }]}>
-            {done ? 'All done!' : `${idx + 1} of ${SNACK_CARDS.length}`}
-          </Text>
-        </View>
-        <View style={{ width: 40, alignItems: 'center' }}>
-          <Target size={22} color={theme.subtext} />
-        </View>
-      </View>
-
-      <View style={{ padding: 20, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center', height: 420 }}>
-        {!done && (
-          <>
-            <View style={{ position: 'absolute', top: 28, width: 300, height: 380, borderRadius: 24, backgroundColor: theme.card, opacity: 0.4, transform: [{ scale: 0.92 }] }} />
-            <View style={{ position: 'absolute', top: 24, width: 310, height: 380, borderRadius: 24, backgroundColor: theme.card, opacity: 0.7, transform: [{ scale: 0.96 }] }} />
-            <Animated.View
-              {...panResponder.panHandlers}
-              style={{
-                position: 'absolute',
-                top: 20,
-                width: 320,
-                height: 400,
-                borderRadius: 24,
-                backgroundColor: theme.card,
-                overflow: 'hidden',
-                opacity,
-                transform: [...position.getTranslateTransform(), { rotate }],
-                shadowColor: theme.shadow,
-                shadowOpacity: 0.2,
-                shadowRadius: 24,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 8,
-              }}
-            >
-              <LinearGradient colors={card.colors} style={{ height: 260, alignItems: 'center', justifyContent: 'center' }}>
-                {(() => {
-                  const CardIcon = card.Icon;
-                  return <CardIcon size={96} color="#fff" />;
-                })()}
-                <Animated.View style={{ position: 'absolute', top: 16, left: 16, opacity: nopeOpacity, borderWidth: 3, borderColor: colors.red, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8, transform: [{ rotate: '-15deg' }] }}>
-                  <Text style={[fw(900), { fontSize: 16, color: colors.red }]}>NOPE</Text>
-                </Animated.View>
-                <Animated.View style={{ position: 'absolute', top: 16, right: 16, opacity: yumOpacity, borderWidth: 3, borderColor: colors.green, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8, transform: [{ rotate: '15deg' }] }}>
-                  <Text style={[fw(900), { fontSize: 16, color: colors.green }]}>YUM!</Text>
-                </Animated.View>
-              </LinearGradient>
-              <View style={{ padding: 16, paddingHorizontal: 20 }}>
-                <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>{card.name}</Text>
-                <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>{card.desc}</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                  {card.tags.map((tag) => (
-                    <View key={tag} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: colors.rose + '18' }}>
-                      <Text style={[fw(700), { fontSize: 11, color: colors.rose }]}>{formatTag(tag)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </Animated.View>
-          </>
-        )}
-
-        {done && (
-          <View style={{ alignItems: 'center', gap: 16 }}>
-            <Target size={56} color={colors.rose} />
-            <Text style={[fw(900), { fontSize: 22, color: theme.text, textAlign: 'center' }]}>Cravings locked in!</Text>
-            <Text style={[fw(600), { fontSize: 14, color: theme.subtext, textAlign: 'center', maxWidth: 240, lineHeight: 20 }]}>
-              You liked {liked.length} out of {SNACK_CARDS.length} foods. We know exactly what you want.
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {!done && (
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 24, paddingHorizontal: 24 }}>
-          <TouchableOpacity
-            onPress={() => finishSwipe('left')}
-            style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(239,68,68,0.15)' }}
-          >
-            <X size={28} color={colors.red} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => finishSwipe('super')}
-            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(59,130,246,0.15)', alignSelf: 'center' }}
-          >
-            <Star size={22} color={colors.blue} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => finishSwipe('right')}
-            style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(34,197,94,0.15)' }}
-          >
-            <Heart size={28} color={colors.green} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {done && (
-        <View style={{ paddingHorizontal: 32, marginTop: 8 }}>
-          <TouchableOpacity onPress={handleGetResults} activeOpacity={0.85}>
-            <LinearGradient colors={['#e11d48', '#fb7185']} style={{ height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-              <Text style={[fw(900), { fontSize: 18, color: '#fff' }]}>Show me my matches</Text>
-              <ArrowRight size={18} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {liked.length > 0 && (
-        <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
-          <Text style={[fw(800), { fontSize: 11, color: theme.subtext, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }]}>
-            You liked
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-            {liked.map((name, i) => {
-              const likedCard = SNACK_CARDS.find((c) => c.name === name);
-              if (!likedCard) return null;
-              const LikedIcon = likedCard.Icon;
-              return (
-                <View key={i} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.green + '18', alignItems: 'center', justifyContent: 'center' }}>
-                  <LikedIcon size={22} color={colors.green} />
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
-    </LinearGradient>
-  );
-}
+const THRESHOLD = 80;
+const VIBES: Record<string, { word: string; text: string }> = {
+  comfort: { word: 'Comfort, always.', text: 'Warm, familiar and filling won tonight.' },
+  healthy: { word: 'Light & kind.', text: 'Fresh, clean plates kept getting your yes.' },
+  spicy: { word: 'Bold & loud.', text: 'You went for heat and big flavour.' },
+  sweet: { word: 'Sweet tooth.', text: 'Dessert-first energy. No judgement.' },
+};
 
 function topCraving(likedNames: string[]): string {
   const counts: Record<string, number> = {};
@@ -258,6 +32,167 @@ function topCraving(likedNames: string[]): string {
     const card = SNACK_CARDS.find((c) => c.name === name);
     if (card) counts[card.craving] = (counts[card.craving] || 0) + 1;
   });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  return sorted[0]?.[0] || 'comfort';
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'comfort';
+}
+
+export default function SnackMatchScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const { colors, dark } = useTheme();
+  const { mood } = useLiveMood();
+  const [idx, setIdx] = useState(0);
+  const [swipes, setSwipes] = useState<GameSwipe[]>([]);
+  const [fly, setFly] = useState<'left' | 'right' | null>(null);
+  const shownAt = useRef(Date.now());
+  const x = useSharedValue(0);
+  const total = SNACK_CARDS.length;
+  const done = idx >= total;
+  const card = SNACK_CARDS[Math.min(idx, total - 1)];
+  const liked = swipes.filter((s) => s.liked).map((s) => s.item);
+
+  useEffect(() => {
+    shownAt.current = Date.now();
+    x.value = 0;
+  }, [idx, x]);
+
+  const commit = (dir: 'left' | 'right') => {
+    const isLike = dir === 'right';
+    isLike ? hapticSelect() : hapticWarning();
+    playSwipeSound();
+    const next = [...swipes, { item: card.name, liked: isLike, reactionTime: Date.now() - shownAt.current }];
+    setSwipes(next);
+    setFly(null);
+    setIdx(idx + 1);
+    if (idx + 1 >= total) {
+      hapticSuccess();
+      playSuccessSound();
+      const likedNames = next.filter((s) => s.liked).map((s) => s.item);
+      trackEvent('game_completed', { game: 'snack_match', liked: likedNames });
+      void logSignals([{ type: 'swipe', payload: { swipes: next.map((s) => ({ item: s.item, liked: s.liked, reaction_time: s.reactionTime })) } }]);
+    }
+  };
+
+  const swipe = (dir: 'left' | 'right') => {
+    if (fly || done) return;
+    setFly(dir);
+    x.value = withTiming(dir === 'right' ? width * 1.3 : -width * 1.3, { duration: 300 }, () => runOnJS(commit)(dir));
+  };
+
+  const undo = () => {
+    if (!idx || fly) return;
+    setSwipes(swipes.slice(0, -1));
+    setIdx(idx - 1);
+  };
+
+  const pan = Gesture.Pan()
+    .enabled(!done && !fly)
+    .onUpdate((e) => {
+      x.value = e.translationX;
+    })
+    .onEnd((e) => {
+      if (e.translationX > THRESHOLD) runOnJS(swipe)('right');
+      else if (e.translationX < -THRESHOLD) runOnJS(swipe)('left');
+      else x.value = withSpring(0);
+    });
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: x.value }, { rotate: `${interpolate(x.value, [-width / 2, 0, width / 2], [-16, 0, 16])}deg` }],
+  }));
+  const yum = useAnimatedStyle(() => ({ opacity: interpolate(x.value, [0, THRESHOLD], [0, 1], 'clamp') }));
+  const nah = useAnimatedStyle(() => ({ opacity: interpolate(x.value, [-THRESHOLD, 0], [1, 0], 'clamp') }));
+
+  const seeMatches = () => {
+    const results = { mood, craving: topCraving(liked), budget: 'medium', preference: 'both', gameData: { type: 'snack_match', likedCount: liked.length } };
+    router.push({ pathname: '/recommendations', params: { results: JSON.stringify(results) } });
+  };
+
+  const vibe = VIBES[topCraving(liked)] ?? VIBES.comfort;
+  const CardIcon = card.Icon;
+
+  return (
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen scrollEnabled={done} contentContainerStyle={{ flexGrow: 1 }}>
+        <TopBar title="Swipe Vibe" subtitle={`${Math.min(idx + 1, total)} of ${total}`} />
+        <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
+          <SegmentProgress count={total} index={idx} />
+        </View>
+
+        {!done ? (
+          <>
+            <View style={{ flex: 1, minHeight: 440, marginHorizontal: 20, marginTop: 16 }}>
+              {idx < total - 1 ? (
+                <Surface kind="glassStrong" radius={30} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, transform: [{ scale: 0.93 }, { translateY: 20 }] }} />
+              ) : null}
+              <GestureDetector gesture={pan}>
+                <Animated.View
+                  key={idx}
+                  entering={FadeIn.duration(200)}
+                  accessible
+                  accessibilityLabel={`${card.name}. ${card.desc}. Swipe right if you'd eat it, left if not.`}
+                  style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 30, overflow: 'hidden', boxShadow: '0px 30px 50px -24px rgba(0,0,0,0.55)', backgroundColor: colors.solid }, cardStyle]}
+                >
+                  <DishImage height={undefined} style={{ flex: 1 }} scrim={0.4}>
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 120, alignItems: 'center', justifyContent: 'center' }}>
+                      <CardIcon size={88} color={colors.accText} />
+                    </View>
+                    <Animated.View style={[{ position: 'absolute', top: 28, left: 24, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 3, borderColor: colors.acc, borderRadius: 12, transform: [{ rotate: '-12deg' }] }, yum]}>
+                      <Text variant="display28" style={{ fontFamily: 'BricolageGrotesque_800ExtraBold' }} color={colors.acc}>YUM</Text>
+                    </Animated.View>
+                    <Animated.View style={[{ position: 'absolute', top: 28, right: 24, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 3, borderColor: '#FFFFFF', borderRadius: 12, transform: [{ rotate: '12deg' }] }, nah]}>
+                      <Text variant="display28" style={{ fontFamily: 'BricolageGrotesque_800ExtraBold' }} tone="white">NAH</Text>
+                    </Animated.View>
+                    <View style={{ position: 'absolute', left: 20, right: 20, bottom: 20, gap: 6 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {card.tags.slice(0, 3).map((t) => (
+                          <View key={t} style={{ height: 26, paddingHorizontal: 9, borderRadius: 13, backgroundColor: colors.acc, justifyContent: 'center' }}>
+                            <Text variant="chip11" color={colors.onAcc}>{t}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <Text variant="display28" tone="white">{card.name}</Text>
+                      <Text variant="caption13" tone="photo2">{card.desc}</Text>
+                    </View>
+                  </DishImage>
+                </Animated.View>
+              </GestureDetector>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22, paddingTop: 22, paddingBottom: 36 }}>
+              <IconButton icon="close" label="Nah" variant="glass" size={66} onPress={() => swipe('left')} />
+              <IconButton icon="undo" label="Undo" variant="glass" size={48} onPress={undo} disabled={!idx} style={{ opacity: idx ? 1 : 0.5 }} />
+              <IconButton icon="favorite" label="Yum" variant="primary" size={66} filled onPress={() => swipe('right')} />
+            </View>
+          </>
+        ) : (
+          <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 36 }}>
+            <Text variant="label" tone="ink2">Your vibe right now</Text>
+            <Text variant="display44" style={{ marginTop: 6 }} accessibilityRole="header">{liked.length ? vibe.word : 'Hard to please.'}</Text>
+            <Text variant="body14" tone="ink2" style={{ marginTop: 10 }}>
+              {liked.length
+                ? `You swiped right on ${liked.length} of ${total}. ${vibe.text}`
+                : "Nothing grabbed you — fair. We'll lean on your mood instead."}
+            </Text>
+            {liked.length ? (
+              <Surface radius={22} padding={16} style={{ marginTop: 22, gap: 8 }}>
+                <Text variant="label" tone="ink2">You said yum to</Text>
+                <Text variant="bodyStrong15">{liked.join(' · ')}</Text>
+              </Surface>
+            ) : null}
+            <View style={{ marginTop: 'auto', paddingTop: 24, flexDirection: 'row', gap: 10 }}>
+              <Button
+                label="Play again"
+                variant="glass"
+                style={{ height: 56, borderRadius: 18 }}
+                onPress={() => {
+                  setSwipes([]);
+                  setIdx(0);
+                }}
+              />
+              <Button label="Show my matches" style={{ flex: 1, height: 56, borderRadius: 18 }} onPress={seeMatches} />
+            </View>
+          </Animated.View>
+        )}
+      </Screen>
+    </View>
+  );
 }

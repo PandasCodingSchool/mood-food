@@ -1,145 +1,121 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Heart } from 'lucide-react-native';
-import { useTheme } from '../src/context/ThemeContext';
-import { fw, colors } from '../src/constants/theme';
-import { dishEmoji } from '../src/utils/dishVisuals';
-import Screen from '../src/components/Screen';
-import BottomNav from '../src/components/BottomNav';
+// 2.0 History & saved. Same API as v1 (fetchHistory(all|ordered|saved),
+// toggleSaved). Optional ?tab=ordered|saved.
+import { useCallback, useEffect, useState } from 'react';
+import { RefreshControl, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { space } from '@moodfood/tokens';
+import { DishImage, IconButton, Screen, SegmentedControl, Surface, Text, useTheme, useToast } from '@moodfood/ui';
+import { AppTabBar, ErrorBlock, LoadingBlock, TopBar } from '../src/components/v2';
 import { fetchHistory, toggleSaved, type HistoryItem } from '../src/services/history';
 
-type Tab = 'all' | 'saved' | 'ordered';
+type Tab = 'all' | 'ordered' | 'saved';
 
-function formatDate(iso: string): string {
+function when(iso: string) {
   const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (days === 0) return `Today · ${time}`;
+  if (days === 1) return `Yesterday · ${time}`;
+  if (days < 7) return `${d.toLocaleDateString('en-IN', { weekday: 'short' })} · ${time}`;
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
 export default function HistoryScreen() {
-  const { theme } = useTheme();
-  const [tab, setTab] = useState<Tab>('all');
+  const toast = useToast();
+  const { colors, dark } = useTheme();
+  const params = useLocalSearchParams<{ tab?: Tab }>();
+  const [tab, setTab] = useState<Tab>(params.tab === 'saved' || params.tab === 'ordered' ? params.tab : 'all');
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true);
-    try {
-      const data = await fetchHistory(tab);
-      setItems(data);
-    } catch {
-      setItems([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [tab]);
+  const load = useCallback(
+    async (refresh = false) => {
+      refresh ? setRefreshing(true) : setLoading(true);
+      setError(null);
+      try {
+        setItems(await fetchHistory(tab));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not load your history');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [tab],
+  );
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const handleToggleSaved = async (item: HistoryItem) => {
+  const flipSaved = async (item: HistoryItem) => {
     const next = !item.saved;
-    setItems((prev) => prev.map((x) => x.id === item.id ? { ...x, saved: next } : x));
+    setItems((prev) => (tab === 'saved' && !next ? prev.filter((i) => i.id !== item.id) : prev.map((i) => (i.id === item.id ? { ...i, saved: next } : i))));
     try {
       await toggleSaved(item.id, next);
+      toast(next ? 'Saved for later' : 'Removed from saved');
     } catch {
-      setItems((prev) => prev.map((x) => x.id === item.id ? { ...x, saved: item.saved } : x));
+      void load();
     }
   };
 
+  const empty = tab === 'saved' ? 'Nothing saved yet. Tap the bookmark on any pick and it lands here.' : tab === 'ordered' ? 'No orders yet.' : 'No history yet.';
+
   return (
-    <Screen>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
-      <View style={{ paddingTop: 60, paddingHorizontal: 24 }}>
-        <Text style={[fw(900), { fontSize: 24, color: theme.text }]}>History</Text>
-        <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4 }]}>Your past picks & saved meals</Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', margin: 24, marginBottom: 0, backgroundColor: theme.surface, borderRadius: 14, padding: 3 }}>
-        {(['all', 'saved', 'ordered'] as Tab[]).map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => setTab(t)}
-            style={{ flex: 1, paddingVertical: 10, borderRadius: 11, backgroundColor: tab === t ? theme.card : 'transparent', alignItems: 'center' }}
-          >
-            <Text style={[fw(800), { fontSize: 13, color: tab === t ? theme.text : theme.subtext, textTransform: 'capitalize' }]}>{t}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={colors.orange} />
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingBottom: 110, gap: 12 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.orange]} />}
-        >
-          {items.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingTop: 48, gap: 12 }}>
-              <Text style={{ fontSize: 48 }}>🍽️</Text>
-              <Text style={[fw(800), { fontSize: 17, color: theme.text }]}>
-                {tab === 'saved' ? 'No saved meals yet' : tab === 'ordered' ? 'No orders yet' : 'No history yet'}
-              </Text>
-              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center' }]}>
-                Play a game and place an order to see it here
-              </Text>
-            </View>
-          ) : (
-            items.map((item) => (
-              <View key={item.id} style={{ backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden', shadowColor: theme.shadow, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 }}>
-                <LinearGradient
-                  colors={[item.gradientStart, item.gradientEnd] as [string, string]}
-                  style={{ padding: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-                >
-                  <Text style={{ fontSize: 36 }}>
-                    {dishEmoji({ dish: { name: item.dishName, cuisine: item.cuisine ?? '', category: '' } })}
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen withTabBar overlay={<AppTabBar />} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.acc} />}>
+        <TopBar title="Your food" />
+        <SegmentedControl
+          style={{ marginHorizontal: space.gutter, marginTop: 16 }}
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'ordered', label: 'Orders' },
+            { value: 'saved', label: 'Saved' },
+          ]}
+        />
+        {loading ? (
+          <LoadingBlock label="Loading" />
+        ) : error ? (
+          <ErrorBlock message={error} onRetry={() => void load()} />
+        ) : items.length === 0 ? (
+          <Text variant="body14" tone="ink2" align="center" style={{ paddingHorizontal: 40, paddingTop: 60 }}>{empty}</Text>
+        ) : (
+          <View style={{ paddingHorizontal: space.gutter, paddingTop: 12, gap: 10 }}>
+            {items.map((it) => (
+              <Surface key={it.id} radius={22} padding={12} style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <DishImage height={64} radius={16} stripe={7} style={{ width: 64 }}>
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 26 }} accessible={false}>{it.emoji}</Text>
+                  </View>
+                </DishImage>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="micro11" tone="ink2">{when(it.createdAt)}</Text>
+                  <Text variant="bodyStrong14" numberOfLines={1} style={{ marginTop: 2 }}>{it.dishName}</Text>
+                  <Text variant="micro12" tone="ink2" numberOfLines={1} style={{ marginTop: 5 }}>
+                    {[it.ordered ? it.platform : 'Saved idea', it.priceInr ? `₹${Math.round(it.priceInr)}` : null, it.via].filter(Boolean).join(' · ')}
                   </Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[fw(800), { fontSize: 16, color: '#fff' }]} numberOfLines={1}>{item.dishName}</Text>
-                    <Text style={[fw(600), { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 }]}>{item.cuisine}</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleToggleSaved(item)}
-                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Heart size={18} color={item.saved ? colors.rose : '#fff'} fill={item.saved ? colors.rose : 'transparent'} />
-                  </TouchableOpacity>
-                </LinearGradient>
-                <View style={{ padding: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {item.priceInr > 0 && (
-                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.orange + '18' }}>
-                        <Text style={[fw(700), { fontSize: 11, color: colors.orange }]}>₹{item.priceInr}</Text>
-                      </View>
-                    )}
-                    {item.platform && (
-                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: theme.surface }}>
-                        <Text style={[fw(700), { fontSize: 11, color: theme.subtext }]}>{item.platform}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={[fw(600), { fontSize: 11, color: theme.subtext }]}>{formatDate(item.createdAt)}</Text>
-                    {item.ordered && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green, marginLeft: 4 }} />}
-                  </View>
                 </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
-
-      <BottomNav active="history" />
-    </Screen>
+                <IconButton
+                  icon="bookmark"
+                  label={it.saved ? 'Remove from saved' : 'Save'}
+                  variant="solid"
+                  size={36}
+                  square
+                  filled={it.saved}
+                  iconColor={it.saved ? colors.accText : undefined}
+                  onPress={() => void flipSaved(it)}
+                />
+              </Surface>
+            ))}
+          </View>
+        )}
+      </Screen>
+    </View>
   );
 }

@@ -1,37 +1,37 @@
-import { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
-import { useTheme } from '../../src/context/ThemeContext';
-import { fw, colors } from '../../src/constants/theme';
+// 2.0 DIY recipe. Generates the recipe (same API as v1), then shows it:
+// tick off what you already have, step through the method, then either get
+// the ingredients on Instamart (/diy/cart) or go straight to cook mode.
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { space } from '@moodfood/tokens';
+import { Button, Checkbox, Chip, DishImage, IconButton, Screen, Surface, Text, useTheme } from '@moodfood/ui';
+import { BottomBar, ErrorBlock, LoadingBlock } from '../../src/components/v2';
+import { generateRecipe, type Recipe } from '../../src/services/diy';
 import type { Recommendation } from '../../src/types';
-import { generateRecipe } from '../../src/services/diy';
+import { imageCaption, recView } from '../../src/utils/recView';
 
 export default function DiyRecipeScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
-  const { top: safeTop } = useSafeAreaInsets();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ rec: string; rank?: string }>();
-  const rec: Recommendation | null = params.rec ? JSON.parse(params.rec) : null;
-
-  const [loading, setLoading] = useState(true);
+  const rec = useMemo<Recommendation | null>(() => (params.rec ? JSON.parse(params.rec) : null), [params.rec]);
+  const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [have, setHave] = useState<Set<number>>(new Set());
+  const [step, setStep] = useState(0);
 
   const load = async () => {
     if (!rec) return;
-    setLoading(true);
     setError(null);
-    const result = await generateRecipe(rec.dish.name, 2);
-    setLoading(false);
+    setRecipe(null);
+    const result = await generateRecipe(rec.dish.name, 2).catch((e) => ({ success: false, error: String(e?.message ?? e), recipe: undefined }));
     if (!result.success || !result.recipe) {
       setError(result.error || "Couldn't generate a recipe. Please try again.");
       return;
     }
-    router.replace({
-      pathname: '/diy/cart',
-      params: { recipe: JSON.stringify(result.recipe), rank: params.rank || '0' },
-    });
+    setRecipe(result.recipe);
   };
 
   useEffect(() => {
@@ -40,47 +40,113 @@ export default function DiyRecipeScreen() {
   }, []);
 
   if (!rec) return null;
+  const v = recView(rec);
+  const recipeJson = recipe ? JSON.stringify(recipe) : '';
+  const toggleHave = (i: number) =>
+    setHave((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ paddingTop: safeTop + 12, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronLeft size={22} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 18, color: theme.text, flex: 1, textAlign: 'center', marginRight: 40 }]}>
-          👨‍🍳 DIY it!
-        </Text>
-      </View>
+    <View style={{ flex: 1 }}>
+      <StatusBar style="light" />
+      <Screen edgeToEdge contentContainerStyle={{ paddingBottom: 140 }}>
+        <DishImage uri={v.imageUrl} caption={`home-cooked · ${imageCaption(v)}`} height={280} scrim={0.55}>
+          <View style={{ position: 'absolute', top: 56, left: 16 }}>
+            <IconButton icon="arrow_back" label="Back" variant="photo" onPress={() => router.back()} />
+          </View>
+        </DishImage>
+        <Surface kind="solid" radius={30} style={{ marginTop: -52, marginHorizontal: 12, paddingHorizontal: 18, paddingTop: 22, paddingBottom: 20, boxShadow: '0px -10px 40px -20px rgba(0,0,0,0.45)' }}>
+          <Chip icon="skillet" label="Cook it yourself" />
+          <Text variant="display28" style={{ marginTop: 12 }} accessibilityRole="header">{recipe?.dish || rec.dish.name}</Text>
 
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
-        {loading ? (
-          <>
-            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 32 }}>🍳</Text>
-            </View>
-            <ActivityIndicator color={colors.orange} />
-            <Text style={[fw(700), { fontSize: 14, color: theme.subtext, textAlign: 'center' }]}>
-              Whipping up a recipe for {rec.dish.name}…
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text style={{ fontSize: 40 }}>😕</Text>
-            <Text style={[fw(700), { fontSize: 14, color: theme.subtext, textAlign: 'center' }]}>{error}</Text>
-            <TouchableOpacity
-              onPress={() => void load()}
-              activeOpacity={0.85}
-              style={{ marginTop: 8, width: 160, height: 48, borderRadius: 24, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text style={[fw(800), { fontSize: 15, color: '#fff' }]}>Try again</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+          {error ? (
+            <ErrorBlock message={error} onRetry={() => void load()} />
+          ) : !recipe ? (
+            <LoadingBlock label="Writing your recipe" />
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 16 }}>
+                {[
+                  { v: String(recipe.servings), l: 'Serves' },
+                  { v: String(recipe.items.length), l: 'Ingredients' },
+                  { v: String(recipe.steps.length), l: 'Steps' },
+                ].map((m) => (
+                  <Surface key={m.l} kind="tint" radius={14} style={{ flex: 1, paddingVertical: 10, alignItems: 'center' }}>
+                    <Text variant="bodyStrong14">{m.v}</Text>
+                    <Text variant="micro11" tone="ink2" style={{ marginTop: 2 }}>{m.l}</Text>
+                  </Surface>
+                ))}
+              </View>
+
+              <View style={{ marginTop: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Text variant="bodyStrong16">Ingredients</Text>
+                <Text variant="caption12" tone="ink2">{`You have ${have.size} of ${recipe.items.length}`}</Text>
+              </View>
+              <View style={{ marginTop: 8 }}>
+                {recipe.items.map((it, i) => {
+                  const on = have.has(i);
+                  return (
+                    <Pressable
+                      key={`${it.name}${i}`}
+                      onPress={() => toggleHave(i)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.line }}
+                    >
+                      <Checkbox checked={on} />
+                      <Text variant="body14" style={{ flex: 1, fontFamily: 'Geist_500Medium', textDecorationLine: on ? 'line-through' : 'none', opacity: on ? 0.55 : 1 }}>
+                        {it.name}
+                      </Text>
+                      <Text variant="caption13" tone="ink2">{[it.quantity, it.unit].filter(Boolean).join(' ')}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text variant="bodyStrong16" style={{ marginTop: 24 }}>Method</Text>
+              <View style={{ marginTop: 10, gap: 8 }}>
+                {recipe.steps.map((s, i) => {
+                  const cur = i === step;
+                  const done = i < step;
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() => setStep(i)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Step ${i + 1}${done ? ', done' : cur ? ', current' : ''}`}
+                      style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 14, borderRadius: 18, backgroundColor: cur ? colors.accSoft : colors.tint, borderWidth: 1.5, borderColor: cur ? colors.acc : 'transparent', opacity: done ? 0.6 : 1 }}
+                    >
+                      <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: cur || done ? colors.acc : colors.solid }}>
+                        <Text variant="button13" color={cur || done ? colors.onAcc : colors.ink2}>{done ? '✓' : String(i + 1)}</Text>
+                      </View>
+                      <Text variant="body14" style={{ flex: 1, fontSize: 14 }}>{s}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
+        </Surface>
+      </Screen>
+      {recipe ? (
+        <BottomBar>
+          <Button
+            label="Get ingredients"
+            variant="glass"
+            style={{ height: 56, borderRadius: 18 }}
+            onPress={() => router.push({ pathname: '/diy/cart', params: { recipe: recipeJson, rank: params.rank || '0' } })}
+          />
+          <Button
+            label="Start cooking"
+            iconRight="arrow_forward"
+            style={{ flex: 1, height: 56, borderRadius: 18 }}
+            onPress={() => router.push({ pathname: '/diy/cook', params: { recipe: recipeJson, sessionId: '' } })}
+          />
+        </BottomBar>
+      ) : null}
     </View>
   );
 }

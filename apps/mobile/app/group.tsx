@@ -1,30 +1,28 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, TextInput, ScrollView } from 'react-native';
+// 2.0 Group decision. Same flow and API as v1: start or join a room, lobby
+// polls members every 3s, everyone swipes the snack cards, then the server
+// returns the consensus (what nobody's miserable about).
+import { useCallback, useEffect, useState, type ComponentProps } from 'react';
+import { Pressable, Share, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Users, Check, Clock, X, Heart, Trophy, ArrowRight } from 'lucide-react-native';
-import { useTheme } from '../src/context/ThemeContext';
+import { StatusBar } from 'expo-status-bar';
+import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import { fontFamily, hueTile, palette, space } from '@moodfood/tokens';
+import { Button, DishImage, IconButton, ProgressBar, Screen, Surface, Text, useTheme } from '@moodfood/ui';
+import { AppTabBar, TopBar } from '../src/components/v2';
 import { SNACK_CARDS } from '../src/constants/snackCards';
-import { fw, colors } from '../src/constants/theme';
+import { createGroup, fetchConsensus, fetchGroup, joinGroup, submitGroupSwipes, type ConsensusOption, type GroupMember } from '../src/services/groups';
 import { trackEvent } from '../src/utils/analytics';
-import {
-  createGroup,
-  joinGroup,
-  fetchGroup,
-  submitGroupSwipes,
-  fetchConsensus,
-  type GroupMember,
-  type ConsensusOption,
-} from '../src/services/groups';
 
 type Stage = 'landing' | 'lobby' | 'swipe' | 'results';
+const HUES = [55, 210, 140, 320, 20, 260, 95, 180];
+const minMatch = (o: ConsensusOption) => {
+  const v = Object.values(o.member_match);
+  return v.length ? Math.min(...v) : 0;
+};
 
-// 3.6 — Group / social decision games. Multiplayer swipe → AI finds the
-// overlap via maximin consensus (nobody is miserable). Poll-based lobby, no
-// websockets needed at this scale.
 export default function GroupScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { colors, dark } = useTheme();
   const [stage, setStage] = useState<Stage>('landing');
   const [code, setCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -34,6 +32,8 @@ export default function GroupScreen() {
   const [swipeIdx, setSwipeIdx] = useState(0);
   const [swipes, setSwipes] = useState<Array<{ item: string; liked: boolean }>>([]);
   const [options, setOptions] = useState<ConsensusOption[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const pollLobby = useCallback(async () => {
     if (!code) return;
@@ -43,196 +43,187 @@ export default function GroupScreen() {
 
   useEffect(() => {
     if (stage !== 'lobby') return;
-    pollLobby();
+    void pollLobby();
     const id = setInterval(pollLobby, 3000);
     return () => clearInterval(id);
   }, [stage, pollLobby]);
 
-  const handleCreate = async () => {
+  const create = async () => {
+    setBusy(true);
+    setError(null);
     const newCode = await createGroup();
-    if (!newCode) return;
+    if (!newCode) {
+      setBusy(false);
+      return setError('Could not start a room. Try again.');
+    }
     setCode(newCode);
-    const key = await joinGroup(newCode, displayName || 'Host');
-    setMemberKey(key);
+    setMemberKey(await joinGroup(newCode, displayName || 'Host'));
     trackEvent('group_created', { code: newCode });
+    setBusy(false);
     setStage('lobby');
   };
 
-  const handleJoin = async () => {
+  const join = async () => {
     const upper = joinCode.trim().toUpperCase();
     if (!upper) return;
+    setBusy(true);
+    setError(null);
     const key = await joinGroup(upper, displayName || 'Guest');
-    if (!key) return;
+    setBusy(false);
+    if (!key) return setError('No room with that code.');
     setCode(upper);
     setMemberKey(key);
     trackEvent('group_joined', { code: upper });
     setStage('lobby');
   };
 
-  const handleStartSwipe = () => setStage('swipe');
-
-  const handleSwipe = (liked: boolean) => {
+  const swipe = (liked: boolean) => {
     const card = SNACK_CARDS[swipeIdx];
     const next = [...swipes, { item: card.name, liked }];
     setSwipes(next);
     if (swipeIdx + 1 >= SNACK_CARDS.length) {
       if (memberKey) void submitGroupSwipes(code, memberKey, next);
       setStage('lobby');
-    } else {
-      setSwipeIdx((i) => i + 1);
-    }
+    } else setSwipeIdx(swipeIdx + 1);
   };
 
-  const handleGetConsensus = async () => {
-    const opts = await fetchConsensus(code);
-    setOptions(opts);
+  const consensus = async () => {
+    setBusy(true);
+    setOptions(await fetchConsensus(code));
+    setBusy(false);
     setStage('results');
   };
 
-  if (stage === 'landing') {
-    return (
-      <LinearGradient colors={[theme.bg, theme.surface]} style={{ flex: 1 }}>
-        <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-        <View style={{ paddingTop: 70, paddingHorizontal: 24 }}>
-          <Users size={40} color={colors.orange} />
-          <Text style={[fw(900), { fontSize: 24, color: theme.text, marginTop: 12 }]}>Group decide</Text>
-          <Text style={[fw(600), { fontSize: 14, color: theme.subtext, marginTop: 4 }]}>
-            Everyone swipes, we find what nobody's miserable about.
-          </Text>
-        </View>
-        <View style={{ padding: 24, gap: 12 }}>
-          <TextInput
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Your name"
-            placeholderTextColor={theme.muted}
-            style={{ padding: 14, borderRadius: 14, backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, fontSize: 14, color: theme.text }}
-          />
-          <TouchableOpacity
-            onPress={handleCreate}
-            activeOpacity={0.85}
-            style={{
-              height: 52,
-              borderRadius: 26,
-              backgroundColor: colors.orange,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'row',
-              gap: 8,
-            }}
-          >
-            <Text style={[fw(900), { fontSize: 16, color: '#fff' }]}>Start a group</Text>
-            <ArrowRight size={18} color="#fff" />
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            <TextInput
-              value={joinCode}
-              onChangeText={setJoinCode}
-              placeholder="Enter code"
-              placeholderTextColor={theme.muted}
-              autoCapitalize="characters"
-              style={{ flex: 1, padding: 14, borderRadius: 14, backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, fontSize: 14, color: theme.text }}
-            />
-            <TouchableOpacity onPress={handleJoin} activeOpacity={0.85} style={{ paddingHorizontal: 20, borderRadius: 14, backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[fw(800), { fontSize: 14, color: '#fff' }]}>Join</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </LinearGradient>
-    );
-  }
+  const swiped = members.filter((m) => m.swipeCount > 0).length;
+  const iSwiped = swipes.length >= SNACK_CARDS.length;
+  const ranked = [...options].sort((a, b) => minMatch(b) - minMatch(a));
+  const winner = ranked[0];
 
-  if (stage === 'lobby') {
-    return (
-      <View style={{ flex: 1, backgroundColor: theme.bg }}>
-        <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-        <View style={{ paddingTop: 70, paddingHorizontal: 24, alignItems: 'center' }}>
-          <Text style={[fw(700), { fontSize: 13, color: theme.subtext }]}>Room code</Text>
-          <Text style={[fw(900), { fontSize: 36, color: theme.text, letterSpacing: 4 }]}>{code}</Text>
-          <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 4 }]}>Share this code with your group</Text>
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 24, gap: 8 }}>
-          {members.map((m) => (
-            <View key={m.memberKey} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
-              <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>{m.displayName}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                {m.swipeCount > 0 ? <Check size={14} color={colors.green} /> : <Clock size={14} color={theme.subtext} />}
-                <Text style={[fw(600), { fontSize: 12, color: m.swipeCount > 0 ? colors.green : theme.subtext }]}>{m.swipeCount > 0 ? 'swiped' : 'waiting'}</Text>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-        <View style={{ padding: 24, gap: 10 }}>
-          <TouchableOpacity onPress={handleStartSwipe} activeOpacity={0.85}>
-            <LinearGradient colors={['#e11d48', '#fb7185']} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-              <Text style={[fw(900), { fontSize: 15, color: '#fff' }]}>Swipe your picks</Text>
-              <ArrowRight size={18} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleGetConsensus} activeOpacity={0.85} style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.border }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Trophy size={18} color={theme.text} />
-              <Text style={[fw(800), { fontSize: 15, color: theme.text }]}>Get group consensus</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  if (stage === 'swipe') {
-    const card = SNACK_CARDS[swipeIdx];
-    const CardIcon = card.Icon;
-    return (
-      <LinearGradient colors={card.colors} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <StatusBar barStyle="light-content" />
-        <CardIcon size={96} color="#fff" />
-        <Text style={[fw(900), { fontSize: 24, color: '#fff', marginTop: 12 }]}>{card.name}</Text>
-        <Text style={[fw(600), { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 }]}>
-          {swipeIdx + 1}/{SNACK_CARDS.length}
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 24, marginTop: 40 }}>
-          <TouchableOpacity onPress={() => handleSwipe(false)} style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' }}>
-            <X size={28} color={colors.navy} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleSwipe(true)} style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' }}>
-            <Heart size={28} color={colors.navy} />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-    );
-  }
+  const input = (props: ComponentProps<typeof TextInput>) => (
+    <Surface kind="solid" bordered radius={18} style={{ paddingHorizontal: 16 }}>
+      <TextInput placeholderTextColor={colors.ink2} {...props} style={{ height: 52, color: colors.ink, fontFamily: fontFamily.bodyMedium, fontSize: 16 }} />
+    </Surface>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ paddingTop: 70, paddingHorizontal: 24 }}>
-        <TouchableOpacity onPress={() => router.push('/home')} style={{ marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <ChevronLeft size={22} color={theme.text} />
-          <Text style={[fw(700), { fontSize: 16, color: theme.text }]}>Home</Text>
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Trophy size={24} color={colors.orange} />
-          <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>Group picks</Text>
-        </View>
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 12 }}>
-        {options.length === 0 && (
-          <Text style={[fw(600), { fontSize: 13, color: theme.subtext }]}>Not enough swipes yet to find consensus.</Text>
-        )}
-        {options.map((opt) => (
-          <View key={opt.dish_id} style={{ padding: 16, borderRadius: 16, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
-            <Text style={[fw(800), { fontSize: 16, color: theme.text }]}>{opt.dish_name}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-              {Object.entries(opt.member_match).map(([name, pct]) => (
-                <View key={name} style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.orange + '18' }}>
-                  <Text style={[fw(700), { fontSize: 11, color: colors.orange }]}>{name}: {pct}%</Text>
-                </View>
-              ))}
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen withTabBar overlay={stage === 'swipe' ? null : <AppTabBar />} keyboardShouldPersistTaps="handled">
+        {stage === 'landing' ? (
+          <>
+            <TopBar />
+            <View style={{ paddingHorizontal: space.page, paddingTop: 10 }}>
+              <Text variant="label" tone="ink2">With friends</Text>
+              <Text variant="display36" style={{ marginTop: 4 }} accessibilityRole="header">Group decision</Text>
+              <Text variant="body14" tone="ink2" style={{ marginTop: 6 }}>Everyone swipes, we find what nobody's miserable about.</Text>
             </View>
-          </View>
-        ))}
-      </ScrollView>
+            <View style={{ paddingHorizontal: space.gutter, paddingTop: 22, gap: 12 }}>
+              {input({ value: displayName, onChangeText: setDisplayName, placeholder: 'Your name', accessibilityLabel: 'Your name', autoComplete: 'name' })}
+              <Button block label="Start a group" iconRight="arrow_forward" loading={busy} onPress={create} />
+              <Text variant="caption12" tone="ink2" align="center" style={{ marginTop: 6 }}>or join one</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  {input({ value: joinCode, onChangeText: setJoinCode, placeholder: 'Room code', accessibilityLabel: 'Room code', autoCapitalize: 'characters' })}
+                </View>
+                <Button label="Join" variant="night" size="md" style={{ height: 54, borderRadius: 18 }} onPress={join} />
+              </View>
+              {error ? <Text variant="caption13" color={palette.danger}>{error}</Text> : null}
+            </View>
+          </>
+        ) : stage === 'lobby' ? (
+          <>
+            <TopBar title="Group decision" onBack={() => setStage('landing')} />
+            <Surface kind="solid" elevated radius={26} padding={18} style={{ marginHorizontal: space.gutter, marginTop: 18, gap: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text variant="micro12" tone="ink2">Room code</Text>
+                  <Text variant="code" style={{ marginTop: 2 }} selectable>{code}</Text>
+                </View>
+                <Button label="Invite" iconLeft="person_add" size="sm" style={{ height: 40, borderRadius: 14 }} onPress={() => void Share.share({ message: `Join my MoodFood group with code ${code}` })} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                {members.map((m, i) => (
+                  <View key={m.memberKey} style={{ alignItems: 'center', gap: 6 }} accessibilityLabel={`${m.displayName}, ${m.swipeCount > 0 ? 'done' : 'waiting'}`}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: hueTile(HUES[i % HUES.length]), alignItems: 'center', justifyContent: 'center' }}>
+                      <Text variant="bodyStrong16" style={{ fontFamily: 'BricolageGrotesque_700Bold' }} color={palette.onAccent}>{(m.displayName[0] ?? '?').toUpperCase()}</Text>
+                      <View style={{ position: 'absolute', right: -2, bottom: -2, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.solid, backgroundColor: m.swipeCount > 0 ? palette.success : colors.track }} />
+                    </View>
+                    <Text variant="micro11" tone="ink2" numberOfLines={1} style={{ maxWidth: 56 }}>{m.displayName}</Text>
+                  </View>
+                ))}
+                <Text variant="caption12" tone="ink2" style={{ marginLeft: 'auto' }}>{`${swiped} of ${members.length} swiped`}</Text>
+              </View>
+            </Surface>
+            <View style={{ paddingHorizontal: space.gutter, paddingTop: 16, gap: 10 }}>
+              {!iSwiped ? (
+                <Button
+                  block
+                  label="Swipe your picks"
+                  iconRight="arrow_forward"
+                  onPress={() => {
+                    setSwipeIdx(0);
+                    setSwipes([]);
+                    setStage('swipe');
+                  }}
+                />
+              ) : (
+                <Text variant="caption13" tone="ink2" align="center">You're in. Waiting on the others…</Text>
+              )}
+              <Button block variant="glass" size="md" label="See the group's pick" iconLeft="military_tech" loading={busy} onPress={consensus} />
+            </View>
+          </>
+        ) : stage === 'swipe' ? (
+          <>
+            <TopBar title="Your picks" subtitle={`${swipeIdx + 1} of ${SNACK_CARDS.length}`} onBack={() => setStage('lobby')} />
+            <Animated.View key={swipeIdx} entering={FadeIn.duration(200)} style={{ marginHorizontal: 20, marginTop: 16, borderRadius: 30, overflow: 'hidden', boxShadow: '0px 30px 50px -24px rgba(0,0,0,0.55)' }}>
+              <DishImage height={420} scrim={0.4}>
+                {(() => {
+                  const C = SNACK_CARDS[swipeIdx].Icon;
+                  return (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 120, alignItems: 'center', justifyContent: 'center' }}>
+                      <C size={88} color={colors.accText} />
+                    </View>
+                  );
+                })()}
+                <View style={{ position: 'absolute', left: 20, right: 20, bottom: 20, gap: 6 }}>
+                  <Text variant="display28" tone="white">{SNACK_CARDS[swipeIdx].name}</Text>
+                  <Text variant="caption13" tone="photo2">{SNACK_CARDS[swipeIdx].desc}</Text>
+                </View>
+              </DishImage>
+            </Animated.View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22, paddingTop: 22 }}>
+              <IconButton icon="close" label="No" variant="glass" size={66} onPress={() => swipe(false)} />
+              <IconButton icon="favorite" label="Yes" variant="primary" size={66} filled onPress={() => swipe(true)} />
+            </View>
+          </>
+        ) : (
+          <>
+            <TopBar title="The group's pick" onBack={() => setStage('lobby')} />
+            {winner ? (
+              <Animated.View entering={ZoomIn.springify().damping(13)} style={{ marginHorizontal: space.gutter, marginTop: 18, borderRadius: 30, padding: 20, backgroundColor: colors.acc, boxShadow: `0px 30px 50px -26px ${colors.acc}` }}>
+                <Text variant="label" color={palette.onAccent}>{`It's a match · works for ${Object.keys(winner.member_match).length}`}</Text>
+                <Text variant="display32" style={{ fontFamily: 'BricolageGrotesque_800ExtraBold', marginTop: 8 }} color={palette.onAccent}>{winner.dish_name}</Text>
+                <Text variant="caption13" color={palette.onAccent} style={{ marginTop: 8 }}>{`Everyone's at least ${Math.round(minMatch(winner))}% happy with it.`}</Text>
+              </Animated.View>
+            ) : (
+              <Text variant="body14" tone="ink2" align="center" style={{ padding: 32 }}>No consensus yet. Get everyone to swipe, then check again.</Text>
+            )}
+            <View style={{ paddingHorizontal: space.gutter, paddingTop: 14, gap: 10 }}>
+              {ranked.slice(winner ? 1 : 0).map((o) => (
+                <Surface key={o.dish_id} radius={22} padding={14} style={{ gap: 8 }}>
+                  <Text variant="bodyStrong15">{o.dish_name}</Text>
+                  <ProgressBar value={minMatch(o) / 100} />
+                  <Text variant="micro12" tone="ink2">{Object.entries(o.member_match).map(([n, p]) => `${n} ${Math.round(p)}%`).join(' · ')}</Text>
+                </Surface>
+              ))}
+              <Pressable onPress={() => setStage('lobby')} accessibilityRole="button" style={{ alignSelf: 'center', paddingVertical: 10 }}>
+                <Text variant="button13" tone="accText">Back to the room</Text>
+              </Pressable>
+              <Button block variant="glass" size="md" label="Done" onPress={() => router.replace('/home')} />
+            </View>
+          </>
+        )}
+      </Screen>
     </View>
   );
 }

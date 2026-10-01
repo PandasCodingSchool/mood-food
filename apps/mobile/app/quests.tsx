@@ -1,43 +1,33 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StatusBar, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Check, Flame, UtensilsCrossed, CalendarDays, Compass, Trophy } from 'lucide-react-native';
-import { useTheme } from '../src/context/ThemeContext';
-import { fw, colors, gradients } from '../src/constants/theme';
-import Screen from '../src/components/Screen';
-import BottomNav from '../src/components/BottomNav';
+// 2.0 Quests & streaks: real streak and quest progress from /quests.
+// Completed quests double as badges (there's no separate badges API yet).
+import { useCallback, useState } from 'react';
+import { RefreshControl, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { palette, space } from '@moodfood/tokens';
+import { Icon, IconTile, ProgressBar, Screen, SectionHeader, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
+import { AppTabBar, LoadingBlock, TopBar } from '../src/components/v2';
 import { fetchQuests, type Quest } from '../src/services/quests';
 
-const QUEST_ICONS: Record<string, typeof Trophy> = {
-  try_3_cuisines: UtensilsCrossed,
-  mood_streak_7: CalendarDays,
-  adventure_score: Compass,
+const QUEST_STYLE: Record<string, { icon: IconName; hue: number }> = {
+  try_3_cuisines: { icon: 'explore', hue: 300 },
+  mood_streak_7: { icon: 'local_fire_department', hue: 40 },
+  adventure_score: { icon: 'radar', hue: 270 },
 };
+const styleFor = (key: string) => QUEST_STYLE[key] ?? { icon: 'military_tech' as IconName, hue: 150 };
 
-function QuestIcon({ questKey, color }: { questKey: string; color: string }) {
-  const Icon = QUEST_ICONS[questKey] ?? Trophy;
-  return <Icon size={22} color={color} />;
-}
-
-// 5.2 — Streaks & taste-discovery quests. Deliberately inject exploration
-// data, fighting the recommender's collapse into the same 5 dishes.
 export default function QuestsScreen() {
-  const router = useRouter();
-  const { theme } = useTheme();
+  const { colors, dark } = useTheme();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const q = await fetchQuests();
-    setQuests(q);
+  const load = useCallback(async (refresh = false) => {
+    refresh ? setRefreshing(true) : setLoading(true);
+    setQuests(await fetchQuests());
     setLoading(false);
+    setRefreshing(false);
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,183 +35,86 @@ export default function QuestsScreen() {
     }, [load]),
   );
 
-  const completedCount = quests.filter((q) => q.status === 'completed').length;
-  const total = quests.length || 1;
-  const overallPct = Math.min(100, Math.round((completedCount / total) * 100));
   const streak = quests.reduce((max, q) => Math.max(max, q.streakCount || 0), 0);
+  const active = quests.filter((q) => q.status !== 'completed');
+  const completed = quests.filter((q) => q.status === 'completed');
+  const streakQuest = quests.find((q) => q.key === 'mood_streak_7');
 
   return (
-    <Screen>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen withTabBar overlay={<AppTabBar />} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.acc} />}>
+        <TopBar title="Quests & streaks" />
 
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => router.push('/home')}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: theme.surface,
-            borderWidth: 1,
-            borderColor: theme.border,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <ChevronLeft size={22} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[fw(900), { fontSize: 20, color: theme.text }]}>Quests</Text>
-      </View>
-
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={colors.orange} />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 110, gap: 18 }} showsVerticalScrollIndicator={false}>
-          <LinearGradient
-            colors={gradients.orangeDeep}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              borderRadius: 24,
-              padding: 22,
-              overflow: 'hidden',
-              shadowColor: '#000',
-              shadowOpacity: 0.1,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: 6,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View>
-                <Text style={[fw(700), { fontSize: 13, color: 'rgba(255,255,255,0.85)' }]}>Current streak</Text>
-                <Text style={[fw(900), { fontSize: 34, color: '#fff', marginTop: 2 }]}>{streak} day{streak === 1 ? '' : 's'}</Text>
-              </View>
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: 'rgba(255,255,255,0.25)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Flame size={28} color="#fff" fill="#fff" />
-              </View>
-            </View>
-
-            <View style={{ marginTop: 20 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={[fw(700), { fontSize: 12, color: 'rgba(255,255,255,0.9)' }]}>Overall progress</Text>
-                <Text style={[fw(800), { fontSize: 12, color: '#fff' }]}>{completedCount}/{quests.length} completed</Text>
-              </View>
-              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
-                <LinearGradient
-                  colors={['#fff', '#ffe4c4']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{ height: '100%', width: `${overallPct}%` }}
-                />
-              </View>
-            </View>
-          </LinearGradient>
-
-          <Text style={[fw(800), { fontSize: 16, color: theme.text, marginTop: 4 }]}>Active challenges</Text>
-
-          {quests.map((q) => {
-            const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
-            const done = q.status === 'completed';
-            const iconColor = done ? colors.green : colors.orange;
-
-            return (
-              <View
-                key={q.key}
-                style={{
-                  padding: 18,
-                  borderRadius: 20,
-                  backgroundColor: theme.card,
-                  borderWidth: 1.5,
-                  borderColor: done ? 'rgba(34,197,94,0.35)' : theme.border,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.04,
-                  shadowRadius: 10,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 2,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
-                      backgroundColor: done ? 'rgba(34,197,94,0.12)' : `${colors.orange}15`,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <QuestIcon questKey={q.key} color={iconColor} />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={[fw(800), { fontSize: 15, color: theme.text }]}>{q.title}</Text>
-                      {done ? (
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 4,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 12,
-                            backgroundColor: 'rgba(34,197,94,0.12)',
-                          }}
-                        >
-                          <Check size={12} color={colors.green} />
-                          <Text style={[fw(800), { fontSize: 10, color: colors.green }]}>Done</Text>
-                        </View>
-                      ) : (
-                        <Text style={[fw(800), { fontSize: 12, color: colors.orange }]}>{pct}%</Text>
-                      )}
-                    </View>
-                    <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 3, lineHeight: 17 }]}>
-                      {q.description}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.surface, overflow: 'hidden', marginTop: 16 }}>
-                  <LinearGradient
-                    colors={done ? ['#22c55e', '#4ade80'] : gradients.orange}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={{ height: '100%', width: `${pct}%` }}
-                  />
-                </View>
-                <Text style={[fw(700), { fontSize: 11, color: theme.subtext, marginTop: 7 }]}>
-                  {q.progress}/{q.target} {done ? '· Complete!' : 'to go'}
-                </Text>
-              </View>
-            );
-          })}
-
-          {quests.length === 0 && (
-            <View style={{ alignItems: 'center', marginTop: 40, paddingHorizontal: 24 }}>
-              <Trophy size={48} color={theme.muted} />
-              <Text style={[fw(800), { fontSize: 15, color: theme.text, marginTop: 16 }]}>No quests active</Text>
-              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, marginTop: 4, textAlign: 'center' }]}>
-                Check back soon for new challenges and streak rewards.
+        <View style={{ marginHorizontal: space.gutter, marginTop: 18, borderRadius: 30, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20, backgroundColor: colors.acc, boxShadow: `0px 30px 50px -26px ${colors.acc}` }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View>
+              <Text variant="label" color={palette.onAccent}>Mood streak</Text>
+              <Text variant="display64" style={{ marginTop: 8 }} color={palette.onAccent}>
+                {String(streak)}
+                <Text variant="display26" style={{ fontSize: 24 }} color={palette.onAccent}>{streak === 1 ? ' day' : ' days'}</Text>
               </Text>
             </View>
+            <Icon name="local_fire_department" size={44} color={palette.onAccent} filled />
+          </View>
+          {streakQuest ? (
+            <>
+              <Text variant="body13" color={palette.onAccent} style={{ marginTop: 10 }}>
+                {streakQuest.status === 'completed' ? 'Week-long streak complete.' : `${Math.max(0, streakQuest.target - streakQuest.progress)} more check-ins to a full week`}
+              </Text>
+              <ProgressBar value={streakQuest.progress / streakQuest.target} height={8} color={palette.onAccent} style={{ marginTop: 12, backgroundColor: 'rgba(11,20,34,0.18)' }} />
+            </>
+          ) : (
+            <Text variant="body13" color={palette.onAccent} style={{ marginTop: 10 }}>Check in every day to keep it going.</Text>
           )}
-        </ScrollView>
-      )}
+        </View>
 
-      <BottomNav active="quests" />
-    </Screen>
+        {loading ? (
+          <LoadingBlock label="Loading quests" />
+        ) : (
+          <>
+            <SectionHeader title="Active quests" />
+            <View style={{ paddingHorizontal: space.gutter, gap: 10 }}>
+              {active.length === 0 ? (
+                <Text variant="body13" tone="ink2">Nothing active right now. Check back soon for new challenges.</Text>
+              ) : (
+                active.map((q) => {
+                  const s = styleFor(q.key);
+                  return (
+                    <Surface key={q.key} radius={22} padding={14} style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
+                      <IconTile icon={s.icon} hue={s.hue} size={48} />
+                      <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                          <Text variant="bodyStrong15" style={{ flex: 1 }}>{q.title}</Text>
+                          <Text variant="button13" style={{ fontFamily: 'GeistMono_500Medium', fontSize: 12.5 }} tone="accText">{`${q.progress}/${q.target}`}</Text>
+                        </View>
+                        <Text variant="caption12" tone="ink2">{q.description}</Text>
+                        <ProgressBar value={q.progress / q.target} />
+                      </View>
+                    </Surface>
+                  );
+                })
+              )}
+            </View>
+
+            {quests.length ? <SectionHeader title="Badges" action={`${completed.length} of ${quests.length}`} /> : null}
+            <View style={{ paddingHorizontal: space.gutter, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {quests.map((q) => {
+                const s = styleFor(q.key);
+                const on = q.status === 'completed';
+                return (
+                  <Surface key={q.key} radius={22} style={{ flexBasis: '30%', flexGrow: 1, paddingTop: 16, paddingBottom: 14, paddingHorizontal: 8, alignItems: 'center', gap: 10 }} accessibilityLabel={`${q.title}, ${on ? 'earned' : 'locked'}`}>
+                    <View style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? undefined : colors.tint, borderWidth: on ? 0 : 1.5, borderStyle: 'dashed', borderColor: colors.track, opacity: on ? 1 : 0.7 }}>
+                      {on ? <IconTile icon={s.icon} hue={s.hue} size={56} /> : <Icon name={s.icon} size={28} tone="ink2" />}
+                    </View>
+                    <Text variant="micro12" align="center" style={{ fontFamily: 'Geist_600SemiBold' }} tone={on ? 'ink' : 'ink2'}>{q.title}</Text>
+                  </Surface>
+                );
+              })}
+            </View>
+          </>
+        )}
+      </Screen>
+    </View>
   );
 }

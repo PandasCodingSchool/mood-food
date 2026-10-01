@@ -1,173 +1,129 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { ComponentType } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
+// 2.0 Notifications: same API as v1 (list, mark one read, mark all read),
+// grouped into Today / Earlier. Tapping opens the related screen when the
+// type has an obvious home (orders → history, quests → quests).
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, RefreshControl, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Bell, ChevronLeft, ShoppingCart, Utensils, Ticket, Megaphone, Trophy } from 'lucide-react-native';
-import { fw, colors } from '../src/constants/theme';
-import BottomNav from '../src/components/BottomNav';
-import { useTheme } from '../src/context/ThemeContext';
+import { StatusBar } from 'expo-status-bar';
+import { space } from '@moodfood/tokens';
+import { Button, IconTile, Screen, Text, useTheme, type IconName } from '@moodfood/ui';
+import { ErrorBlock, LoadingBlock, TopBar } from '../src/components/v2';
 import { fetchNotifications, markAllRead, markOneRead, type AppNotification } from '../src/services/notifications';
 
-type NotifIcon = ComponentType<{ size?: number; color?: string }>;
-
-const TYPE_META: Record<string, { Icon: NotifIcon; accent: string }> = {
-  order:  { Icon: ShoppingCart, accent: colors.orange },
-  order_placed:  { Icon: ShoppingCart, accent: colors.orange },
-  quest_completed:  { Icon: Trophy, accent: colors.purple },
-  swiggy: { Icon: Utensils, accent: colors.green },
-  promo:  { Icon: Ticket, accent: colors.purple },
-  info:   { Icon: Megaphone, accent: colors.cyan },
+const TYPE_STYLE: Record<AppNotification['type'], { icon: IconName; hue: number; route?: string }> = {
+  order: { icon: 'receipt_long', hue: 260, route: '/history' },
+  order_placed: { icon: 'shopping_bag', hue: 40, route: '/history' },
+  quest_completed: { icon: 'military_tech', hue: 95, route: '/quests' },
+  info: { icon: 'info', hue: 210 },
+  promo: { icon: 'sell', hue: 350 },
+  swiggy: { icon: 'link', hue: 30, route: '/swiggy-connect' },
 };
 
-function formatDate(iso: string): string {
+function timeAgo(iso: string): string {
   const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 2) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
+  const min = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (min < 2) return 'Just now';
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
+
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { colors, dark } = useTheme();
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true);
+  const load = useCallback(async (refresh = false) => {
+    refresh ? setRefreshing(true) : setLoading(true);
+    setError(null);
     try {
-      const res = await fetchNotifications();
-      setItems(res.notifications);
-    } catch {
-      setItems([]);
+      setItems((await fetchNotifications()).notifications);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load notifications');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const handleMarkAllRead = async () => {
+  const readAll = async () => {
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     await markAllRead().catch(() => {});
   };
 
-  const handleTap = async (item: AppNotification) => {
-    if (!item.read) {
-      setItems((prev) => prev.map((n) => n.id === item.id ? { ...n, read: true } : n));
-      await markOneRead(item.id).catch(() => {});
+  const tap = async (n: AppNotification) => {
+    if (!n.read) {
+      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+      void markOneRead(n.id).catch(() => {});
     }
+    const route = TYPE_STYLE[n.type]?.route;
+    if (route) router.push(route as never);
   };
 
   const unread = items.filter((n) => !n.read).length;
+  const sections = [
+    { title: 'Today', items: items.filter((n) => isToday(n.createdAt)) },
+    { title: 'Earlier', items: items.filter((n) => !isToday(n.createdAt)) },
+  ].filter((s) => s.items.length);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.bg} />
-
-      <View style={{ paddingTop: 60, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <ChevronLeft size={22} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={[fw(900), { fontSize: 22, color: theme.text }]}>Notifications</Text>
-          {unread > 0 && (
-            <View style={{ backgroundColor: colors.orange, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={[fw(800), { fontSize: 11, color: '#fff' }]}>{unread}</Text>
-            </View>
-          )}
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.acc} />}>
+        <TopBar right={unread ? <Button label="Mark all read" variant="glass" size="sm" style={{ height: 34, borderRadius: 17 }} onPress={readAll} /> : null} />
+        <View style={{ paddingHorizontal: space.page, paddingTop: 16, flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+          <Text variant="display36" accessibilityRole="header">Notifications</Text>
+          {unread ? <Text variant="bodyStrong14" tone="accText">{`${unread} new`}</Text> : null}
         </View>
-        {unread > 0 && (
-          <TouchableOpacity onPress={handleMarkAllRead}>
-            <Text style={[fw(700), { fontSize: 13, color: colors.orange }]}>Mark all read</Text>
-          </TouchableOpacity>
+
+        {loading ? (
+          <LoadingBlock label="Loading" />
+        ) : error ? (
+          <ErrorBlock message={error} onRetry={() => void load()} />
+        ) : sections.length === 0 ? (
+          <Text variant="body14" tone="ink2" align="center" style={{ padding: 40 }}>You're all caught up.</Text>
+        ) : (
+          sections.map((sec) => (
+            <View key={sec.title}>
+              <Text variant="label" tone="ink2" style={{ paddingHorizontal: space.page, paddingTop: 22, paddingBottom: 10 }}>{sec.title}</Text>
+              <View style={{ paddingHorizontal: space.gutter, gap: 8 }}>
+                {sec.items.map((n) => {
+                  const s = TYPE_STYLE[n.type] ?? TYPE_STYLE.info;
+                  return (
+                    <Pressable
+                      key={n.id}
+                      onPress={() => void tap(n)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${n.read ? '' : 'Unread. '}${n.title}`}
+                      style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 14, paddingRight: 14, paddingLeft: 20, borderRadius: 22, borderWidth: 1, borderColor: colors.line, backgroundColor: n.read ? colors.surf : colors.surf2 }}
+                    >
+                      {!n.read ? <View style={{ position: 'absolute', top: 16, left: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.acc }} /> : null}
+                      <IconTile icon={s.icon} hue={s.hue} size={44} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                          <Text variant="bodyStrong14" style={{ flex: 1 }}>{n.title}</Text>
+                          <Text variant="micro12" tone="ink2">{timeAgo(n.createdAt)}</Text>
+                        </View>
+                        {n.body ? <Text variant="caption13" tone="ink2" style={{ marginTop: 4 }}>{n.body}</Text> : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ))
         )}
-      </View>
-
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={colors.orange} />
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingBottom: 110, gap: 10 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.orange]} />}
-        >
-          {items.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingTop: 64, gap: 12 }}>
-              <Bell size={56} color={theme.subtext} />
-              <Text style={[fw(800), { fontSize: 18, color: theme.text }]}>No notifications yet</Text>
-              <Text style={[fw(600), { fontSize: 13, color: theme.subtext, textAlign: 'center' }]}>
-                Order updates and Swiggy alerts will appear here
-              </Text>
-            </View>
-          ) : (
-            items.map((item) => {
-              const meta = TYPE_META[item.type] || TYPE_META.info;
-              const MetaIcon = meta.Icon;
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.8}
-                  onPress={() => handleTap(item)}
-                  style={{
-                    padding: 16,
-                    borderRadius: 16,
-                    backgroundColor: theme.card,
-                    borderWidth: item.read ? 1 : 2,
-                    borderColor: item.read ? theme.border : `${meta.accent}40`,
-                    flexDirection: 'row',
-                    gap: 12,
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <View style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: `${meta.accent}15`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <MetaIcon size={22} color={meta.accent} />
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={[fw(item.read ? 700 : 800), { fontSize: 14, color: theme.text, flex: 1 }]} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      {!item.read && (
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.accent, marginLeft: 8, flexShrink: 0 }} />
-                      )}
-                    </View>
-                    {item.body ? (
-                      <Text style={[fw(600), { fontSize: 13, color: theme.subtext, lineHeight: 18 }]} numberOfLines={2}>
-                        {item.body}
-                      </Text>
-                    ) : null}
-                    <Text style={[fw(600), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>
-                      {formatDate(item.createdAt)}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
-      )}
-
-      <BottomNav active="profile" />
+      </Screen>
     </View>
   );
 }

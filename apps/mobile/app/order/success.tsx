@@ -1,31 +1,21 @@
-import { useRef, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, Animated, Linking } from 'react-native';
+// 2.0 Order placed. Tracking logic is v1's unchanged: real Swiggy orders poll
+// track_food_order (never faster than 10s) until a terminal state; demo
+// orders show a local order number. Params: rec, appName, total, orderId?.
+import { useEffect, useMemo, useState } from 'react';
+import { Linking, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Check, PartyPopper, Sparkles, Gift, Truck, Package, Clock, Home, History, PhoneCall } from 'lucide-react-native';
-import { DELIVERY_APPS, swiggyDeliveryOption, type AppIcon, type DeliveryApp } from '../../src/constants/deliveryApps';
-import { useTheme } from '../../src/context/ThemeContext';
-import { fw, colors } from '../../src/constants/theme';
-import { bounceIn, floatLoop, pulseLoop } from '../../src/utils/animations';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { ZoomIn } from 'react-native-reanimated';
+import { palette, space } from '@moodfood/tokens';
+import { AmbientBackground, Button, Icon, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
+import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import { trackOrder } from '../../src/services/swiggyOrder';
 import type { Recommendation } from '../../src/types';
 
 // track_food_order must not be polled faster than every 10s (Swiggy MCP docs).
 const TRACK_POLL_MS = 10000;
 const SWIGGY_SUPPORT_NUMBER = '080-67466729';
-
-function CelebrationIcon({ Icon, size, color, style, duration }: { Icon: AppIcon; size: number; color: string; style: object; duration: number }) {
-  const translateY = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = floatLoop(translateY, 8, duration);
-    return () => loop.stop();
-  }, []);
-  return (
-    <Animated.View style={[{ position: 'absolute' }, style, { transform: [{ translateY }] }]}>
-      <Icon size={size} color={color} />
-    </Animated.View>
-  );
-}
 
 type TrackStep = 'placed' | 'preparing' | 'on_the_way' | 'delivered' | 'cancelled';
 
@@ -40,7 +30,6 @@ function stepFromStatus(status: string | null | undefined): TrackStep {
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
   const { rec: rawRec, appName, total, orderId } = useLocalSearchParams<{
     rec: string;
     appName: string;
@@ -53,7 +42,6 @@ export default function OrderSuccessScreen() {
     if (liveOption && liveOption.name === appName) return liveOption;
     return DELIVERY_APPS.find((a) => a.name === appName) ?? DELIVERY_APPS[0];
   }, [appName, rec]);
-  const AppIcon = app.icon;
   const orderNum = useMemo(() => Math.floor(1000 + Math.random() * 9000).toString(), []);
 
   const isRealOrder = !!orderId;
@@ -61,14 +49,7 @@ export default function OrderSuccessScreen() {
   const [liveEta, setLiveEta] = useState<string | null>(null);
   const [trackError, setTrackError] = useState(false);
 
-  const checkScale = useRef(new Animated.Value(0.3)).current;
-  const pulseDot = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    bounceIn(checkScale);
-    const loop = pulseLoop(pulseDot, 1.4, 750);
-    return () => loop.stop();
-  }, []);
 
   // 4.1-adjacent: real order tracking. Polls no faster than the documented
   // 10s floor and stops once the order reaches a terminal state.
@@ -107,159 +88,66 @@ export default function OrderSuccessScreen() {
   const onTheWayActive = step === 'on_the_way';
   const deliveredActive = step === 'delivered';
 
-  return (
-    <LinearGradient colors={[theme.bg, theme.surface, theme.surface]} style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <View style={{ flex: 1, alignItems: 'center', paddingTop: 100, paddingHorizontal: 32, paddingBottom: 40 }}>
-        <View style={{ marginTop: 20 }}>
-          <Animated.View
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              alignItems: 'center',
-              justifyContent: 'center',
-              transform: [{ scale: checkScale }],
-            }}
-          >
-            <LinearGradient colors={['#22c55e', '#4ade80']} style={{ width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' }}>
-              <Check size={60} color="#fff" />
-            </LinearGradient>
-          </Animated.View>
-          <CelebrationIcon Icon={PartyPopper} size={24} color={colors.orange} duration={2000} style={{ top: -20, left: -20 }} />
-          <CelebrationIcon Icon={Sparkles} size={20} color={colors.purple} duration={2500} style={{ top: -10, right: -25 }} />
-          <CelebrationIcon Icon={Gift} size={18} color={colors.rose} duration={2200} style={{ bottom: -15, left: -15 }} />
-        </View>
+  const { colors, dark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const cancelled = step === 'cancelled';
+  const steps: Array<{ key: string; label: string; icon: IconName; on: boolean; done: boolean }> = [
+    { key: 'preparing', label: 'Preparing', icon: 'skillet', on: preparingActive, done: onTheWayActive || deliveredActive },
+    { key: 'on_the_way', label: 'On the way', icon: 'local_fire_department', on: onTheWayActive, done: deliveredActive },
+    { key: 'delivered', label: 'Delivered', icon: 'home', on: deliveredActive, done: deliveredActive },
+  ];
 
-        <Text style={[fw(900), { fontSize: 28, color: theme.text, textAlign: 'center', marginTop: 32 }]}>Order Confirmed!</Text>
-        <Text style={[fw(600), { fontSize: 14, color: theme.subtext, textAlign: 'center', marginTop: 8, maxWidth: 260, lineHeight: 20 }]}>
-          {step === 'cancelled'
-            ? 'Something went wrong with this order.'
-            : `Your ${rec.dish.name} is on its way. Sit tight!`}
+  return (
+    <View style={{ flex: 1 }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <AmbientBackground />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <Animated.View
+          entering={ZoomIn.springify().damping(11)}
+          style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: cancelled ? palette.danger : colors.acc, alignItems: 'center', justifyContent: 'center', boxShadow: `0px 0px 0px 14px ${colors.accSoft}, 0px 30px 60px -20px ${colors.acc}` }}
+        >
+          <Icon name={cancelled ? 'close' : 'check'} size={60} color={cancelled ? palette.white : colors.onAcc} />
+        </Animated.View>
+        <Text variant="display34" align="center" style={{ marginTop: 36 }} accessibilityRole="header">
+          {cancelled ? 'That didn’t go through.' : 'Good choice.'}
+        </Text>
+        <Text variant="body15" tone="ink2" align="center" style={{ marginTop: 10 }}>
+          {cancelled
+            ? 'This order was cancelled or couldn’t be tracked.'
+            : `${app.isLive && app.restaurantName ? app.restaurantName : app.name} is on it. ${rec.dish.name} arrives in about ${liveEta || app.eta}.`}
+        </Text>
+        <Text variant="label" tone="ink2" style={{ marginTop: 14 }}>
+          {`Order #${isRealOrder ? orderId : `MF-${orderNum}`} · ₹${total}`}
         </Text>
 
-        <View style={{ width: '100%', marginTop: 32, padding: 20, borderRadius: 20, backgroundColor: theme.card, shadowColor: theme.shadow, shadowOpacity: 0.12, shadowRadius: 12, elevation: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: app.bg, alignItems: 'center', justifyContent: 'center' }}>
-              <AppIcon size={22} color={theme.text} />
-            </View>
-            <View>
-              <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>
-                {app.name}{app.isLive && app.restaurantName ? ` · ${app.restaurantName}` : ''}
-              </Text>
-              <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>
-                Order #{isRealOrder ? orderId : `MF-${orderNum}`}
-              </Text>
-            </View>
-          </View>
-
-          {step === 'cancelled' ? (
-            <View style={{ padding: 12, borderRadius: 12, backgroundColor: 'rgba(220,38,38,0.06)', gap: 10 }}>
-              <Text style={[fw(700), { fontSize: 13, color: '#dc2626' }]}>
-                This order was cancelled or couldn't be tracked.
-              </Text>
-              <TouchableOpacity
-                onPress={handleCallSupport}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }}
-              >
-                <PhoneCall size={16} color="#dc2626" />
-                <Text style={[fw(700), { fontSize: 12, color: '#dc2626' }]}>Call Swiggy support: {SWIGGY_SUPPORT_NUMBER}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <ProgressStep Icon={Check} iconBg={colors.green} label="Order placed" labelColor={theme.text} lineColor={colors.green} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: preparingActive ? colors.green : theme.surface, alignItems: 'center', justifyContent: 'center' }}>
-                  {preparingActive ? (
-                    <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff', transform: [{ scale: pulseDot }] }} />
-                  ) : (
-                    <Clock size={14} color={theme.subtext} />
-                  )}
+        {!cancelled ? (
+          <Surface radius={22} padding={16} style={{ alignSelf: 'stretch', marginTop: 24, gap: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {steps.map((s) => (
+                <View key={s.key} style={{ alignItems: 'center', gap: 6, flex: 1 }} accessibilityLabel={`${s.label}${s.on ? ', current' : s.done ? ', done' : ''}`}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: s.on || s.done ? colors.acc : colors.track }}>
+                    <Icon name={s.done && !s.on ? 'check' : s.icon} size={20} color={s.on || s.done ? colors.onAcc : colors.ink2} />
+                  </View>
+                  <Text variant="micro12" tone={s.on ? 'ink' : 'ink2'}>{s.label}</Text>
                 </View>
-                <Text style={[fw(preparingActive ? 700 : 600), { fontSize: 13, color: preparingActive ? theme.text : theme.subtext }]}>Preparing your food</Text>
-              </View>
-              <View style={{ width: 2, height: 20, backgroundColor: onTheWayActive || deliveredActive ? colors.green : theme.border, marginLeft: 13 }} />
-              <ProgressStep
-                Icon={Truck}
-                iconBg={onTheWayActive || deliveredActive ? colors.green : theme.surface}
-                label="On its way"
-                labelColor={onTheWayActive || deliveredActive ? theme.text : theme.subtext}
-                lineColor={deliveredActive ? colors.green : theme.border}
-                muted={!(onTheWayActive || deliveredActive)}
-                pulse={onTheWayActive}
-              />
-              <ProgressStep
-                Icon={Package}
-                iconBg={deliveredActive ? colors.green : theme.surface}
-                label="Delivered"
-                labelColor={deliveredActive ? theme.text : theme.subtext}
-                muted={!deliveredActive}
-                last
-              />
-
-              <View style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: colors.orange + '0F', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Clock size={20} color={colors.orange} />
-                <View>
-                  <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>ETA: {liveEta || app.eta}</Text>
-                  <Text style={[fw(600), { fontSize: 12, color: theme.subtext }]}>
-                    {trackError ? 'Live tracking unavailable right now' : 'Arriving at your door'}
-                  </Text>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
-
-        <View style={{ width: '100%', gap: 10, marginTop: 'auto' }}>
-          <TouchableOpacity onPress={() => router.push('/home')} activeOpacity={0.85}>
-            <View style={{ height: 52, borderRadius: 26, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
-              <Home size={20} color="#fff" />
-              <Text style={[fw(800), { fontSize: 16, color: '#fff' }]}>Play another game</Text>
+              ))}
             </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/history')} activeOpacity={0.7}>
-            <View style={{ height: 48, borderRadius: 24, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}>
-              <History size={18} color={theme.text} />
-              <Text style={[fw(700), { fontSize: 14, color: theme.text }]}>View order history</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+            <Text variant="caption12" tone="ink2" align="center">
+              {!isRealOrder
+                ? 'Demo order: no live tracking.'
+                : trackError
+                  ? 'Live tracking unavailable right now'
+                  : `ETA ${liveEta || app.eta} · updates every 10 seconds`}
+            </Text>
+          </Surface>
+        ) : (
+          <Button label="Call Swiggy support" iconLeft="call" variant="glass" size="md" style={{ marginTop: 24 }} onPress={handleCallSupport} />
+        )}
       </View>
-    </LinearGradient>
-  );
-}
-
-function ProgressStep({
-  Icon,
-  iconBg,
-  label,
-  labelColor,
-  lineColor,
-  muted,
-  last,
-  pulse,
-}: {
-  Icon: AppIcon;
-  iconBg: string;
-  label: string;
-  labelColor: string;
-  lineColor?: string;
-  muted?: boolean;
-  last?: boolean;
-  pulse?: boolean;
-}) {
-  return (
-    <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={muted ? 14 : 12} color={muted ? '#94a3b8' : '#fff'} />
-        </View>
-        <Text style={[fw(muted ? 600 : 700), { fontSize: 13, color: labelColor }]}>
-          {label}{pulse ? '…' : ''}
-        </Text>
+      <View style={{ paddingHorizontal: space.gutter, paddingBottom: Math.max(36, insets.bottom + 16), gap: 10 }}>
+        <Button block label="Back home" onPress={() => router.replace('/home')} />
+        <Button block variant="glass" size="md" label="View my orders" onPress={() => router.push('/history')} />
       </View>
-      {!last && <View style={{ width: 2, height: 20, backgroundColor: lineColor || 'rgba(0,0,0,0.08)', marginLeft: 13 }} />}
     </View>
   );
 }
