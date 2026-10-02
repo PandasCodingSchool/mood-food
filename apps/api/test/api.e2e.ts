@@ -56,6 +56,17 @@ describe('health & errors', () => {
     assert.equal(typeof bad.data.error, 'string');
   });
 
+  it('CORS preflight allows every method the web app uses', async () => {
+    for (const method of ['PUT', 'PATCH', 'DELETE']) {
+      const res = await fetch(BASE + '/user/me', {
+        method: 'OPTIONS',
+        headers: { Origin: 'http://localhost:8081', 'Access-Control-Request-Method': method, 'Access-Control-Request-Headers': 'content-type,authorization' },
+      });
+      assert.ok(res.status < 300, `preflight ${method} → ${res.status}`);
+      assert.match(res.headers.get('access-control-allow-methods') ?? '', new RegExp(method), method);
+    }
+  });
+
   it('accepts an empty JSON body', async () => {
     const r = await call('POST', '/auth/guest', { headers: { 'Content-Type': 'application/json' } });
     assert.equal(r.status, 201);

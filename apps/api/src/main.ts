@@ -53,6 +53,8 @@ async function bootstrap() {
   app.enableCors({
     origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((o) => o.trim()),
     credentials: true,
+    // @fastify/cors only allows GET/HEAD/POST by default; the app also uses PUT, PATCH and DELETE.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     exposedHeaders: ['x-request-id', 'RateLimit-Limit', 'RateLimit-Remaining', 'Retry-After'],
   });
   app.enableShutdownHooks();

@@ -128,3 +128,13 @@ export async function logout(): Promise<void> {
   }
   await clearSessionId();
 }
+
+/** Permanently deletes the account and all its data (store requirement), then signs out locally. */
+export async function deleteAccount(): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/user/me`, { method: "DELETE", headers: await getHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Could not delete your account. Please try again.");
+  }
+  await clearSessionId();
+}

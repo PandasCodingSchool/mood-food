@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { space } from '@moodfood/tokens';
-import { FilterChip, ListRow, Screen, SegmentedControl, Surface, Text, useTheme } from '@moodfood/ui';
+import { palette, space } from '@moodfood/tokens';
+import { Button, FilterChip, ListRow, Screen, SegmentedControl, Surface, Text, useTheme } from '@moodfood/ui';
 import { LoadingBlock, TopBar } from '../src/components/v2';
 import { ALLERGIES, BUDGETS, CUISINES, DEFAULT_PREFS, DIETS } from '../src/constants/preferences';
-import { fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
+import { deleteAccount, fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
 import { fetchPreferences, savePreferences, type UserPreferences } from '../src/services/preferences';
 
 type ListKey = 'diets' | 'allergies' | 'cuisines';
@@ -20,6 +20,9 @@ export default function SettingsScreen() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // Inline confirm (Alert.alert is a no-op on web).
+  const [deleteStep, setDeleteStep] = useState<'idle' | 'confirm' | 'deleting'>('idle');
+  const [deleteError, setDeleteError] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -115,6 +118,42 @@ export default function SettingsScreen() {
                 )}
               </Surface>,
             )}
+            {user ? (
+              <View style={{ paddingHorizontal: space.gutter, paddingTop: 14 }}>
+                {deleteStep === 'idle' ? (
+                  <Button block variant="ghost" size="md" label="Delete account" onPress={() => setDeleteStep('confirm')} />
+                ) : (
+                  <Surface padding={16} style={{ gap: 12 }}>
+                    <Text variant="bodyStrong15">Delete your account?</Text>
+                    <Text variant="body13" tone="ink2">
+                      This permanently deletes your profile, preferences, history, saved dishes, quests and taste data, and unlinks Swiggy. It can't be undone.
+                    </Text>
+                    {deleteError ? <Text variant="caption13" color={palette.danger}>{deleteError}</Text> : null}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Button variant="glass" size="md" label="Cancel" style={{ flex: 1 }} disabled={deleteStep === 'deleting'} onPress={() => { setDeleteStep('idle'); setDeleteError(''); }} />
+                      <Button
+                        variant="ink"
+                        size="md"
+                        label={deleteStep === 'deleting' ? 'Deleting…' : 'Delete forever'}
+                        style={{ flex: 1 }}
+                        disabled={deleteStep === 'deleting'}
+                        onPress={async () => {
+                          setDeleteStep('deleting');
+                          setDeleteError('');
+                          try {
+                            await deleteAccount();
+                            router.replace('/login');
+                          } catch (e) {
+                            setDeleteError(e instanceof Error ? e.message : 'Could not delete your account.');
+                            setDeleteStep('confirm');
+                          }
+                        }}
+                      />
+                    </View>
+                  </Surface>
+                )}
+              </View>
+            ) : null}
             <Text variant="micro12" tone="ink2" align="center" style={{ paddingTop: 20 }}>MoodFood 2.0</Text>
           </>
         )}

@@ -1,177 +1,130 @@
-# MoodFood 🍽️
+# MoodFood
 
 > **From "I'm hungry" to eating in 90 seconds.**
 
-AI-powered, mood-based food recommendations. Answer a few quick questions (or play a game), and get personalized meal picks — with healthier swaps and budget alternatives included.
+MoodFood picks food for how you feel. You do a four-tap mood check-in or a 30-second game, and MoodFood combines that with the time of day and the weather to suggest three dishes, each with a reason. You can order them on Swiggy inside the app, or get the recipe and buy the ingredients on Instamart.
+
+This is **MoodFood 2.0**: a pnpm + Turborepo monorepo with a new design system, a NestJS backend on Postgres and Redis, one Expo app for iOS, Android and the web, and a Next.js marketing site.
 
 ---
 
-## What It Does
+## What's in the repo
 
-Most food apps answer "How do I order?" — MoodFood answers **"What should I eat?"**
-
-Users pick a game, share their mood & cravings, and receive 3 AI-curated meal recommendations tailored to their budget, dietary preferences, and current vibe.
-
----
-
-## Tech Stack
-
-| Layer      | Tech                                                    |
-| ---------- | ------------------------------------------------------- |
-| Frontend   | React 18 + Vite, TypeScript, Tailwind CSS, Lucide React |
-| Backend    | Node.js + Express, SQLite (via better-sqlite3)          |
-| AI Service | Python FastAPI (intelligence service, separate process) |
-| Animations | CSS keyframes (no external animation libraries)         |
-
----
-
-## Project Structure
+| Path | What it is | Stack | Local port |
+| --- | --- | --- | --- |
+| `apps/mobile` | The product app: iOS, Android and the web app | Expo SDK 57, expo-router, React Native 0.86, Reanimated 4 | 8081 |
+| `apps/api` | Backend API: users and auth, personalisation, Swiggy linking, games, history | NestJS 12 (Fastify), Drizzle + Postgres, Redis | 3001 |
+| `apps/intelligence` | Recommender, learning loop, Swiggy MCP client, recipes, moderation | Python 3.12, FastAPI | 8000 |
+| `apps/site` | Marketing site: landing, waitlist, about | Next.js 16 (static) | 3002 |
+| `packages/tokens` | Design tokens and the "living theme" (time × weather × mood) | TypeScript | — |
+| `packages/ui` | Component kit used by the app and the web app | React Native + web | — |
+| `apps/backend` | v1 Express API. **Superseded by `apps/api`**; remove after the beta cutover | Express | — |
+| `apps/frontend` | v1 Vite web app. **Superseded by the Expo web build + `apps/site`** | React + Vite | — |
+| `docs/` | Architecture notes and the 2.0 design handoff (`docs/design/moodfood-2.0`) | | |
 
 ```
-mood-food/
-├── apps/
-│   ├── backend/        # Express API (v1). Being replaced by apps/api (NestJS)
-│   ├── frontend/       # Vite + React web app (v1). Replaced by Expo web + apps/site
-│   ├── mobile/         # Expo app (iOS, Android, product web)
-│   └── intelligence/   # Python FastAPI: recommender, learning, Swiggy MCP
-├── packages/           # Shared packages (tokens, ui, contracts, api-client), added in 2.0
-├── docs/               # Architecture, gaps, redesign reference
-├── pnpm-workspace.yaml
-└── turbo.json          # Pipeline: pnpm build | typecheck | test
+           ┌──────────────┐      ┌──────────────┐
+           │  apps/site   │      │ apps/mobile  │  iOS · Android · web
+           │  (Next.js)   │      │   (Expo)     │
+           └──────┬───────┘      └──────┬───────┘
+          waitlist│                     │ /api/* (Bearer session)
+                  ▼                     ▼
+               ┌──────────────────────────┐        ┌──────────┐
+               │        apps/api          │───────▶│ Postgres │
+               │   NestJS · Fastify       │───────▶│  Redis   │
+               └────────────┬─────────────┘        └──────────┘
+                            │ private network
+                            ▼
+               ┌──────────────────────────┐        ┌──────────────────────┐
+               │   apps/intelligence      │───────▶│ OpenAI · Swiggy MCP  │
+               │   FastAPI                │        │ Open-Meteo           │
+               └──────────────────────────┘        └──────────────────────┘
 ```
+
+---
+
+## Quick start
+
+Requirements: Node 22+, pnpm (through corepack), Docker, and Python 3.12 if you run the intelligence service.
+
+```bash
+corepack enable
+pnpm install
+
+pnpm db:up              # Postgres 17 + Redis 7.4 in Docker (docker-compose.yml)
+pnpm api                # API on :3001 — applies DB migrations on boot
+pnpm mobile             # Expo dev server; press w for the web app
+pnpm site               # marketing site on :3002
+```
+
+`pnpm dev` starts the API and the site together.
+
+The intelligence service is needed for real recommendations, Swiggy and recipes. Without it the API falls back to rule-based picks.
+
+```bash
+cd apps/intelligence
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env    # OpenAI key, Swiggy token, SYNC_KEY
+uvicorn app.main:app --port 8000 --reload
+```
+
+Or run it and the API in containers: `docker compose --profile app up -d --build`.
+
+### Environment files
+
+All of them are optional for local development unless noted.
+
+| File | Copy from | Notes |
+| --- | --- | --- |
+| `apps/api/.env` | `apps/api/.env.example` | Every value has a local default. OTP codes are printed in the API log. |
+| `apps/intelligence/.env` | `apps/intelligence/.env.example` | **Required:** `OPENAI_API_KEY`. Swiggy needs the bootstrap token. |
+| `apps/mobile/.env` | — | `EXPO_PUBLIC_API_URL=http://localhost:3001/api` |
+| `apps/site/.env.local` | `apps/site/.env.example` | API and web-app URLs for the waitlist form and links |
+
+The shared secret `INTELLIGENCE_SYNC_KEY` (API) must equal `SYNC_KEY` (intelligence).
+
+### Handy extras
+
+- `docker compose --profile tools up -d` starts Adminer at http://localhost:8081 (server `postgres`, user and password `moodfood`) and Redis Insight at http://localhost:5540.
+- The admin panel is at http://localhost:3001/admin, using `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+- `/design-system` in the app is a gallery of every UI component.
+
+---
+
+## Scripts
+
+| Command | Does |
+| --- | --- |
+| `pnpm db:up` · `db:down` · `db:reset` | Start, stop, or wipe and restart local Postgres and Redis |
+| `pnpm db:migrate` | Build the API and apply migrations without starting it |
+| `pnpm typecheck` · `pnpm build` · `pnpm test` | Turborepo across all packages |
+| `pnpm --filter @moodfood/api test:e2e` | API end-to-end suite against a running API (`API_URL=…`) |
+| `pnpm --filter @moodfood/api db:generate` | New SQL migration after editing `apps/api/src/db/schema.ts` |
+| `pnpm --filter @moodfood/mobile exec expo export --platform web` | Static web-app build |
 
 ---
 
 ## Features
 
-### 🎮 Three Game Modes
+- **Mood check-in and living theme.** The app's colours follow the time of day, the weather and your mood.
+- **Decision games:** Snack Match, Meal Roulette, Mood Scoop, This or That, Craving Radar, Story mode, Bracket and Pantry mode. Every result feeds the learning loop.
+- **Recommendations** come with reasons, healthier and budget swaps, live Swiggy restaurant matches, and a post-meal "how do you feel now?" step that calibrates future picks.
+- **Ordering in the app:** link your Swiggy account to get menus, cart, coupons, checkout and live order tracking.
+- **DIY:** turn any pick into a recipe, see what's missing from your pantry, and buy it on Instamart.
+- **Accounts:** phone OTP or password login, guest mode that upgrades in place, device sessions, account deletion.
+- **Retention:** mood streaks, taste quests and notifications.
 
-- **Classic Quiz** — 4-question mood quiz
-- **Swipe & Vibe** — Tinder-style food card swiping with touch drag, card tilt, and LIKE/NOPE stamps
-- **Meal Roulette** — Spin to land on a food vibe; accept or reject with confetti on land
-
-### 🤖 AI Recommendations
-
-- 3 personalized meal picks powered by the intelligence service
-- Each pick includes an explanation and mood-match score
-- **Healthier swap** (🥦) and **Budget pick** (💰) alternatives in a horizontal scroll strip
-
-### 🏠 Landing Page
-
-- Word-by-word animated hero headline
-- Floating food emoji particles + animated background blobs
-- Shimmer effect on CTA button
-- Scroll-triggered staggered fade-in on all sections
-- "The difference" panel: _Other apps ask how to order. We answer what to eat._
-- **Coming Soon** grid: Restaurant Finder, Group Decisions, Meal Memories, and more
-
-### 🧭 Navbar
-
-- Scroll-aware shadow + blur
-- "Join Waitlist" + "Find My Meal" buttons
-- Mobile hamburger drawer
-
-### 📋 Waitlist
-
-- Name, email, city, favourite cuisine
-- Duplicate email prevention
-- Backend-persisted in SQLite
-
-### 🔧 Admin Panel
-
-- Basic Auth protected at `/admin`
-- Analytics dashboard: events, daily stats, waitlist viewer
+API reference and auth details: [apps/api/README.md](apps/api/README.md). Site details: [apps/site/README.md](apps/site/README.md).
 
 ---
 
-## Quick Start
+## Deploying
 
-### 1. Install dependencies
-
-```bash
-corepack enable
-pnpm install         # installs every app in apps/*
-```
-
-### 2. Configure environment
-
-```bash
-cp apps/backend/.env.example apps/backend/.env
-# Fill in AI service URL, admin credentials, etc.
-```
-
-### 3. Run dev servers
-
-```bash
-pnpm dev             # starts frontend (5173) + backend (3001) concurrently
-```
-
-### 4. Admin panel
-
-```
-http://localhost:3001/admin
-Username: admin
-Password: set in apps/backend/.env (ADMIN_PASSWORD)
-```
-
----
-
-## API Endpoints
-
-### Public
-
-| Method | Route                     | Description           |
-| ------ | ------------------------- | --------------------- |
-| GET    | `/api/health`             | Health check          |
-| POST   | `/api/waitlist`           | Join waitlist         |
-| POST   | `/api/analytics`          | Track event           |
-| POST   | `/api/ai-recommendations` | Get AI meal picks     |
-| POST   | `/api/quiz-complete`      | Track quiz completion |
-
-### Admin (Basic Auth)
-
-| Method | Route                  | Description          |
-| ------ | ---------------------- | -------------------- |
-| GET    | `/api/admin/analytics` | Analytics summary    |
-| GET    | `/api/admin/waitlist`  | All waitlist entries |
-
----
-
-## Analytics Events
-
-| Event                      | Triggered when             |
-| -------------------------- | -------------------------- |
-| `landing_page_viewed`      | User visits landing page   |
-| `quiz_started`             | User clicks "Find My Meal" |
-| `game_selected`            | User picks a game mode     |
-| `quiz_completed`           | Quiz answers submitted     |
-| `recommendation_viewed`    | AI results displayed       |
-| `recommendation_liked`     | User likes a result        |
-| `recommendation_refreshed` | User requests new picks    |
-| `recommendation_shared`    | User shares a result       |
-| `waitlist_joined`          | Waitlist form submitted    |
-| `wheel_spun`               | SpinWheel spin triggered   |
-| `wheel_landed`             | SpinWheel stops on segment |
-
----
-
-## Coming Soon (Roadmap)
-
-| Feature                                                        | ETA     |
-| -------------------------------------------------------------- | ------- |
-| 📍 Restaurant Finder — nearby spots for your picked dish       | Q3 2026 |
-| 👥 Group Decisions — vote with friends via one link            | Q3 2026 |
-| 📸 Meal Memories — snap what you ate, build your taste profile | Q4 2026 |
-| 🔔 Meal Reminders — "Hungry yet?" nudges based on your routine | Q4 2026 |
-| 🏆 Taste Streaks — try new things daily & earn badges          | Q1 2027 |
-| 🌍 Global Palette — explore cuisines from 50+ countries        | Q1 2027 |
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the beta launch plan: hosting, domains, environments, mobile release tracks, rollout phases and the go/no-go checklist.
 
 ---
 
 ## License
 
 MIT
-
----
-
-**Built with ❤️ for people who hate deciding what to eat.**
