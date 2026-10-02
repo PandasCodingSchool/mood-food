@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.env
+**/.env.*
+.git
+.gitnexus
+*.zip
+apps/mobile
+apps/frontend
+apps/backend
+docs
+build_plan

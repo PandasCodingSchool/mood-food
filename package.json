@@ -1,19 +1,30 @@
 {
-  "name": "mood-food-platform",
-  "version": "1.0.0",
+  "name": "moodfood",
+  "version": "2.0.0",
+  "private": true,
   "description": "Mood-based food recommendation platform",
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "build": "cd frontend && npm run build",
-    "start": "cd backend && npm start",
-    "mobile": "cd mobile && npx expo start",
-    "mobile:android": "cd mobile && npx expo start --android",
-    "mobile:ios": "cd mobile && npx expo start --ios"
+    "dev": "turbo run dev --filter=@moodfood/api --filter=@moodfood/site",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "mobile": "pnpm --filter @moodfood/mobile start",
+    "mobile:android": "pnpm --filter @moodfood/mobile exec expo start --android",
+    "mobile:ios": "pnpm --filter @moodfood/mobile exec expo start --ios",
+    "intelligence": "pnpm --filter @moodfood/intelligence dev",
+    "api": "pnpm --filter @moodfood/api dev",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:migrate": "pnpm --filter @moodfood/api build && pnpm --filter @moodfood/api db:migrate",
+    "site": "pnpm --filter @moodfood/site dev"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "turbo": "^2.5.0"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22"
+  }
 }

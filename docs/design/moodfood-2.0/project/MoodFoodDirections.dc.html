@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@400..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block" rel="stylesheet">
+<style>body{margin:0;background:#f0eee9;font-family:Geist,system-ui,sans-serif}a{color:#C2560A}a:hover{color:#8F3E05}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55)}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5)}.dv-note{margin:0 0 22px;max-width:760px;font:13px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.6)}</style></helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Home + Mood check-in — three directions</span></div>
+<p class="dv-note">Assumptions: evening, raining, user reads as “tired” — the default context. <a class="dv-oid" href="#1a">1a</a> is the live, fully clickable prototype direction (open MoodFoodApp.dc.html for the whole flow). <a class="dv-oid" href="#1b">1b</a> and <a class="dv-oid" href="#1c">1c</a> are static alternates to steal from. Food photos are placeholders.</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Ambient glass — weather + time drive the whole backdrop; mood tints the accent</div>
+<div class="dv-card" style="background:#E8E4DE;display:flex">
+<dc-import name="MoodFoodApp" screen="home" bare="{{ true }}" hint-size="474px,928px"></dc-import>
+<dc-import name="MoodFoodApp" screen="mood" bare="{{ true }}" hint-size="474px,928px"></dc-import>
+</div></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Editorial menu — paper, big type, a ranked list instead of a feed</div>
+<div class="dv-card" style="background:#E8E4DE;display:flex;gap:32px;padding:32px">
+
+<div style="width:390px;height:844px;border-radius:56px;padding:10px;background:#0B0B10;box-sizing:content-box">
+<div style="position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:#F4EFE6;color:#0B1422">
+<div style="position:absolute;top:11px;left:50%;margin-left:-61px;width:122px;height:34px;border-radius:20px;background:#000000"></div>
+<div style="padding:60px 22px 0;display:flex;justify-content:space-between;align-items:center">
+<div style="font:800 21px 'Bricolage Grotesque',sans-serif;letter-spacing:-.03em">Mood<span style="color:#E8650A">Food</span></div>
+<div style="font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5E5A55">Rain · 24° · 7:48 PM</div>
+</div>
+<div style="padding:26px 22px 0;font:700 46px/.94 'Bricolage Grotesque',sans-serif;letter-spacing:-.04em">Tired, rainy, 7:48&nbsp;pm.</div>
+<div style="padding:10px 22px 0;font-size:16px;color:#5E5A55">Dinner, sorted in order of how much it'll help.</div>
+<div style="margin:22px 22px 0;height:220px;border-radius:6px;background:repeating-linear-gradient(135deg,rgba(11,20,34,.07) 0 9px,rgba(11,20,34,.02) 9px 18px);display:grid;place-items:center"><span style="font:500 10px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5E5A55">photo · butter chicken · naan</span></div>
+<div style="padding:16px 22px 0;display:flex;gap:14px;align-items:flex-start">
+<div style="font:800 40px/1 'Bricolage Grotesque',sans-serif;color:#E8650A;letter-spacing:-.04em">01</div>
+<div style="flex:1">
+<div style="font:700 24px/1.05 'Bricolage Grotesque',sans-serif;letter-spacing:-.025em">Butter Chicken &amp; Garlic Naan</div>
+<div style="font-size:13.5px;line-height:1.4;color:#5E5A55;margin-top:6px">96% match — slow-cooked comfort that asks nothing of you.</div>
+</div>
+</div>
+<div style="padding:14px 22px 0;display:flex;gap:8px">
+<div style="flex:1;height:50px;border-radius:25px;background:#0B1422;color:#FFFFFF;font:600 15px Geist,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px">Order · ₹420<span style="font-family:'Material Symbols Rounded';font-size:18px">arrow_forward</span></div>
+<div style="height:50px;padding:0 18px;border-radius:25px;border:1.5px solid #0B1422;font:600 15px Geist,sans-serif;display:flex;align-items:center">Why?</div>
+</div>
+<div style="margin:22px 22px 0;border-top:1.5px solid #0B1422">
+<div style="display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid rgba(11,20,34,.12)"><span style="font:700 15px 'Geist Mono',monospace;color:#E8650A">02</span><span style="flex:1;font-weight:600;font-size:15px">Masala Khichdi Bowl</span><span style="font-size:13px;color:#5E5A55">93%</span><span style="font-weight:600;font-size:14px;width:44px;text-align:right">₹240</span></div>
+<div style="display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid rgba(11,20,34,.12)"><span style="font:700 15px 'Geist Mono',monospace;color:#E8650A">03</span><span style="flex:1;font-weight:600;font-size:15px">Pepper Rasam &amp; Ghee Rice</span><span style="font-size:13px;color:#5E5A55">91%</span><span style="font-weight:600;font-size:14px;width:44px;text-align:right">₹220</span></div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:88px;background:#F4EFE6;border-top:1px solid rgba(11,20,34,.12);display:grid;grid-template-columns:1fr 1fr 80px 1fr 1fr;align-items:center;padding-bottom:14px;box-sizing:border-box;font:600 12px Geist,sans-serif;text-align:center">
+<span>Home</span><span style="color:#5E5A55">For you</span>
+<div style="display:flex;justify-content:center"><div style="width:52px;height:52px;border-radius:50%;background:#E8650A;display:grid;place-items:center;color:#0B1422"><span style="font-family:'Material Symbols Rounded';font-size:26px">mood</span></div></div>
+<span style="color:#5E5A55">Play</span><span style="color:#5E5A55">Group</span>
+</div>
+</div>
+</div>
+
+<div style="width:390px;height:844px;border-radius:56px;padding:10px;background:#0B0B10;box-sizing:content-box">
+<div style="position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:#F4EFE6;color:#0B1422">
+<div style="position:absolute;top:11px;left:50%;margin-left:-61px;width:122px;height:34px;border-radius:20px;background:#000000"></div>
+<div style="padding:62px 22px 0;display:flex;justify-content:space-between;font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5E5A55"><span>Check-in · 20 sec</span><span>Skip</span></div>
+<div style="padding:20px 22px 0;font:700 44px/.94 'Bricolage Grotesque',sans-serif;letter-spacing:-.04em">How are you, really?</div>
+<div style="margin:24px 22px 0;border-top:1.5px solid #0B1422">
+<div style="padding:14px 0;border-bottom:1px solid rgba(11,20,34,.12)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:700 20px 'Bricolage Grotesque',sans-serif">Energy</span><span style="font-size:13px;color:#5E5A55">Low</span></div><div style="display:flex;gap:8px;margin-top:10px"><span style="width:40px;height:40px;border-radius:50%;background:#0B1422;color:#FFF;display:grid;place-items:center;font:600 14px Geist">1</span><span style="width:40px;height:40px;border-radius:50%;background:#0B1422;color:#FFF;display:grid;place-items:center;font:600 14px Geist">2</span><span style="width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(11,20,34,.2);display:grid;place-items:center;font:600 14px Geist;box-sizing:border-box">3</span><span style="width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(11,20,34,.2);display:grid;place-items:center;font:600 14px Geist;box-sizing:border-box">4</span><span style="width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(11,20,34,.2);display:grid;place-items:center;font:600 14px Geist;box-sizing:border-box">5</span></div></div>
+<div style="padding:14px 0;border-bottom:1px solid rgba(11,20,34,.12)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:700 20px 'Bricolage Grotesque',sans-serif">Stress</span><span style="font-size:13px;color:#5E5A55">A little</span></div><div style="display:flex;gap:8px;margin-top:10px"><span style="width:40px;height:40px;border-radius:50%;background:#0B1422;color:#FFF;display:grid;place-items:center;font:600 14px Geist">1</span><span style="width:40px;height:40px;border-radius:50%;background:#0B1422;color:#FFF;display:grid;place-items:center;font:600 14px Geist">2</span><span style="width:40px;height:40px;border-radius:50%;background:#0B1422;color:#FFF;display:grid;place-items:center;font:600 14px Geist">3</span><span style="width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(11,20,34,.2);display:grid;place-items:center;font:600 14px Geist;box-sizing:border-box">4</span><span style="width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(11,20,34,.2);display:grid;place-items:center;font:600 14px Geist;box-sizing:border-box">5</span></div></div>
+<div style="padding:14px 0;border-bottom:1px solid rgba(11,20,34,.12);display:flex;justify-content:space-between;align-items:baseline"><span style="font:700 20px 'Bricolage Grotesque',sans-serif">Hunger</span><span style="font-size:13px;color:#5E5A55">Very hungry · 4</span></div>
+<div style="padding:14px 0;border-bottom:1px solid rgba(11,20,34,.12);display:flex;justify-content:space-between;align-items:baseline"><span style="font:700 20px 'Bricolage Grotesque',sans-serif">Company</span><span style="font-size:13px;color:#5E5A55">Duo · 2</span></div>
+</div>
+<div style="padding:22px 22px 0;font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5E5A55">This meal is for</div>
+<div style="padding:6px 22px 0;display:flex;flex-wrap:wrap;gap:2px 14px;font:700 32px/1.1 'Bricolage Grotesque',sans-serif;letter-spacing:-.03em">
+<span style="color:#E8650A;text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px">comfort</span><span style="color:rgba(11,20,34,.3)">treat</span><span style="color:rgba(11,20,34,.3)">reward</span><span style="color:rgba(11,20,34,.3)">fuel</span>
+</div>
+<div style="position:absolute;left:22px;right:22px;bottom:34px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:14px;color:#5E5A55">Reading you as <span style="color:#0B1422;font-weight:700">tired</span> → slow, warm, zero-effort.</div>
+<div style="height:56px;border-radius:28px;background:#0B1422;color:#FFFFFF;font:600 16px Geist,sans-serif;display:flex;align-items:center;justify-content:center">Show my matches</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Mood dial — one gesture check-in; home becomes a swipeable deck of tonight's picks</div>
+<div class="dv-card" style="background:#E8E4DE;display:flex;gap:32px;padding:32px">
+
+<div style="width:390px;height:844px;border-radius:56px;padding:10px;background:#0B0B10;box-sizing:content-box">
+<div style="position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:radial-gradient(120% 70% at 50% 30%,#1B2440 0%,#0B1422 60%);color:#F4F1EC">
+<div style="position:absolute;top:11px;left:50%;margin-left:-61px;width:122px;height:34px;border-radius:20px;background:#000000"></div>
+<div style="padding:62px 22px 0;font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:rgba(244,241,236,.6)">Check-in · drag the dial</div>
+<div style="padding:12px 22px 0;font:700 36px/.98 'Bricolage Grotesque',sans-serif;letter-spacing:-.035em">Turn it to how you feel.</div>
+<div style="position:relative;width:300px;height:300px;margin:34px auto 0">
+<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from -45deg,oklch(0.76 0.17 52) 0 90deg,oklch(0.72 0.18 355) 90deg 180deg,oklch(0.76 0.1 160) 180deg 270deg,oklch(0.76 0.12 72) 270deg 360deg)"></div>
+<div style="position:absolute;inset:28px;border-radius:50%;background:#0F1A30;box-shadow:inset 0 10px 30px rgba(0,0,0,.5)"></div>
+<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#FFFFFF;box-shadow:0 6px 16px rgba(0,0,0,.5),0 0 0 5px oklch(0.76 0.12 72);transform:rotate(-58deg) translateY(-136px)"></div>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+<div style="font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:rgba(244,241,236,.6)">Reading</div>
+<div style="font:800 44px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.035em;color:oklch(0.82 0.12 72);margin-top:4px">Tired</div>
+<div style="font-size:13px;color:rgba(244,241,236,.7);margin-top:6px">low energy · a little stressed</div>
+</div>
+<span style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);font:600 12px Geist">Happy</span>
+<span style="position:absolute;right:-50px;top:50%;margin-top:-8px;font:600 12px Geist">Bold</span>
+<span style="position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);font:600 12px Geist">Stressed</span>
+<span style="position:absolute;left:-36px;top:50%;margin-top:-8px;font:600 12px Geist">Tired</span>
+</div>
+<div style="margin:44px 22px 0;display:flex;flex-direction:column;gap:14px">
+<div><div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600">Hunger</span><span style="color:rgba(244,241,236,.6)">Very hungry</span></div><div style="position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.14);margin-top:10px"><div style="width:78%;height:100%;border-radius:3px;background:oklch(0.76 0.12 72)"></div><div style="position:absolute;left:78%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#FFFFFF"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600">Company</span><span style="color:rgba(244,241,236,.6)">Duo</span></div><div style="position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.14);margin-top:10px"><div style="width:30%;height:100%;border-radius:3px;background:oklch(0.76 0.12 72)"></div><div style="position:absolute;left:30%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#FFFFFF"></div></div></div>
+</div>
+<div style="position:absolute;left:22px;right:22px;bottom:34px;height:58px;border-radius:20px;background:oklch(0.76 0.12 72);color:#0B1422;font:600 16px Geist,sans-serif;display:flex;align-items:center;justify-content:center">Deal me tonight's cards</div>
+</div>
+</div>
+
+<div style="width:390px;height:844px;border-radius:56px;padding:10px;background:#0B0B10;box-sizing:content-box">
+<div style="position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:radial-gradient(120% 70% at 50% 20%,#1B2440 0%,#0B1422 60%);color:#F4F1EC">
+<div style="position:absolute;top:11px;left:50%;margin-left:-61px;width:122px;height:34px;border-radius:20px;background:#000000"></div>
+<div style="padding:60px 20px 0;display:flex;align-items:center;gap:10px">
+<div style="height:40px;padding:0 14px 0 6px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500"><span style="width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,oklch(0.76 0.12 72) 50%)"></span>Tired · rainy · 7:48</div>
+<div style="margin-left:auto;width:40px;height:40px;border-radius:50%;background:oklch(0.76 0.12 72);color:#0B1422;display:grid;place-items:center;font:700 15px 'Bricolage Grotesque'">A</div>
+</div>
+<div style="padding:22px 20px 0;font:700 34px/.98 'Bricolage Grotesque',sans-serif;letter-spacing:-.035em">Tonight's deck</div>
+<div style="padding:6px 20px 0;font-size:14px;color:rgba(244,241,236,.65)">Six cards, dealt for your mood. Keep one.</div>
+<div style="position:relative;height:430px;margin:22px 20px 0">
+<div style="position:absolute;inset:26px 16px -6px;border-radius:30px;background:rgba(255,255,255,.06);transform:rotate(5deg)"></div>
+<div style="position:absolute;inset:14px 8px 4px;border-radius:30px;background:rgba(255,255,255,.1);transform:rotate(-3deg)"></div>
+<div style="position:absolute;inset:0;border-radius:30px;overflow:hidden;background:repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0 9px,rgba(255,255,255,.02) 9px 18px);box-shadow:0 30px 50px -20px rgba(0,0,0,.6)">
+<div style="position:absolute;top:110px;left:0;right:0;text-align:center;font:500 10px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:rgba(244,241,236,.55)">photo · masala khichdi</div>
+<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,14,0) 40%,rgba(8,8,14,.9))"></div>
+<div style="position:absolute;top:16px;left:16px;height:28px;padding:0 10px;border-radius:14px;background:oklch(0.76 0.12 72);color:#0B1422;font:700 12px Geist;display:flex;align-items:center">1 of 6 · 96% match</div>
+<div style="position:absolute;left:20px;right:20px;bottom:20px">
+<div style="font:700 28px/1.02 'Bricolage Grotesque',sans-serif;letter-spacing:-.025em">Masala Khichdi Bowl</div>
+<div style="font-size:13.5px;line-height:1.4;color:rgba(244,241,236,.85);margin-top:6px">Soft, soothing and here in 20 minutes — a hug in a bowl.</div>
+<div style="font-size:13px;color:rgba(244,241,236,.65);margin-top:8px">The Good Bowl · 22 min · ₹240</div>
+</div>
+</div>
+</div>
+<div style="display:flex;justify-content:center;gap:18px;margin-top:22px">
+<div style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center"><span style="font-family:'Material Symbols Rounded';font-size:28px">close</span></div>
+<div style="width:60px;height:60px;border-radius:50%;background:oklch(0.76 0.12 72);color:#0B1422;display:grid;place-items:center"><span style="font-family:'Material Symbols Rounded';font-size:28px;font-variation-settings:'FILL' 1">favorite</span></div>
+</div>
+<div style="position:absolute;left:14px;right:14px;bottom:22px;height:64px;border-radius:26px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-around;align-items:center">
+<span style="font-family:'Material Symbols Rounded';font-size:24px;color:oklch(0.82 0.12 72);font-variation-settings:'FILL' 1">style</span>
+<span style="font-family:'Material Symbols Rounded';font-size:24px;color:rgba(244,241,236,.55)">stadia_controller</span>
+<span style="font-family:'Material Symbols Rounded';font-size:24px;color:rgba(244,241,236,.55)">groups</span>
+<span style="font-family:'Material Symbols Rounded';font-size:24px;color:rgba(244,241,236,.55)">person</span>
+</div>
+</div>
+</div>
+</div></div>
+
+</div>
+
+<div class="dv-thd" style="margin-top:40px"><span class="dv-tname">The context system — <a class="dv-oid" href="#1a">1a</a> Home under four time × weather × mood combos</span></div>
+<p class="dv-note">Same screen, same code. Time sets the base gradient and light/dark; weather adds rain, fog, sun glow or lightning; mood picks the accent hue (all accents share lightness + chroma so contrast holds).</p>
+<div class="dv-opts">
+<div class="dv-opt"><div class="dv-olabel">Morning · sunny · happy</div><div class="dv-card" style="background:#E8E4DE"><dc-import name="MoodFoodApp" screen="home" bare="{{ true }}" time="morning" weather="sunny" mood="happy" hint-size="474px,928px"></dc-import></div></div>
+<div class="dv-opt"><div class="dv-olabel">Afternoon · cloudy · stressed</div><div class="dv-card" style="background:#E8E4DE"><dc-import name="MoodFoodApp" screen="home" bare="{{ true }}" time="afternoon" weather="cloudy" mood="stressed" hint-size="474px,928px"></dc-import></div></div>
+<div class="dv-opt"><div class="dv-olabel">Night · stormy · adventurous</div><div class="dv-card" style="background:#E8E4DE"><dc-import name="MoodFoodApp" screen="home" bare="{{ true }}" time="night" weather="stormy" mood="adventurous" hint-size="474px,928px"></dc-import></div></div>
+</div>
+<p class="dv-next">Try next: "bring the ranked list from <a class="dv-oid" href="#1b">1b</a> into <a class="dv-oid" href="#1a">1a</a>'s feed" · "make <a class="dv-oid" href="#1c">1c</a>'s dial the real check-in" · "design Quests, Profile and Notifications"</p>
+</section>
+</x-dc>
+</body>
+</html>

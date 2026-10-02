@@ -1,0 +1,25 @@
+{
+  "name": "@moodfood/site",
+  "version": "2.0.0",
+  "private": true,
+  "description": "MoodFood marketing site (Next.js), themed by @moodfood/tokens.",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@moodfood/tokens": "workspace:*",
+    "@moodfood/ui": "workspace:*",
+    "next": "16.3.8",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/react": "~19.2.10",
+    "@types/react-dom": "~19.2.3",
+    "typescript": "~6.0.3"
+  }
+}

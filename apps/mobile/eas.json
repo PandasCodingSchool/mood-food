@@ -1,0 +1,34 @@
+{
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.staging.moodfood.fun/api",
+        "EXPO_PUBLIC_SWIGGY_LIVE": "true"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.moodfood.fun/api",
+        "EXPO_PUBLIC_SWIGGY_LIVE": "true"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.moodfood.fun/api",
+        "EXPO_PUBLIC_SWIGGY_LIVE": "true"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

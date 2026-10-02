@@ -1,0 +1,9 @@
+{
+  "name": "@moodfood/intelligence",
+  "private": true,
+  "description": "Python FastAPI recommendation + Swiggy MCP service. Wrapper so turbo can run it.",
+  "scripts": {
+    "dev": "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "test": "python3 -m pytest"
+  }
+}
