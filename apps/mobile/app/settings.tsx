@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { palette, space } from '@moodfood/tokens';
 import { Button, FilterChip, ListRow, Screen, SegmentedControl, Surface, Text, useTheme } from '@moodfood/ui';
-import { LoadingBlock, TopBar } from '../src/components/v2';
+import { LoadingBlock, PoweredBySwiggy, TopBar } from '../src/components/v2';
 import { ALLERGIES, BUDGETS, CUISINES, DEFAULT_PREFS, DIETS } from '../src/constants/preferences';
 import { deleteAccount, fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
 import { fetchPreferences, savePreferences, type UserPreferences } from '../src/services/preferences';
@@ -154,7 +154,8 @@ export default function SettingsScreen() {
                 )}
               </View>
             ) : null}
-            <Text variant="micro12" tone="ink2" align="center" style={{ paddingTop: 20 }}>MoodFood 2.0</Text>
+            <PoweredBySwiggy style={{ paddingTop: 24 }} />
+            <Text variant="micro12" tone="ink2" align="center" style={{ paddingTop: 8 }}>MoodFood 2.0</Text>
           </>
         )}
       </Screen>
