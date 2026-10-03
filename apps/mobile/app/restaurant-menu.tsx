@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { palette, space } from '@moodfood/tokens';
 import { Button, DishImage, Icon, IconButton, Surface, Text, useTheme } from '@moodfood/ui';
-import { ErrorBlock, LoadingBlock } from '../src/components/v2';
+import { ErrorBlock, LoadingBlock, PoweredBySwiggy } from '../src/components/v2';
 import MenuChat from '../src/components/MenuChat';
 import { getRestaurantMenu, updateCartItems, type MenuItem, type RestaurantMenu } from '../src/services/swiggyOrder';
 
@@ -194,6 +194,7 @@ export default function RestaurantMenuScreen() {
             </View>
           ))
         )}
+        <PoweredBySwiggy style={{ paddingTop: 28 }} />
       </ScrollView>
       {cartBar}
     </View>

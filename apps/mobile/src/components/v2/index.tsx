@@ -103,3 +103,4 @@ export function ErrorBlock({ message, onRetry }: { message: string; onRetry?: ()
     </View>
   );
 }
+export { PoweredBySwiggy } from './PoweredBySwiggy';

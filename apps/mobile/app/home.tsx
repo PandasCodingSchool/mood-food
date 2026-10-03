@@ -6,7 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WEATHER_SPECS, palette, space } from '@moodfood/tokens';
 import { Button, Icon, IconButton, IconTile, Screen, SectionHeader, Surface, Text, useTheme, useToast, type IconName } from '@moodfood/ui';
-import { AppTabBar, ErrorBlock, LoadingBlock, LogoPill } from '../src/components/v2';
+import { AppTabBar, ErrorBlock, LoadingBlock, LogoPill, PoweredBySwiggy } from '../src/components/v2';
 import { HeroPick, QuickChip, RailCard } from '../src/components/v2/RecCards';
 import PostMealPrompt from '../src/components/PostMealPrompt';
 import NostalgiaPrompt from '../src/components/NostalgiaPrompt';
@@ -252,6 +252,7 @@ export default function HomeScreen() {
         </Pressable>
 
         <TwinTasteSection />
+        <PoweredBySwiggy style={{ paddingTop: 28 }} />
       </Screen>
     </View>
   );

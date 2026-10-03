@@ -13,7 +13,7 @@ This plan takes MoodFood 2.0 from the monorepo to a closed beta and then an open
 | Postgres 17 + Redis 7 | **Railway** managed databases, same region | internal |
 | iOS / Android | **EAS Build + Submit**, **TestFlight** and **Play closed testing**, **EAS Update** for JS fixes | — |
 
-Two Railway environments, **staging** and **production**, deploy automatically from git after CI passes. Vercel creates a preview for every PR.
+**Releases go through the `production` branch:** merge work into `main`, then merge `main` into `production`. That push deploys everything: Railway (after CI passes) and Vercel. Only `production` builds; other branches don't deploy. A `staging` environment is planned for later; only production exists today.
 
 ### Why this setup
 
@@ -75,7 +75,7 @@ One Railway project, `moodfood`, with environments `staging` and `production`. S
 
 | Setting | Value |
 | --- | --- |
-| Source | GitHub repo, branch `main` (production) / `staging` (staging); **wait for CI** on |
+| Source | `PandasCodingSchool/mood-food`, branch **`production`**; **wait for CI** on; watch patterns `apps/api/**` + root lockfiles (intelligence: root `apps/intelligence`, watches `apps/intelligence/**`) |
 | Builder | Dockerfile at `apps/api/Dockerfile`, build context = repo root |
 | Pre-deploy command | `node dist/db/migrate.js` |
 | Start command | (from Dockerfile) `node dist/main.js` |
@@ -189,9 +189,10 @@ pnpm --filter @moodfood/mobile exec eas build --platform android --profile previ
 ## 6. CI/CD flow
 
 ```
-PR ──▶ GitHub Actions (typecheck · build · tests) ──▶ Vercel previews
-merge to staging ─▶ Railway staging deploys (pre-deploy migrate) ─▶ smoke test
-merge to main ────▶ Railway production + Vercel production ─▶ smoke test
+feature PR ─▶ main ── GitHub Actions (typecheck · build · tests)
+release PR ─▶ main → production
+                 ├─▶ GitHub Actions on production ─▶ Railway api + intelligence (wait for CI, pre-deploy migrate)
+                 └─▶ Vercel moodfood-site + moodfood-web (builds only on `production`)
 mobile: tag v2.x.y ─▶ eas build + submit   ·   JS hotfix ─▶ eas update
 ```
 

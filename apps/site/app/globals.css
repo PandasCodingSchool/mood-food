@@ -881,3 +881,122 @@ button {
     grid-column: 1 / -1;
   }
 }
+
+/* ── Launch: early-access pill, store tiles, Powered by Swiggy ── */
+
+.announce {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 10px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: var(--acc-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.announce-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 0 4px var(--acc-soft);
+}
+
+.stores {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.store {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+  height: 56px;
+  padding: 0 18px 0 14px;
+  border-radius: 16px;
+  color: var(--ink2);
+  cursor: default;
+}
+
+.store > span {
+  display: grid;
+  line-height: 1.15;
+}
+
+.store-small {
+  font-size: 11.5px;
+}
+
+.store-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.powered {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+.powered strong {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: #fc8019; /* Swiggy brand orange (palette.swiggy) */
+}
+
+.hero-powered {
+  margin: 4px 0 26px;
+}
+
+.footer-powered {
+  margin-top: 10px;
+}
+
+.spots {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+
+.spots-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--acc-text);
+}
+
+.spots-row .h4 {
+  color: var(--ink);
+}
+
+.spots-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.spots-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--acc);
+  min-width: 8px;
+}

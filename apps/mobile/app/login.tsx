@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { fontFamily, palette, space } from '@moodfood/tokens';
 import { Button, Icon, OtpBox, Screen, Surface, Text, useTheme } from '@moodfood/ui';
-import { LogoTile, TopBar } from '../src/components/v2';
+import { LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
 import { continueAsGuest, login as loginWithPassword, requestOtp, verifyOtp, type AuthUser } from '../src/services/auth';
 import { trackEvent } from '../src/utils/analytics';
 
@@ -263,6 +263,7 @@ export default function LoginScreen() {
             <Text variant="micro12" tone="ink2" align="center" style={{ paddingHorizontal: 28, paddingTop: 22 }}>
               By continuing you agree to our Terms and Privacy Policy. Mood data stays on your account and is never sold.
             </Text>
+            <PoweredBySwiggy style={{ paddingTop: 18 }} />
           </>
         ) : null}
       </Screen>
