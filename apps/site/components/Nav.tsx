@@ -1,6 +1,5 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { APP_URL } from '@/lib/config';
 
 export function Nav() {
   return (
@@ -16,9 +15,9 @@ export function Nav() {
           <Link href="/#features">Features</Link>
           <Link href="/about">About</Link>
         </nav>
-        <a className="btn btn-primary btn-sm" href={APP_URL}>
-          Open MoodFood
-        </a>
+        <Link className="btn btn-primary btn-sm" href="/#waitlist">
+          Get early access
+        </Link>
       </div>
     </header>
   );

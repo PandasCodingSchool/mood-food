@@ -12,7 +12,7 @@ import Svg, { Polyline } from 'react-native-svg';
 import { WEATHER_SPECS, palette, space } from '@moodfood/tokens';
 import { Button, Icon, IconButton, Screen, Surface, Text, useTheme, useToast, type IconName } from '@moodfood/ui';
 import { ChoiceChip } from '../../src/components/v2/GameKit';
-import { LoadingBlock } from '../../src/components/v2';
+import { LoadingBlock, PoweredBySwiggy } from '../../src/components/v2';
 import { useLiveMood } from '../../src/context/LiveMood';
 import { clearActiveOrder, getActiveOrder, isTerminal, saveActiveOrder, stepFromStatus, type ActiveOrder, type TrackStep } from '../../src/services/activeOrder';
 import { fetchPendingPredictions, resolvePrediction } from '../../src/services/signals';
@@ -329,6 +329,7 @@ export default function OrderTrackScreen() {
             </Pressable>
           ) : null}
         </Surface>
+        <PoweredBySwiggy style={{ paddingTop: 22 }} />
         <View style={{ height: 40 }} />
       </Screen>
     </View>

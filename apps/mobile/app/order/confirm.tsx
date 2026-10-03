@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { palette, space } from '@moodfood/tokens';
 import { Button, Icon, Radio, Screen, Surface, Text, useTheme } from '@moodfood/ui';
-import { BottomBar, LoadingBlock, TopBar } from '../../src/components/v2';
+import { BottomBar, LoadingBlock, PoweredBySwiggy, TopBar } from '../../src/components/v2';
 import { WEATHER_COPY } from '../../src/constants/copy';
 import { useLiveMood } from '../../src/context/LiveMood';
 import { dishEmoji, dishGradient, resolveDishImage } from '../../src/utils/dishVisuals';
@@ -444,6 +444,7 @@ export default function OrderConfirmScreen() {
         {orderError ? (
           <Text variant="caption13" color={palette.danger} style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">{orderError}</Text>
         ) : null}
+        <PoweredBySwiggy style={{ paddingTop: 22 }} />
       </Screen>
 
       <BottomBar>

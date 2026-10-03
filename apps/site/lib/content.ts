@@ -30,6 +30,7 @@ export const FEATURES: Array<{ icon: IconName; title: string; body: string }> = 
 export const FAQ: Array<{ q: string; a: string }> = [
   { q: 'Is MoodFood free?', a: 'Yes. You pay only for what you order or buy, at the usual Swiggy prices.' },
   { q: 'Do I need a Swiggy account?', a: 'Only to order in the app. Recommendations, games and recipes work without one, and you can link Swiggy any time.' },
-  { q: 'Where does it work?', a: 'In India, wherever Swiggy delivers. The app runs on Android, iOS and the web.' },
+  { q: 'When can I get the app?', a: 'MoodFood is coming soon to the App Store and Google Play. The first 100 people on the waitlist get free early access before launch.' },
+  { q: 'Where does it work?', a: 'In India, wherever Swiggy delivers. Ordering is powered by Swiggy.' },
   { q: 'How does it know my mood?', a: 'You tell it, in a four-tap check-in or a quick game. It also reads the local time and weather.' },
 ];

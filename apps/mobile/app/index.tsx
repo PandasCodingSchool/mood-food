@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { MOOD_SPECS, WEATHER_SPECS } from '@moodfood/tokens';
 import { AmbientBackground, ProgressBar, Text, useTheme } from '@moodfood/ui';
-import { LogoTile } from '../src/components/v2';
+import { LogoTile, PoweredBySwiggy } from '../src/components/v2';
 import { MOOD_COPY, TIME_COPY, WEATHER_COPY } from '../src/constants/copy';
 import { useLiveMood } from '../src/context/LiveMood';
 import { isSessionValid } from '../src/services/session';
@@ -78,6 +78,7 @@ export default function SplashScreen() {
           <Text variant="label" tone="ink2">{`${MOOD_SPECS[mood].label} · ${clockText()}`}</Text>
         </View>
         <ProgressBar value={progress} height={4} durationMs={LAUNCH_MS} />
+        <PoweredBySwiggy style={{ marginTop: 14 }} />
       </View>
     </Pressable>
   );
