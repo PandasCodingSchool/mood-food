@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { APP_URL } from '@/lib/config';
+import Link from 'next/link';
+import { PoweredBySwiggy } from '@/components/PoweredBySwiggy';
 
 export const metadata: Metadata = {
   title: 'About',
@@ -20,6 +21,12 @@ export default function About() {
         weather, is enough to suggest three dishes with a reason for each. Order on Swiggy without leaving the app, or
         get the recipe and cook it yourself.
       </p>
+      <h2 className="h3">Powered by Swiggy</h2>
+      <p>
+        Menus, prices, carts, checkout and live order tracking come straight from Swiggy, so what you see in MoodFood is
+        what the restaurant actually has right now.
+      </p>
+      <PoweredBySwiggy />
       <h2 className="h3">It gets better the more you use it</h2>
       <p>
         Every swipe, pick and “how did that feel?” teaches MoodFood your taste. There’s no long setup quiz. It learns
@@ -31,9 +38,9 @@ export default function About() {
         only the moods it detects.
       </p>
       <p>
-        <a className="btn btn-primary" href={APP_URL}>
-          Open MoodFood
-        </a>
+        <Link className="btn btn-primary" href="/#waitlist">
+          Get early access
+        </Link>
       </p>
     </article>
   );

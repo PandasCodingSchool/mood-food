@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { palette, space } from '@moodfood/tokens';
 import { Button, Icon, Screen, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
-import { LogoTile, TopBar } from '../src/components/v2';
+import { LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
 import { fetchCurrentUser } from '../src/services/auth';
 import { fetchAddresses, saveAddressId } from '../src/services/aiRecommendations';
 import { getHeaders } from '../src/services/apiBase';
@@ -161,6 +161,7 @@ export default function SwiggyConnectScreen() {
             <Text variant="caption12" tone="ink2" align="center">Finish in the browser, then come back. We'll pick it up automatically.</Text>
           ) : null}
         </View>
+        <PoweredBySwiggy style={{ paddingTop: 10, paddingBottom: 24 }} />
       </Screen>
     </View>
   );

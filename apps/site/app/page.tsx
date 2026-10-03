@@ -3,7 +3,10 @@ import { Icon } from '@/components/Icon';
 import { PhoneMock } from '@/components/PhoneMock';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Waitlist } from '@/components/Waitlist';
-import { APP_URL } from '@/lib/config';
+import { EarlyAccessPill } from '@/components/EarlyAccess';
+import { PoweredBySwiggy } from '@/components/PoweredBySwiggy';
+import { StoreButtons } from '@/components/StoreButtons';
+import { EARLY_ACCESS_SPOTS } from '@/lib/config';
 import { FAQ, FEATURES, GAMES, STEPS } from '@/lib/content';
 
 export default function Home() {
@@ -11,6 +14,7 @@ export default function Home() {
     <>
       <section className="hero container">
         <div className="hero-copy">
+          <EarlyAccessPill />
           <p className="label">Mood × time × weather</p>
           <h1 className="display">Food that matches your mood.</h1>
           <p className="lede">
@@ -18,13 +22,12 @@ export default function Home() {
             Swiggy without leaving the app.
           </p>
           <div className="cta-row">
-            <a className="btn btn-primary" href={APP_URL}>
-              Open MoodFood <Icon name="arrow_forward" size={18} />
-            </a>
-            <a className="btn btn-glass" href="#waitlist">
-              Join the waitlist
+            <a className="btn btn-primary" href="#waitlist">
+              Claim free early access <Icon name="arrow_forward" size={18} />
             </a>
           </div>
+          <StoreButtons />
+          <PoweredBySwiggy className="hero-powered" />
           <ThemeSwitcher />
           <p className="muted small">Tap a mood or a time. The whole page re-themes, just like the app does.</p>
         </div>
@@ -90,11 +93,12 @@ export default function Home() {
       <section id="waitlist" className="section container split">
         <div>
           <p className="label">Early access</p>
-          <h2 className="h2">Get early access.</h2>
-          <p className="lede">We’re letting people in gradually. Leave your email and we’ll tell you when it’s your turn.</p>
-          <a className="btn btn-glass" href={APP_URL}>
-            Or try the web app now <Icon name="arrow_forward" size={18} />
-          </a>
+          <h2 className="h2">{`The first ${EARLY_ACCESS_SPOTS} get in free.`}</h2>
+          <p className="lede">
+            MoodFood is launching on iPhone and Android soon. The first {EARLY_ACCESS_SPOTS} people to sign up get free
+            early access before the public launch.
+          </p>
+          <StoreButtons />
         </div>
         <Waitlist />
       </section>
