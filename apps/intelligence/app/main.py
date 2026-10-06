@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -26,6 +26,7 @@ from app.routes.learn import router as learn_router
 from app.routes.recipe import router as recipe_router
 from app.routes.instamart import router as instamart_router
 from app.routes.moderation import router as moderation_router
+from app.services.swiggy_mcp import track_user_token
 
 app = FastAPI(title="FoodMood API", version="1.0.0")
 
@@ -35,6 +36,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def flag_rejected_user_token(request: Request, call_next):
+    """Tell the API (via a private header) when Swiggy rejected the user's token, so it drops the link."""
+    state = track_user_token(request.headers.get("x-swiggy-user-token"))
+    response = await call_next(request)
+    if state.rejected:
+        response.headers["X-Swiggy-Token-Rejected"] = "1"
+    return response
+
 
 app.include_router(recommendations_router)
 app.include_router(dish_router)

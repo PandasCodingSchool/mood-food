@@ -46,7 +46,8 @@ export class RecommendationsController {
 
     try {
       const swiggyToken = await this.tokens.activeToken(userId);
-      const response = await this.callWithRetry(aiRequest, swiggyToken, String(req.id));
+      const onTokenRejected = userId && swiggyToken ? () => this.tokens.discardRejected(userId, swiggyToken) : undefined;
+      const response = await this.callWithRetry(aiRequest, swiggyToken, String(req.id), onTokenRejected);
       if (userId) void this.predictions.recordFromRecommendations(userId, response, aiRequest.request_id);
       return response;
     } catch (err) {
@@ -62,7 +63,12 @@ export class RecommendationsController {
     };
   }
 
-  private async callWithRetry(payload: unknown, swiggyToken: string | null, requestId: string): Promise<AiResponse> {
+  private async callWithRetry(
+    payload: unknown,
+    swiggyToken: string | null,
+    requestId: string,
+    onTokenRejected?: () => Promise<void>,
+  ): Promise<AiResponse> {
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.intelligence.json<AiResponse>('POST', '/api/ai-recommendations', {
@@ -70,6 +76,7 @@ export class RecommendationsController {
           timeoutMs: this.env.AI_TIMEOUT_MS,
           swiggyToken,
           requestId,
+          onTokenRejected,
         });
       } catch (err) {
         if (attempt >= this.env.AI_MAX_RETRIES || !retryable(err)) throw err;

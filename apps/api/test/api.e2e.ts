@@ -95,6 +95,32 @@ describe('auth & user management', () => {
     assert.equal(me.data.user.swiggyLinked, false);
   });
 
+  it('signs up and logs in with email, case-insensitively', async () => {
+    const methods = await call('GET', '/auth/methods');
+    assert.equal(methods.data.email, true);
+    assert.equal(typeof methods.data.otp, 'boolean');
+
+    const email = `Mail${rand()}@Example.com`;
+    const up = await call('POST', '/auth/signup', { body: { name: 'Mail User', email, password: 'secret123' } });
+    assert.equal(up.status, 201, JSON.stringify(up.data));
+    assert.equal(up.data.user.email, email.toLowerCase());
+    assert.equal(up.data.user.phone, null);
+
+    const dup = await call('POST', '/auth/signup', { body: { name: 'X', email: email.toUpperCase(), password: 'secret123' } });
+    assert.equal(dup.status, 409);
+    assert.equal(dup.data.error, 'Email already registered');
+
+    const bad = await call('POST', '/auth/login', { body: { email, password: 'wrong-pass' } });
+    assert.equal(bad.status, 401);
+    assert.equal(bad.data.error, 'Invalid email or password');
+    const ok = await call('POST', '/auth/login', { body: { email: ` ${email.toLowerCase()} `, password: 'secret123' } });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.data.user.id, up.data.user.id);
+
+    assert.equal((await call('POST', '/auth/signup', { body: { name: 'X', password: 'secret123' } })).status, 400);
+    assert.equal((await call('POST', '/auth/signup', { body: { name: 'X', email: 'nope', password: 'secret123' } })).status, 400);
+  });
+
   it('lists and revokes device sessions', async () => {
     const { phone, token } = await signup();
     const second = await call('POST', '/auth/login', { body: { phone, password: 'secret123' } });

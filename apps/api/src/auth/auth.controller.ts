@@ -37,6 +37,13 @@ export class AuthController {
   }
 
   @Public()
+  @Get('methods')
+  methods() {
+    return this.auth.methods();
+  }
+
+  @Public()
+  @RateLimit('signup')
   @Post('signup')
   signup(@Body({ schema: signupBody }) body: SignupBody, @Req() req: AppRequest) {
     return this.auth.signup(body, req.user, meta(req));

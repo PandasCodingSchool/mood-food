@@ -58,6 +58,13 @@ This plan takes MoodFood 2.0 from the monorepo to a closed beta and then an open
 **Repo changes:**
 - Done: `apps/mobile/eas.json` points `preview` and `production` at `https://api.moodfood.fun/api` and `development` at the staging API. (v1 builds pointed at `https://moodfood.fun/api`, which becomes the marketing site.)
 - If Swiggy's MCP approval lists allowed redirect URIs, add the new callback before launch. The API registers its OAuth client at runtime with whatever `SWIGGY_OAUTH_REDIRECT_URI` says.
+- The redirect URI is whitelisted on the Swiggy MCP gateway as an exact match. `SWIGGY_OAUTH_REDIRECT_URI` must equal it character for character. Email builders@swiggy.in *before* shipping any new or changed URI.
+
+**Swiggy token lifecycle** (`apps/api/src/swiggy/`):
+- Tokens are AES-256-GCM encrypted with `SWIGGY_TOKEN_ENCRYPTION_KEY` and bound to the user id. They never reach the client. Back up the key: losing or changing it forces every user to re-link.
+- Swiggy v1 tokens last 5 days and there is no refresh token. An hourly sweep deletes expired tokens and sends a "reconnect" notification about 12 hours before expiry.
+- When Swiggy rejects a user's token (401/403/419), the intelligence service sets `X-Swiggy-Token-Rejected: 1`. The API then deletes the link and notifies the user.
+- Disconnecting, or deleting the account, calls Swiggy's `/auth/logout` and deletes the stored token.
 
 ---
 

@@ -9,13 +9,29 @@ export interface AuthUser {
   isGuest?: boolean;
   swiggyLinked?: boolean;
   swiggyUserId?: string | null;
+  swiggyExpiresAt?: string | null;
 }
 
-export async function login(phone: string, password: string): Promise<AuthUser> {
+/** Accounts are identified by email or phone (email is the default while SMS OTP is unavailable). */
+export type AccountId = { email: string } | { phone: string };
+
+/** Sign-in methods the server supports right now; OTP only when it can actually send SMS. */
+export async function fetchAuthMethods(): Promise<{ email: boolean; otp: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/methods`);
+    if (!res.ok) return { email: true, otp: false };
+    const data = await res.json();
+    return { email: data.email !== false, otp: !!data.otp };
+  } catch {
+    return { email: true, otp: false };
+  }
+}
+
+export async function login(account: AccountId, password: string): Promise<AuthUser> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, password }),
+    body: JSON.stringify({ ...account, password }),
   });
 
   const data = await res.json();
@@ -29,14 +45,14 @@ export async function login(phone: string, password: string): Promise<AuthUser> 
 
 export async function signup(
   name: string,
-  phone: string,
+  account: AccountId,
   password: string,
 ): Promise<AuthUser> {
   // Sends the current session so a guest account is upgraded in place (keeps its data).
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: await getHeaders(),
-    body: JSON.stringify({ name, phone, password }),
+    body: JSON.stringify({ name, ...account, password }),
   });
 
   const data = await res.json();

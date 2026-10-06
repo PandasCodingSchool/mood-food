@@ -14,7 +14,7 @@ import type { Env } from '../config/env.js';
 import { ENV, REDIS } from '../core/tokens.js';
 import { fail } from './http.js';
 
-export type LimitName = 'general' | 'ip' | 'ai' | 'signals' | 'otpSend' | 'otpVerify' | 'login';
+export type LimitName = 'general' | 'ip' | 'ai' | 'signals' | 'otpSend' | 'otpVerify' | 'login' | 'signup';
 
 interface LimitSpec {
   max: number;
@@ -29,6 +29,12 @@ const TOO_MANY = 'Too many requests, please try again later.';
 const bodyPhone = (req: FastifyRequest) => {
   const phone = (req.body as { phone?: unknown } | undefined)?.phone;
   return typeof phone === 'string' ? phone.replace(/[^\d+]/g, '') : undefined;
+};
+
+/** Login attempts are counted per account (email or phone) so one shared carrier IP doesn't lock everyone out. */
+const bodyAccount = (req: FastifyRequest) => {
+  const email = (req.body as { email?: unknown } | undefined)?.email;
+  return typeof email === 'string' && email.trim() ? `e:${email.trim().toLowerCase()}` : bodyPhone(req);
 };
 
 /** Per signed-in device when a token is sent (users behind one carrier IP don't share a bucket), else per IP. */
@@ -75,7 +81,9 @@ export class RateLimitGuard implements CanActivate {
         message: 'Too many verification attempts. Please try again later.',
         key: bodyPhone,
       },
-      login: { max: 10, windowSec: WINDOW, message: 'Too many login attempts. Please try again later.', key: bodyPhone },
+      login: { max: 10, windowSec: WINDOW, message: 'Too many login attempts. Please try again later.', key: bodyAccount },
+      // Sign-up has no OTP gate when email is used, so cap account creation per IP.
+      signup: { max: env.RATE_LIMIT_SIGNUP, windowSec: WINDOW, message: 'Too many sign-ups from this network. Please try again later.' },
     };
   }
 

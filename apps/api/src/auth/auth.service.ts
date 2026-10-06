@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Env } from '../config/env.js';
 import { fail, isUniqueViolation } from '../common/http.js';
 import { DB, ENV, type Database } from '../core/tokens.js';
@@ -55,6 +55,16 @@ export class AuthService {
     return this.db.query.users.findFirst({ where: eq(users.phone, phone) });
   }
 
+  private findByEmail(email: string) {
+    // lower() also matches mixed-case emails saved before they were normalised.
+    return this.db.query.users.findFirst({ where: sql`lower(${users.email}) = ${email}` });
+  }
+
+  /** Which sign-in methods the app should offer: SMS OTP only when a real SMS provider is configured. */
+  methods() {
+    return { success: true, email: true, otp: this.env.SMS_PROVIDER === 'twilio' || this.env.NODE_ENV !== 'production' };
+  }
+
   /** Anonymous account so guests can use personalised features; upgradable later. */
   async guest(meta: ClientMeta) {
     const [user] = await this.db.insert(users).values({ isGuest: true }).returning();
@@ -62,18 +72,19 @@ export class AuthService {
   }
 
   async signup(body: SignupBody, current: AuthUser | undefined, meta: ClientMeta) {
-    const phone = this.phone(body.phone);
-    if (await this.findByPhone(phone)) fail(409, 'Phone number already registered');
+    const phone = body.phone ? this.phone(body.phone) : undefined;
+    const { email } = body;
+    if (email && (await this.findByEmail(email))) fail(409, 'Email already registered');
+    if (phone && (await this.findByPhone(phone))) fail(409, 'Phone number already registered');
     const passwordHash = await hashSecret(body.password);
-    const user = await this.createOrUpgrade(current, { name: body.name, phone, passwordHash });
+    const user = await this.createOrUpgrade(current, { name: body.name, phone, email, passwordHash });
     return authPayload(user, await this.sessions.issue(user.id, meta));
   }
 
   async login(body: LoginBody, meta: ClientMeta) {
-    const phone = this.phone(body.phone);
-    const user = await this.findByPhone(phone);
+    const user = body.email ? await this.findByEmail(body.email) : await this.findByPhone(this.phone(body.phone));
     const ok = user?.passwordHash ? await verifySecret(body.password, user.passwordHash) : await burnVerify(body.password);
-    if (!user || !ok) fail(401, 'Invalid phone number or password');
+    if (!user || !ok) fail(401, body.email ? 'Invalid email or password' : 'Invalid phone number or password');
     return authPayload(user, await this.sessions.issue(user.id, meta));
   }
 
@@ -149,7 +160,7 @@ export class AuthService {
   /** New account, or — when a guest is signed in — the guest account becomes a real one (keeps its data). */
   private async createOrUpgrade(
     current: AuthUser | undefined,
-    fields: { name: string; phone: string; passwordHash?: string; phoneVerifiedAt?: Date },
+    fields: { name: string; phone?: string; email?: string; passwordHash?: string; phoneVerifiedAt?: Date },
   ): Promise<UserRow> {
     try {
       if (current?.isGuest) {
@@ -164,7 +175,7 @@ export class AuthService {
       const [user] = await this.db.insert(users).values(fields).returning();
       return user;
     } catch (err) {
-      if (isUniqueViolation(err)) fail(409, 'Phone number already registered');
+      if (isUniqueViolation(err)) fail(409, fields.phone ? 'Phone number already registered' : 'Email already registered');
       throw err;
     }
   }

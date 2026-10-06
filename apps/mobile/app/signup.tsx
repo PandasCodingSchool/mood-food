@@ -58,7 +58,7 @@ export default function SignupScreen() {
     setSubmitting(true);
     trackEvent('signup_submitted');
     try {
-      await signup(name, phone, password);
+      await signup(name, { phone }, password);
       router.replace('/preferences');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign up failed';

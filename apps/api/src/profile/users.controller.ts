@@ -17,6 +17,7 @@ const updateBody = z
     email: z
       .string()
       .trim()
+      .toLowerCase()
       .transform((v) => v || null)
       .pipe(z.email('Invalid email address').nullable())
       .nullish(),
@@ -107,6 +108,7 @@ export class UsersController {
   @Delete()
   async remove(@CurrentUser() user: AuthUser, @Req() req: AppRequest) {
     await this.sessions.revokeAll(user.id);
+    await this.swiggy.unlink(user.id);
     await this.db.delete(users).where(eq(users.id, user.id));
     req.log.info({ userId: user.id }, 'account deleted');
     return { success: true };

@@ -33,6 +33,7 @@ export const envSchema = z.object({
   RATE_LIMIT_IP: z.coerce.number().int().default(2000),
   RATE_LIMIT_AI: z.coerce.number().int().default(10),
   RATE_LIMIT_SIGNALS: z.coerce.number().int().default(120),
+  RATE_LIMIT_SIGNUP: z.coerce.number().int().default(20),
 
   // Intelligence service (Python)
   AI_SERVICE_URL: z.string().default('http://localhost:8000'),
