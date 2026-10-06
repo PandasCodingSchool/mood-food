@@ -95,6 +95,58 @@ describe('auth & user management', () => {
     assert.equal(me.data.user.swiggyLinked, false);
   });
 
+  it('signs up and logs in with email, case-insensitively', async () => {
+    const methods = await call('GET', '/auth/methods');
+    assert.equal(methods.data.email, true);
+    assert.equal(typeof methods.data.otp, 'boolean');
+
+    const email = `Mail${rand()}@Example.com`;
+    const up = await call('POST', '/auth/signup', { body: { name: 'Mail User', email, password: 'secret123' } });
+    assert.equal(up.status, 201, JSON.stringify(up.data));
+    assert.equal(up.data.user.email, email.toLowerCase());
+    assert.equal(up.data.user.phone, null);
+
+    const dup = await call('POST', '/auth/signup', { body: { name: 'X', email: email.toUpperCase(), password: 'secret123' } });
+    assert.equal(dup.status, 409);
+    assert.equal(dup.data.error, 'Email already registered');
+
+    const bad = await call('POST', '/auth/login', { body: { email, password: 'wrong-pass' } });
+    assert.equal(bad.status, 401);
+    assert.equal(bad.data.error, 'Invalid email or password');
+    const ok = await call('POST', '/auth/login', { body: { email: ` ${email.toLowerCase()} `, password: 'secret123' } });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.data.user.id, up.data.user.id);
+
+    assert.equal((await call('POST', '/auth/signup', { body: { name: 'X', password: 'secret123' } })).status, 400);
+    assert.equal((await call('POST', '/auth/signup', { body: { name: 'X', email: 'nope', password: 'secret123' } })).status, 400);
+  });
+
+  it('email verification and password reset reject bad codes and never reveal accounts', async () => {
+    const email = `verify${rand()}@example.com`;
+    const up = await call('POST', '/auth/signup', { body: { name: 'V', email, password: 'secret123' } });
+    const token = up.data.session.token;
+    assert.equal((await call('GET', '/user/me', { token })).data.user.emailVerified, false);
+
+    assert.equal((await call('POST', '/auth/email/send-verification', { token })).status, 200);
+    assert.equal((await call('POST', '/auth/email/verify', { token, body: { otp: '000000' } })).status, 401);
+    assert.equal((await call('POST', '/auth/email/verify', { token, body: { otp: 'abc' } })).status, 400);
+
+    // Same answer whether or not the account exists.
+    const known = await call('POST', '/auth/password/forgot', { body: { email } });
+    const unknown = await call('POST', '/auth/password/forgot', { body: { email: `nobody${rand()}@example.com` } });
+    assert.equal(known.status, 200);
+    assert.deepEqual(known.data, unknown.data);
+
+    const bad = await call('POST', '/auth/password/reset', { body: { email, otp: '000000', password: 'newsecret1' } });
+    assert.equal(bad.status, 401);
+    const none = await call('POST', '/auth/password/reset', { body: { email: `nobody${rand()}@example.com`, otp: '123456', password: 'newsecret1' } });
+    assert.equal(none.status, 400);
+
+    // A phone-only account has no address to verify.
+    const phoneOnly = await signup();
+    assert.equal((await call('POST', '/auth/email/send-verification', { token: phoneOnly.token })).status, 400);
+  });
+
   it('lists and revokes device sessions', async () => {
     const { phone, token } = await signup();
     const second = await call('POST', '/auth/login', { body: { phone, password: 'secret123' } });

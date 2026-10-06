@@ -1,7 +1,6 @@
-// 2.0 Order placed. Tracking logic is v1's unchanged: real Swiggy orders poll
-// track_food_order (never faster than 10s) until a terminal state; demo
-// orders show a local order number. Params: rec, appName, total, orderId?.
-import { useEffect, useMemo, useState } from 'react';
+// 2.0 Order placed on Swiggy. Polls track_food_order (never faster than 10s)
+// until a terminal state. Params: restaurantName, summary, total, orderId?, eta?.
+import { useEffect, useState } from 'react';
 import { Linking, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,9 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { palette, space } from '@moodfood/tokens';
 import { AmbientBackground, Button, Icon, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
-import { DELIVERY_APPS, swiggyDeliveryOption, type DeliveryApp } from '../../src/constants/deliveryApps';
 import { trackOrder } from '../../src/services/swiggyOrder';
-import type { Recommendation } from '../../src/types';
 
 // track_food_order must not be polled faster than every 10s (Swiggy MCP docs).
 const TRACK_POLL_MS = 10000;
@@ -30,26 +27,19 @@ function stepFromStatus(status: string | null | undefined): TrackStep {
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
-  const { rec: rawRec, appName, total, orderId } = useLocalSearchParams<{
-    rec: string;
-    appName: string;
+  const { restaurantName, summary, total, orderId, eta } = useLocalSearchParams<{
+    restaurantName?: string;
+    summary?: string;
     total: string;
     orderId?: string;
+    eta?: string;
   }>();
-  const rec: Recommendation = JSON.parse(rawRec);
-  const app: DeliveryApp = useMemo(() => {
-    const liveOption = swiggyDeliveryOption(rec);
-    if (liveOption && liveOption.name === appName) return liveOption;
-    return DELIVERY_APPS.find((a) => a.name === appName) ?? DELIVERY_APPS[0];
-  }, [appName, rec]);
-  const orderNum = useMemo(() => Math.floor(1000 + Math.random() * 9000).toString(), []);
 
   const isRealOrder = !!orderId;
   const [step, setStep] = useState<TrackStep>('placed');
   const [liveEta, setLiveEta] = useState<string | null>(null);
   const [trackError, setTrackError] = useState(false);
-
-
+  const etaTxt = liveEta || eta || null;
 
   // 4.1-adjacent: real order tracking. Polls no faster than the documented
   // 10s floor and stops once the order reaches a terminal state.
@@ -114,10 +104,10 @@ export default function OrderSuccessScreen() {
         <Text variant="body15" tone="ink2" align="center" style={{ marginTop: 10 }}>
           {cancelled
             ? 'This order was cancelled or couldn’t be tracked.'
-            : `${app.isLive && app.restaurantName ? app.restaurantName : app.name} is on it. ${rec.dish.name} arrives in about ${liveEta || app.eta}.`}
+            : `${restaurantName || 'Swiggy'} is on it.${summary ? ` ${summary}` : ''}${etaTxt ? ` Arriving in about ${etaTxt}.` : ''}`}
         </Text>
         <Text variant="label" tone="ink2" style={{ marginTop: 14 }}>
-          {`Order #${isRealOrder ? orderId : `MF-${orderNum}`} · ₹${total}`}
+          {isRealOrder ? `Order #${orderId} · ₹${total}` : `₹${total} · placed on Swiggy`}
         </Text>
 
         {!cancelled ? (
@@ -134,10 +124,10 @@ export default function OrderSuccessScreen() {
             </View>
             <Text variant="caption12" tone="ink2" align="center">
               {!isRealOrder
-                ? 'Demo order: no live tracking.'
+                ? 'Track this order in the Swiggy app.'
                 : trackError
                   ? 'Live tracking unavailable right now'
-                  : `ETA ${liveEta || app.eta} · updates every 10 seconds`}
+                  : `${etaTxt ? `ETA ${etaTxt} · ` : ''}updates every 10 seconds`}
             </Text>
           </Surface>
         ) : (

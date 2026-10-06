@@ -1,5 +1,7 @@
 // 2.0 Swiggy connect: real OAuth (opens Swiggy in the browser, re-checks on
 // return), saves the first address for ordering, supports unlinking.
+// Swiggy tokens last 5 days with no refresh, so a linked account shows its
+// expiry and offers a reconnect in the last day.
 // ?onboarding=1 → "Step 2 of 2" with "Later", continuing to the check-in.
 import { useEffect, useState } from 'react';
 import { AppState, Linking, View } from 'react-native';
@@ -20,12 +22,18 @@ const PERMS: Array<{ icon: IconName; t: string; d: string }> = [
   { icon: 'shopping_bag', t: 'Place orders for you', d: 'Only when you tap Place order' },
 ];
 
+const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
+
+const formatExpiry = (iso: string) =>
+  new Date(iso).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
 export default function SwiggyConnectScreen() {
   const router = useRouter();
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
   const isOnboarding = onboarding === '1';
   const { colors, dark } = useTheme();
   const [linked, setLinked] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +43,7 @@ export default function SwiggyConnectScreen() {
       const user = await fetchCurrentUser();
       const isLinked = !!user?.swiggyLinked;
       setLinked(isLinked);
+      setExpiresAt(user?.swiggyExpiresAt ?? null);
       if (isLinked) {
         setConnecting(false);
         const addresses = await fetchAddresses();
@@ -52,6 +61,8 @@ export default function SwiggyConnectScreen() {
     const sub = AppState.addEventListener('change', (s) => s === 'active' && void checkStatus());
     return () => sub.remove();
   }, []);
+
+  const expiringSoon = linked && !!expiresAt && new Date(expiresAt).getTime() - Date.now() < EXPIRING_SOON_MS;
 
   const done = () => {
     if (isOnboarding) router.replace({ pathname: '/mood-checkin', params: { next: '/recommendations' } });
@@ -121,6 +132,11 @@ export default function SwiggyConnectScreen() {
               ? 'Your past orders are already teaching MoodFood what you like.'
               : 'We use your order history to learn your taste, then place orders for you.'}
           </Text>
+          {linked && expiresAt ? (
+            <Text variant="caption12" tone={expiringSoon ? undefined : 'ink2'} color={expiringSoon ? palette.danger : undefined} align="center" style={{ marginTop: 8 }}>
+              {expiringSoon ? 'Expires soon' : 'Connected until'} {formatExpiry(expiresAt)}. Swiggy asks you to sign in again every 5 days.
+            </Text>
+          ) : null}
         </View>
 
         <Surface style={{ marginHorizontal: space.gutter, marginTop: 24, paddingHorizontal: 16, paddingVertical: 6 }}>
@@ -153,11 +169,12 @@ export default function SwiggyConnectScreen() {
           <Button
             block
             loading={loading}
-            label={linked ? 'Continue' : connecting ? 'Waiting for Swiggy…' : 'Connect Swiggy'}
-            onPress={linked ? done : connect}
+            label={connecting ? 'Waiting for Swiggy…' : expiringSoon ? 'Reconnect Swiggy' : linked ? 'Continue' : 'Connect Swiggy'}
+            onPress={linked && !expiringSoon ? done : connect}
           />
+          {expiringSoon ? <Button block variant="outline" size="md" label="Continue" onPress={done} /> : null}
           {linked && !isOnboarding ? <Button block variant="outline" size="md" label="Disconnect Swiggy" onPress={unlink} /> : null}
-          {connecting && !linked ? (
+          {connecting ? (
             <Text variant="caption12" tone="ink2" align="center">Finish in the browser, then come back. We'll pick it up automatically.</Text>
           ) : null}
         </View>

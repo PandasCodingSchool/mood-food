@@ -9,13 +9,63 @@ export interface AuthUser {
   isGuest?: boolean;
   swiggyLinked?: boolean;
   swiggyUserId?: string | null;
+  swiggyExpiresAt?: string | null;
+  email?: string | null;
+  emailVerified?: boolean;
 }
 
-export async function login(phone: string, password: string): Promise<AuthUser> {
+async function postJson(path: string, body?: unknown, withSession = true) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: withSession ? await getHeaders() : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+}
+
+/** Emails the signed-in user a 6-digit code for their email address. */
+export async function sendEmailVerification(): Promise<{ emailVerified: boolean }> {
+  return postJson("/auth/email/send-verification");
+}
+
+export async function verifyEmail(otp: string): Promise<void> {
+  await postJson("/auth/email/verify", { otp });
+}
+
+/** Sends a reset code if an account exists (the server answers the same either way). */
+export async function forgotPassword(email: string): Promise<void> {
+  await postJson("/auth/password/forgot", { email }, false);
+}
+
+/** Sets a new password with the emailed code and signs in (other devices are signed out). */
+export async function resetPasswordWithEmail(email: string, otp: string, password: string): Promise<AuthUser> {
+  const data = await postJson("/auth/password/reset", { email, otp, password }, false);
+  await setSessionId(data.user.sessionId);
+  return data.user;
+}
+
+/** Accounts are identified by email or phone (email is the default while SMS OTP is unavailable). */
+export type AccountId = { email: string } | { phone: string };
+
+/** Sign-in methods the server supports right now; OTP only when it can actually send SMS. */
+export async function fetchAuthMethods(): Promise<{ email: boolean; otp: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/methods`);
+    if (!res.ok) return { email: true, otp: false };
+    const data = await res.json();
+    return { email: data.email !== false, otp: !!data.otp };
+  } catch {
+    return { email: true, otp: false };
+  }
+}
+
+export async function login(account: AccountId, password: string): Promise<AuthUser> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, password }),
+    body: JSON.stringify({ ...account, password }),
   });
 
   const data = await res.json();
@@ -29,14 +79,14 @@ export async function login(phone: string, password: string): Promise<AuthUser> 
 
 export async function signup(
   name: string,
-  phone: string,
+  account: AccountId,
   password: string,
 ): Promise<AuthUser> {
   // Sends the current session so a guest account is upgraded in place (keeps its data).
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: await getHeaders(),
-    body: JSON.stringify({ name, phone, password }),
+    body: JSON.stringify({ name, ...account, password }),
   });
 
   const data = await res.json();

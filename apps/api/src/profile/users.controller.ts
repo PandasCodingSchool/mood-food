@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Put, Req } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
@@ -17,6 +17,7 @@ const updateBody = z
     email: z
       .string()
       .trim()
+      .toLowerCase()
       .transform((v) => v || null)
       .pipe(z.email('Invalid email address').nullable())
       .nullish(),
@@ -52,6 +53,7 @@ export class UsersController {
         role: user.role,
         isGuest: user.isGuest,
         phoneVerified: !!user.phoneVerifiedAt,
+        emailVerified: !!user.emailVerifiedAt,
         hasPassword: !!user.passwordHash,
         personaArchetype: user.personaArchetype,
         createdAt: user.createdAt,
@@ -69,7 +71,11 @@ export class UsersController {
   async update(@CurrentUser() user: AuthUser, @Body({ schema: updateBody }) body: z.infer<typeof updateBody>) {
     const set = {
       ...(body.name !== undefined && { name: body.name || null }),
-      ...(body.email !== undefined && { email: body.email }),
+      // A different address must be verified again; re-saving the same one keeps its status.
+      ...(body.email !== undefined && {
+        email: body.email,
+        emailVerifiedAt: sql`case when ${users.email} is distinct from ${body.email} then null else ${users.emailVerifiedAt} end`,
+      }),
     };
     if (Object.keys(set).length) {
       try {
@@ -107,6 +113,7 @@ export class UsersController {
   @Delete()
   async remove(@CurrentUser() user: AuthUser, @Req() req: AppRequest) {
     await this.sessions.revokeAll(user.id);
+    await this.swiggy.unlink(user.id);
     await this.db.delete(users).where(eq(users.id, user.id));
     req.log.info({ userId: user.id }, 'account deleted');
     return { success: true };

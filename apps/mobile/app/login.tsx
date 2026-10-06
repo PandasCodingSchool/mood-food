@@ -1,24 +1,59 @@
-// 2.0 Login: phone → 6-digit OTP (new numbers add a name inline), with
-// password login and guest mode kept from v1. Success → Swiggy connect
-// (skipped when already linked) → check-in.
+// 2.0 Login: email + password (log in, create an account, or reset a
+// forgotten password with an emailed code) is the default. Phone stays
+// available: password login always, the 6-digit OTP flow only when the server
+// reports it can send SMS (/auth/methods). Guest mode kept from v1.
+// Success → (new email accounts: verify email) → Swiggy connect (skipped when
+// already linked) → check-in.
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { fontFamily, palette, space } from '@moodfood/tokens';
-import { Button, Icon, OtpBox, Screen, Surface, Text, useTheme } from '@moodfood/ui';
-import { LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
-import { continueAsGuest, login as loginWithPassword, requestOtp, verifyOtp, type AuthUser } from '../src/services/auth';
+import { Button, Icon, Screen, Surface, Text, useTheme } from '@moodfood/ui';
+import { CODE_LENGTH, CodeInput, LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
+import {
+  continueAsGuest,
+  fetchAuthMethods,
+  forgotPassword,
+  login as loginWithPassword,
+  requestOtp,
+  resetPasswordWithEmail,
+  signup,
+  verifyOtp,
+  type AuthUser,
+} from '../src/services/auth';
 import { trackEvent } from '../src/utils/analytics';
 
 const PHONE_RE = /^\+?[0-9\s-]{7,15}$/;
-const OTP_LEN = 6;
-type Step = 'phone' | 'otp' | 'password';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const OTP_LEN = CODE_LENGTH;
+const MIN_PASSWORD = 6;
+type Method = 'email' | 'phone';
+type EmailMode = 'login' | 'signup' | 'forgot' | 'reset';
+type PhoneStep = 'phone' | 'otp' | 'password';
+
+/** One rounded input row; matches the phone field's surface. */
+function Field(props: TextInputProps) {
+  const { colors } = useTheme();
+  return (
+    <Surface kind="solid" bordered radius={22} style={{ marginHorizontal: space.gutter, marginTop: 10, paddingHorizontal: 16, paddingVertical: 6 }}>
+      <TextInput
+        placeholderTextColor={colors.ink2}
+        {...props}
+        style={{ height: 52, color: colors.ink, fontFamily: fontFamily.bodyMedium, fontSize: 16 }}
+      />
+    </Surface>
+  );
+}
 
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, dark } = useTheme();
-  const [step, setStep] = useState<Step>('phone');
+  const [method, setMethod] = useState<Method>('email');
+  const [emailMode, setEmailMode] = useState<EmailMode>('login');
+  const [step, setStep] = useState<PhoneStep>('password');
+  const [otpAvailable, setOtpAvailable] = useState(false);
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +62,12 @@ export default function LoginScreen() {
   const [countdown, setCountdown] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const otpRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    void fetchAuthMethods().then((m) => setOtpAvailable(m.otp));
+  }, []);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -52,6 +92,53 @@ export default function LoginScreen() {
       setBusy(false);
     }
   };
+
+  const edit = (setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setError('');
+  };
+
+  /* ── Email ── */
+
+  const setMode = (mode: EmailMode) => {
+    setEmailMode(mode);
+    setError('');
+    setNotice('');
+  };
+
+  const sendResetCode = () =>
+    void run(async () => {
+      await forgotPassword(email.trim());
+      setMode('reset');
+      setOtp('');
+      setPassword('');
+      setCountdown(30);
+      setNotice(`If ${email.trim()} has an account, a 6-digit code is on its way.`);
+      setTimeout(() => otpRef.current?.focus(), 250);
+    }, 'forgot_password_error');
+
+  const emailSubmit = () => {
+    if (!EMAIL_RE.test(email.trim())) return setError('Enter a valid email address.');
+    if (emailMode === 'forgot') return sendResetCode();
+    if (emailMode === 'reset' && otp.length !== OTP_LEN) return setError(`Enter the ${OTP_LEN}-digit code from the email.`);
+    if (emailMode === 'signup' && !name.trim()) return setError('Tell us your name.');
+    if (password.length < MIN_PASSWORD) return setError(`Password must be at least ${MIN_PASSWORD} characters.`);
+    void run(async () => {
+      const account = { email: email.trim() };
+      if (emailMode === 'signup') {
+        await signup(name.trim(), account, password);
+        trackEvent('signup_email_success');
+        // A code was emailed at sign-up; verify, then carry on to Swiggy connect.
+        router.replace({ pathname: '/verify-email', params: { onboarding: '1' } });
+        return;
+      }
+      const user = emailMode === 'reset' ? await resetPasswordWithEmail(account.email, otp, password) : await loginWithPassword(account, password);
+      trackEvent(emailMode === 'reset' ? 'password_reset_success' : 'login_email_success');
+      afterLogin(user);
+    }, `${emailMode}_email_error`);
+  };
+
+  /* ── Phone ── */
 
   const validPhone = () => {
     if (PHONE_RE.test(phone.trim())) return true;
@@ -87,10 +174,19 @@ export default function LoginScreen() {
     }, 'login_otp_error');
   };
 
-  const passwordLogin = () => {
+  const phonePasswordLogin = () => {
     if (!validPhone()) return;
-    if (password.length < 6) return setError('Password must be at least 6 characters.');
-    void run(async () => afterLogin(await loginWithPassword(phone.trim(), password)), 'login_error');
+    if (password.length < MIN_PASSWORD) return setError(`Password must be at least ${MIN_PASSWORD} characters.`);
+    void run(async () => afterLogin(await loginWithPassword({ phone: phone.trim() }, password)), 'login_error');
+  };
+
+  /* ── Navigation ── */
+
+  const switchMethod = (next: Method) => {
+    setMethod(next);
+    setStep(next === 'phone' && otpAvailable ? 'phone' : 'password');
+    setNeedsName(false);
+    setError('');
   };
 
   const guest = () => {
@@ -107,22 +203,36 @@ export default function LoginScreen() {
   };
 
   const back = () => {
-    if (step !== 'phone') {
+    if (method === 'phone' && step === 'otp') {
       setStep('phone');
       setError('');
       setNeedsName(false);
       return;
     }
+    if (method === 'phone') return switchMethod('email');
+    if (emailMode === 'forgot' || emailMode === 'reset') return setMode('login');
     router.canGoBack() ? router.back() : router.replace('/onboarding');
   };
 
-  const title = step === 'otp' ? 'Check your messages' : step === 'password' ? 'Welcome back' : 'Welcome to MoodFood';
-  const sub =
-    step === 'otp'
+  const isEmail = method === 'email';
+  const signingUp = isEmail && emailMode === 'signup';
+  const recovering = isEmail && (emailMode === 'forgot' || emailMode === 'reset');
+  const EMAIL_COPY: Record<EmailMode, { title: string; sub: string; cta: string }> = {
+    login: { title: 'Welcome to MoodFood', sub: 'Log in with your email and password.', cta: 'Log in' },
+    signup: { title: 'Create your account', sub: 'Your name, email and a password. That’s it.', cta: 'Create account' },
+    forgot: { title: 'Forgot your password?', sub: 'We’ll email you a 6-digit code to reset it.', cta: 'Send reset code' },
+    reset: { title: 'Check your email', sub: 'Enter the code we sent and choose a new password.', cta: 'Reset password & log in' },
+  };
+  const title = isEmail ? EMAIL_COPY[emailMode].title : step === 'otp' ? 'Check your messages' : 'Log in with phone';
+  const sub = isEmail
+    ? EMAIL_COPY[emailMode].sub
+    : step === 'otp'
       ? `We sent a ${OTP_LEN}-digit code to +91 ${phone}.`
-      : step === 'password'
-        ? 'Log in with your phone and password.'
-        : 'Log in with your phone. Takes ten seconds.';
+      : step === 'password' ? 'Use the phone number and password on your account.' : 'We’ll text you a one-time code.';
+  const primaryLabel = isEmail
+    ? EMAIL_COPY[emailMode].cta
+    : step === 'otp' ? (needsName ? 'Create account & continue' : 'Verify & continue') : step === 'password' ? 'Log in' : 'Send OTP';
+  const primaryAction = isEmail ? emailSubmit : step === 'otp' ? verify : step === 'password' ? phonePasswordLogin : sendOtp;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -135,135 +245,163 @@ export default function LoginScreen() {
           <Text variant="body15" tone="ink2" style={{ marginTop: 10 }}>{sub}</Text>
         </View>
 
-        {step !== 'otp' ? (
-          <>
-            <Surface kind="solid" bordered radius={22} style={{ marginHorizontal: space.gutter, marginTop: 26, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Text variant="bodyStrong16" style={{ fontSize: 17 }}>+91</Text>
-              <View style={{ width: 1, height: 28, backgroundColor: colors.line }} />
-              <TextInput
-                value={phone}
-                onChangeText={(t) => {
-                  setPhone(t.replace(/[^0-9 +-]/g, '').slice(0, 15));
-                  setError('');
-                }}
-                placeholder="98765 43210"
-                placeholderTextColor={colors.ink2}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                textContentType="telephoneNumber"
-                accessibilityLabel="Phone number"
-                returnKeyType="next"
-                onSubmitEditing={step === 'phone' ? sendOtp : undefined}
-                style={{ flex: 1, height: 52, color: colors.ink, fontFamily: fontFamily.bodySemibold, fontSize: 18, letterSpacing: 0.7 }}
-              />
-            </Surface>
-            {step === 'password' ? (
-              <Surface kind="solid" bordered radius={22} style={{ marginHorizontal: space.gutter, marginTop: 10, paddingHorizontal: 16, paddingVertical: 6 }}>
-                <TextInput
+        <View style={{ marginTop: 16 }}>
+          {isEmail ? (
+            <>
+              {signingUp ? (
+                <Field value={name} onChangeText={edit(setName)} placeholder="Your name" autoComplete="name" textContentType="name" accessibilityLabel="Your name" returnKeyType="next" />
+              ) : null}
+              {emailMode === 'reset' ? (
+                <CodeInput ref={otpRef} value={otp} onChange={edit(setOtp)} />
+              ) : (
+                <Field
+                  value={email}
+                  onChangeText={edit(setEmail)}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  textContentType={signingUp ? 'emailAddress' : 'username'}
+                  accessibilityLabel="Email"
+                  returnKeyType={emailMode === 'forgot' ? 'send' : 'next'}
+                  onSubmitEditing={emailMode === 'forgot' ? emailSubmit : undefined}
+                />
+              )}
+              {emailMode !== 'forgot' ? (
+                <Field
                   value={password}
+                  onChangeText={edit(setPassword)}
+                  placeholder={emailMode === 'login' ? 'Password' : `${emailMode === 'reset' ? 'New password' : 'Password'} (${MIN_PASSWORD}+ characters)`}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoComplete={emailMode === 'login' ? 'current-password' : 'new-password'}
+                  textContentType={emailMode === 'login' ? 'password' : 'newPassword'}
+                  accessibilityLabel={emailMode === 'reset' ? 'New password' : 'Password'}
+                  onSubmitEditing={emailSubmit}
+                />
+              ) : null}
+              {emailMode === 'reset' ? (
+                <View style={{ paddingHorizontal: space.page, paddingTop: 12, flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  <Pressable disabled={countdown > 0 || busy} onPress={sendResetCode} hitSlop={10} accessibilityRole="button">
+                    <Text variant="caption13" tone={countdown > 0 ? 'ink2' : 'accText'}>
+                      {countdown > 0 ? `Resend in 0:${String(countdown).padStart(2, '0')}` : 'Resend code'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          ) : step !== 'otp' ? (
+            <>
+              <Surface kind="solid" bordered radius={22} style={{ marginHorizontal: space.gutter, marginTop: 10, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text variant="bodyStrong16" style={{ fontSize: 17 }}>+91</Text>
+                <View style={{ width: 1, height: 28, backgroundColor: colors.line }} />
+                <TextInput
+                  value={phone}
                   onChangeText={(t) => {
-                    setPassword(t);
+                    setPhone(t.replace(/[^0-9 +-]/g, '').slice(0, 15));
                     setError('');
                   }}
-                  placeholder="Password"
+                  placeholder="98765 43210"
                   placeholderTextColor={colors.ink2}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                  accessibilityLabel="Phone number"
+                  returnKeyType="next"
+                  onSubmitEditing={step === 'phone' ? sendOtp : undefined}
+                  style={{ flex: 1, height: 52, color: colors.ink, fontFamily: fontFamily.bodySemibold, fontSize: 18, letterSpacing: 0.7 }}
+                />
+              </Surface>
+              {step === 'password' ? (
+                <Field
+                  value={password}
+                  onChangeText={edit(setPassword)}
+                  placeholder="Password"
                   secureTextEntry
                   autoComplete="current-password"
                   accessibilityLabel="Password"
-                  onSubmitEditing={passwordLogin}
-                  style={{ height: 52, color: colors.ink, fontFamily: fontFamily.bodyMedium, fontSize: 16 }}
+                  onSubmitEditing={phonePasswordLogin}
                 />
-              </Surface>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <Pressable onPress={() => otpRef.current?.focus()} accessibilityLabel="Enter verification code" style={{ marginHorizontal: space.gutter, marginTop: 26, flexDirection: 'row', gap: 8 }}>
-              {Array.from({ length: OTP_LEN }, (_, k) => (
-                <OtpBox key={k} digit={otp[k]} state={otp.length > k ? 'filled' : otp.length === k ? 'active' : 'empty'} />
-              ))}
-            </Pressable>
-            {/* Real input is invisible; boxes mirror it. SMS autofill works through textContentType/autoComplete. */}
-            <TextInput
-              ref={otpRef}
-              value={otp}
-              onChangeText={(t) => {
-                setOtp(t.replace(/\D/g, '').slice(0, OTP_LEN));
-                setError('');
-              }}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              autoComplete="sms-otp"
-              maxLength={OTP_LEN}
-              style={{ position: 'absolute', opacity: 0, height: 1, width: 1 }}
-            />
-            <View style={{ paddingHorizontal: space.page, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Icon name="sms" size={17} tone="accText" />
-                <Text variant="caption13" tone="ink2">{otp.length === OTP_LEN ? 'Code entered' : 'Waiting for the SMS…'}</Text>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <CodeInput ref={otpRef} value={otp} onChange={edit(setOtp)} sms />
+              <View style={{ paddingHorizontal: space.page, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="sms" size={17} tone="accText" />
+                  <Text variant="caption13" tone="ink2">{otp.length === OTP_LEN ? 'Code entered' : 'Waiting for the SMS…'}</Text>
+                </View>
+                <Pressable disabled={countdown > 0 || busy} onPress={sendOtp} hitSlop={10} accessibilityRole="button">
+                  <Text variant="caption13" tone={countdown > 0 ? 'ink2' : 'accText'}>
+                    {countdown > 0 ? `Resend in 0:${String(countdown).padStart(2, '0')}` : 'Resend code'}
+                  </Text>
+                </Pressable>
               </View>
-              <Pressable disabled={countdown > 0 || busy} onPress={sendOtp} hitSlop={10} accessibilityRole="button">
-                <Text variant="caption13" tone={countdown > 0 ? 'ink2' : 'accText'}>
-                  {countdown > 0 ? `Resend in 0:${String(countdown).padStart(2, '0')}` : 'Resend code'}
-                </Text>
-              </Pressable>
-            </View>
-            {needsName ? (
-              <Surface kind="solid" bordered radius={22} style={{ marginHorizontal: space.gutter, marginTop: 16, paddingHorizontal: 16, paddingVertical: 6 }}>
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Your name"
-                  placeholderTextColor={colors.ink2}
-                  autoComplete="name"
-                  textContentType="name"
-                  accessibilityLabel="Your name"
-                  style={{ height: 52, color: colors.ink, fontFamily: fontFamily.bodyMedium, fontSize: 16 }}
-                />
-              </Surface>
-            ) : null}
-          </>
-        )}
+              {needsName ? (
+                <Field value={name} onChangeText={setName} placeholder="Your name" autoComplete="name" textContentType="name" accessibilityLabel="Your name" />
+              ) : null}
+            </>
+          )}
+        </View>
 
+        {notice && !error ? (
+          <Text variant="caption13" tone="ink2" style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">
+            {notice}
+          </Text>
+        ) : null}
         {error ? (
           <Text variant="caption13" color={palette.danger} style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">
             {error}
           </Text>
         ) : null}
 
-        <View style={{ paddingHorizontal: space.gutter, paddingTop: 16 }}>
-          <Button
-            block
-            loading={busy}
-            label={step === 'otp' ? (needsName ? 'Create account & continue' : 'Verify & continue') : step === 'password' ? 'Log in' : 'Send OTP'}
-            onPress={step === 'otp' ? verify : step === 'password' ? passwordLogin : sendOtp}
-          />
+        <View style={{ paddingHorizontal: space.gutter, paddingTop: 16, gap: 6 }}>
+          <Button block loading={busy} label={primaryLabel} onPress={primaryAction} />
+          {isEmail && emailMode === 'login' ? (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Button variant="ghost" size="sm" label="Forgot password?" onPress={() => setMode('forgot')} />
+              <Button variant="ghost" size="sm" label="Create an account" onPress={() => setMode('signup')} />
+            </View>
+          ) : isEmail ? (
+            <Button block variant="ghost" size="sm" label={signingUp ? 'Already have an account? Log in' : 'Back to log in'} onPress={() => setMode('login')} />
+          ) : null}
         </View>
 
-        {step !== 'otp' ? (
+        {(isEmail ? !recovering : step !== 'otp') ? (
           <>
-            <View style={{ paddingHorizontal: space.page, paddingTop: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ paddingHorizontal: space.page, paddingTop: 18, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
               <Text variant="caption12" tone="ink2">or</Text>
               <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
             </View>
             <View style={{ paddingHorizontal: space.gutter, paddingTop: 16, gap: 10 }}>
-              <Button
-                block
-                variant="glass"
-                size="md"
-                label={step === 'password' ? 'Use a one-time code instead' : 'Log in with password'}
-                onPress={() => {
-                  setStep(step === 'password' ? 'phone' : 'password');
-                  setError('');
-                }}
-              />
+              {isEmail ? (
+                <Button block variant="glass" size="md" iconLeft="call" label="Use phone number instead" onPress={() => switchMethod('phone')} />
+              ) : (
+                <>
+                  {otpAvailable ? (
+                    <Button
+                      block
+                      variant="glass"
+                      size="md"
+                      label={step === 'password' ? 'Use a one-time code instead' : 'Log in with password'}
+                      onPress={() => {
+                        setStep(step === 'password' ? 'phone' : 'password');
+                        setError('');
+                      }}
+                    />
+                  ) : null}
+                  <Button block variant="glass" size="md" iconLeft="mail" label="Use email instead" onPress={() => switchMethod('email')} />
+                </>
+              )}
               <Button block variant="glass" size="md" label="Continue as guest" onPress={guest} />
             </View>
             <Text variant="micro12" tone="ink2" align="center" style={{ paddingHorizontal: 28, paddingTop: 22 }}>
               By continuing you agree to our Terms and Privacy Policy. Mood data stays on your account and is never sold.
             </Text>
-            <PoweredBySwiggy style={{ paddingTop: 18 }} />
+            <PoweredBySwiggy style={{ paddingTop: 18, paddingBottom: 24 }} />
           </>
         ) : null}
       </Screen>

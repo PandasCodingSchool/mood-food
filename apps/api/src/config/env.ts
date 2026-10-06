@@ -33,6 +33,7 @@ export const envSchema = z.object({
   RATE_LIMIT_IP: z.coerce.number().int().default(2000),
   RATE_LIMIT_AI: z.coerce.number().int().default(10),
   RATE_LIMIT_SIGNALS: z.coerce.number().int().default(120),
+  RATE_LIMIT_SIGNUP: z.coerce.number().int().default(20),
 
   // Intelligence service (Python)
   AI_SERVICE_URL: z.string().default('http://localhost:8000'),
@@ -46,6 +47,11 @@ export const envSchema = z.object({
   GAME_ASSIST_TIMEOUT_MS: z.coerce.number().int().default(3000),
   LEARN_TIMEOUT_MS: z.coerce.number().int().default(8000),
 
+  // Email (verification + password reset codes). console = codes are printed in the API log (dev).
+  EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('MoodFood <no-reply@moodfood.fun>'),
+
   // Swiggy OAuth
   SWIGGY_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   SWIGGY_OAUTH_REDIRECT_URI: z.string().default('https://moodfood.fun/api/swiggy/oauth/callback'),
@@ -58,6 +64,9 @@ export const envSchema = z.object({
   if (env.NODE_ENV !== 'production') return;
   if (env.ADMIN_PASSWORD === 'changeme') {
     ctx.addIssue({ code: 'custom', path: ['ADMIN_PASSWORD'], message: 'must be changed from the default in production' });
+  }
+  if (env.EMAIL_PROVIDER === 'resend' && !env.RESEND_API_KEY) {
+    ctx.addIssue({ code: 'custom', path: ['RESEND_API_KEY'], message: 'is required when EMAIL_PROVIDER=resend' });
   }
   if (!env.SWIGGY_TOKEN_ENCRYPTION_KEY) {
     ctx.addIssue({ code: 'custom', path: ['SWIGGY_TOKEN_ENCRYPTION_KEY'], message: 'is required in production' });

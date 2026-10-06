@@ -9,34 +9,37 @@ export const OTP_MAX_ATTEMPTS = 5;
 
 export type OtpCheck = 'ok' | 'missing' | 'locked' | 'invalid';
 
-/** 6-digit phone OTPs, hashed in Redis with a 5-minute TTL and 5 attempts. */
+/**
+ * 6-digit one-time codes, hashed in Redis with 5 attempts. Keyed by a subject:
+ * an E.164 phone for SMS OTPs, or `email-verify:…` / `email-reset:…` for email codes.
+ */
 @Injectable()
 export class OtpService {
   constructor(@Inject(REDIS) private readonly redis: Redis) {}
 
-  private key = (phone: string) => `otp:${phone}`;
+  private key = (subject: string) => `otp:${subject}`;
 
-  async issue(phone: string): Promise<string> {
+  async issue(subject: string, ttlSec = OTP_TTL_SEC): Promise<string> {
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
     await this.redis
       .multi()
-      .hset(this.key(phone), { hash: await hashSecret(code), attempts: 0 })
-      .expire(this.key(phone), OTP_TTL_SEC)
+      .hset(this.key(subject), { hash: await hashSecret(code), attempts: 0 })
+      .expire(this.key(subject), ttlSec)
       .exec();
     return code;
   }
 
   /** Checks a code without consuming it; call `consume` once the login succeeds. */
-  async check(phone: string, code: string): Promise<OtpCheck> {
-    const rec = await this.redis.hgetall(this.key(phone));
+  async check(subject: string, code: string): Promise<OtpCheck> {
+    const rec = await this.redis.hgetall(this.key(subject));
     if (!rec.hash) return 'missing';
     if (Number(rec.attempts) >= OTP_MAX_ATTEMPTS) return 'locked';
     if (await verifySecret(code, rec.hash)) return 'ok';
-    await this.redis.hincrby(this.key(phone), 'attempts', 1);
+    await this.redis.hincrby(this.key(subject), 'attempts', 1);
     return 'invalid';
   }
 
-  async consume(phone: string) {
-    await this.redis.del(this.key(phone));
+  async consume(subject: string) {
+    await this.redis.del(this.key(subject));
   }
 }

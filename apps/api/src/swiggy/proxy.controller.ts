@@ -23,20 +23,30 @@ export class ProxyController {
   ) {}
 
   @All(['swiggy', 'swiggy/*'])
-  async swiggy(@Req() req: AppRequest, @Res() reply: FastifyReply) {
-    const swiggyToken = await this.tokens.activeToken(req.user?.id);
-    return this.intelligence.proxy(req, reply, { timeoutMs: this.env.SWIGGY_TIMEOUT_MS, swiggyToken, label: 'Swiggy' });
+  swiggy(@Req() req: AppRequest, @Res() reply: FastifyReply) {
+    return this.withUserToken(req, reply, 'Swiggy');
   }
 
   @All(['instamart', 'instamart/*'])
-  async instamart(@Req() req: AppRequest, @Res() reply: FastifyReply) {
-    const swiggyToken = await this.tokens.activeToken(req.user?.id);
-    return this.intelligence.proxy(req, reply, { timeoutMs: this.env.SWIGGY_TIMEOUT_MS, swiggyToken, label: 'Instamart' });
+  instamart(@Req() req: AppRequest, @Res() reply: FastifyReply) {
+    return this.withUserToken(req, reply, 'Instamart');
   }
 
   @RateLimit('ai')
   @All(['recipe', 'recipe/*'])
   recipe(@Req() req: AppRequest, @Res() reply: FastifyReply) {
     return this.intelligence.proxy(req, reply, { timeoutMs: this.env.RECIPE_TIMEOUT_MS, label: 'Recipe' });
+  }
+
+  /** If Swiggy rejects the forwarded token, the link is dropped so the app asks the user to reconnect. */
+  private async withUserToken(req: AppRequest, reply: FastifyReply, label: string) {
+    const userId = req.user?.id;
+    const swiggyToken = await this.tokens.activeToken(userId);
+    return this.intelligence.proxy(req, reply, {
+      timeoutMs: this.env.SWIGGY_TIMEOUT_MS,
+      swiggyToken,
+      label,
+      onTokenRejected: userId && swiggyToken ? () => this.tokens.discardRejected(userId, swiggyToken) : undefined,
+    });
   }
 }

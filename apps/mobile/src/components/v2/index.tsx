@@ -104,3 +104,4 @@ export function ErrorBlock({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 export { PoweredBySwiggy } from './PoweredBySwiggy';
+export { CODE_LENGTH, CodeInput } from './CodeInput';
