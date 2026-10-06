@@ -7,9 +7,8 @@ import type { AuthUser } from '../auth/auth.types.js';
 import type { Env } from '../config/env.js';
 import { fail } from '../common/http.js';
 import { ENV, REDIS } from '../core/tokens.js';
-import { SwiggyTokensService } from './swiggy-tokens.service.js';
+import { SWIGGY_AUTH_BASE as AUTH_BASE, SwiggyTokensService } from './swiggy-tokens.service.js';
 
-const AUTH_BASE = 'https://mcp.swiggy.com';
 const STATE_TTL_SEC = 10 * 60;
 const CLIENT_TTL_SEC = 24 * 60 * 60;
 

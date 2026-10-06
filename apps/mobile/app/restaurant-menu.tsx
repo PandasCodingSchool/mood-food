@@ -100,7 +100,17 @@ export default function RestaurantMenuScreen() {
   const total = Object.entries(cart).reduce((a, [id, q]) => a + (allItems[id]?.price || 0) * q, 0);
 
   const toCheckout = () =>
-    router.push({ pathname: '/order/confirm', params: { restaurantId: params.restaurantId, restaurantName: name, addressId: params.addressId } });
+    router.push({
+      pathname: '/order/confirm',
+      params: {
+        restaurantId: params.restaurantId,
+        restaurantName: name,
+        addressId: params.addressId,
+        etaMin: menu?.restaurant?.etaMin != null ? String(menu.restaurant.etaMin) : '',
+        dishId: params.dishId || '',
+        dishName: params.dishName || '',
+      },
+    });
 
   const cartBar = count > 0 ? (
     <View

@@ -13,7 +13,7 @@ import { MOOD_COPY, WEATHER_COPY } from '../src/constants/copy';
 import { useLiveMood } from '../src/context/LiveMood';
 import { getSavedAddressId } from '../src/services/aiRecommendations';
 import { saveOrder, toggleSaved } from '../src/services/history';
-import { startOrder } from '../src/services/orderFlow';
+import { useStartOrder } from '../src/services/orderFlow';
 import type { Recommendation } from '../src/types';
 import { imageCaption, recView } from '../src/utils/recView';
 
@@ -21,6 +21,7 @@ type Variant = 'original' | 'healthier_swap' | 'budget_swap';
 
 export default function MealDetailScreen() {
   const router = useRouter();
+  const { order, ordering } = useStartOrder(router);
   const toast = useToast();
   const { colors, dark } = useTheme();
   const { weather, mood } = useLiveMood();
@@ -223,7 +224,7 @@ export default function MealDetailScreen() {
       </Screen>
       <BottomBar>
         <IconButton icon="bookmark" label={saved ? 'Remove from saved' : 'Save'} variant="solid" square size={56} filled={saved} iconColor={saved ? colors.accText : undefined} onPress={toggleSave} style={{ borderRadius: 18 }} />
-        <Button label={v.priceTxt ? `Order now · ${v.priceTxt}` : 'Order now'} style={{ flex: 1, height: 56, borderRadius: 18 }} onPress={() => void startOrder(router, current, rank)} />
+        <Button label={v.priceTxt ? `Order now · ${v.priceTxt}` : 'Order now'} style={{ flex: 1, height: 56, borderRadius: 18 }} loading={ordering} onPress={() => void order(current)} />
       </BottomBar>
     </View>
   );

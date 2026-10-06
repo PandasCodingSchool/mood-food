@@ -20,7 +20,7 @@ import { hasCheckedInToday } from '../src/services/moodState';
 import { getMoodRecommendations } from '../src/services/moodRecs';
 import { fetchNotifications } from '../src/services/notifications';
 import { markNostalgiaPromptShown, shouldShowNostalgiaPrompt } from '../src/services/nostalgiaGate';
-import { openMeal, startOrder } from '../src/services/orderFlow';
+import { openMeal, useStartOrder } from '../src/services/orderFlow';
 import { fetchStreak } from '../src/services/quests';
 import { fetchLearnedProfile, flushSignals } from '../src/services/signals';
 import type { LearnedProfile, RecommendationResponse } from '../src/types';
@@ -32,6 +32,7 @@ let promptedCheckinThisSession = false;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { order, ordering } = useStartOrder(router);
   const toast = useToast();
   const { colors, dark } = useTheme();
   const { time, weather, mood, temperature } = useLiveMood();
@@ -171,7 +172,7 @@ export default function HomeScreen() {
               onOpen={() => openMeal(router, top, 0)}
               actions={
                 <>
-                  <Button label="Order now" size="md" style={{ flex: 1 }} onPress={() => void startOrder(router, top, 0)} />
+                  <Button label="Order now" size="md" style={{ flex: 1 }} loading={ordering} onPress={() => void order(top)} />
                   <Button label="See why" size="md" variant="photo" onPress={() => openMeal(router, top, 0)} />
                 </>
               }

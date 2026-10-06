@@ -58,6 +58,13 @@ This plan takes MoodFood 2.0 from the monorepo to a closed beta and then an open
 **Repo changes:**
 - Done: `apps/mobile/eas.json` points `preview` and `production` at `https://api.moodfood.fun/api` and `development` at the staging API. (v1 builds pointed at `https://moodfood.fun/api`, which becomes the marketing site.)
 - If Swiggy's MCP approval lists allowed redirect URIs, add the new callback before launch. The API registers its OAuth client at runtime with whatever `SWIGGY_OAUTH_REDIRECT_URI` says.
+- The redirect URI is whitelisted on the Swiggy MCP gateway as an exact match. `SWIGGY_OAUTH_REDIRECT_URI` must equal it character for character. Email builders@swiggy.in *before* shipping any new or changed URI.
+
+**Swiggy token lifecycle** (`apps/api/src/swiggy/`):
+- Tokens are AES-256-GCM encrypted with `SWIGGY_TOKEN_ENCRYPTION_KEY` and bound to the user id. They never reach the client. Back up the key: losing or changing it forces every user to re-link.
+- Swiggy v1 tokens last 5 days and there is no refresh token. An hourly sweep deletes expired tokens and sends a "reconnect" notification about 12 hours before expiry.
+- When Swiggy rejects a user's token (401/403/419), the intelligence service sets `X-Swiggy-Token-Rejected: 1`. The API then deletes the link and notifies the user.
+- Disconnecting, or deleting the account, calls Swiggy's `/auth/logout` and deletes the stored token.
 
 ---
 
@@ -100,14 +107,19 @@ SWIGGY_OAUTH_REDIRECT_URI=https://api.moodfood.fun/api/swiggy/oauth/callback
 FRONTEND_ORIGIN=https://app.moodfood.fun
 ADMIN_USERNAME=<not "admin">
 ADMIN_PASSWORD=<strong; the API refuses to boot with "changeme">
-SMS_PROVIDER=twilio
+SMS_PROVIDER=twilio            # or leave unset: the app then hides SMS OTP and offers email + password
 TWILIO_ACCOUNT_SID=…  TWILIO_AUTH_TOKEN=…  TWILIO_PHONE_NUMBER=…
+EMAIL_PROVIDER=resend          # verification + password reset codes
+RESEND_API_KEY=re_…            # the API refuses to boot without it when EMAIL_PROVIDER=resend
+EMAIL_FROM=MoodFood <no-reply@moodfood.fun>
+RATE_LIMIT_SIGNUP=20           # sign-ups per IP per 15 min (email sign-up has no OTP gate)
 EXPO_ACCESS_TOKEN=<for push>
 ```
 
 Notes:
 - **Migrations are forward-only.** For a breaking schema change, use expand → deploy → contract across two releases, so old and new replicas can run side by side.
 - **Private networking:** if the API can't reach `intelligence.railway.internal`, the environment's private network may be IPv6-only. Make uvicorn listen on `::` (and the API too if anything calls it privately).
+- **Email (Resend):** add `moodfood.fun` as a domain in Resend and create its DNS records in Vercel (team pank1999s-projects). Resend's SPF/MX records sit on the `send.` subdomain and DKIM is a `resend._domainkey` TXT, so the Hostinger mail records on the apex stay untouched. Sending only works once Resend shows the domain as verified; until then a sign-up still succeeds, but its verification email fails and is logged. Without `EMAIL_PROVIDER=resend`, codes are only printed in the API log, so forgot password can't work in production.
 - **OTP SMS in India:** sending SMS to Indian numbers needs DLT registration (sender ID and template). Start this early; it can take days. Until then, use password login, or keep `SMS_PROVIDER=console` in staging only.
 
 ### 3.3 `intelligence`

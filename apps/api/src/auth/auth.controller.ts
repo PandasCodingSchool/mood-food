@@ -5,12 +5,15 @@ import { fail } from '../common/http.js';
 import { RateLimit } from '../common/rate-limit.js';
 import { CurrentUser, Public } from './auth.guard.js';
 import {
+  emailBody,
+  emailVerifyBody,
   loginBody,
   otpVerifyBody,
   passwordChangeBody,
   passwordResetBody,
   phoneBody,
   signupBody,
+  type EmailVerifyBody,
   type LoginBody,
   type OtpVerifyBody,
   type PasswordChangeBody,
@@ -37,6 +40,13 @@ export class AuthController {
   }
 
   @Public()
+  @Get('methods')
+  methods() {
+    return this.auth.methods();
+  }
+
+  @Public()
+  @RateLimit('signup')
   @Post('signup')
   signup(@Body({ schema: signupBody }) body: SignupBody, @Req() req: AppRequest) {
     return this.auth.signup(body, req.user, meta(req));
@@ -77,6 +87,28 @@ export class AuthController {
   @HttpCode(200)
   resetPassword(@Body({ schema: passwordResetBody }) body: PasswordResetBody, @Req() req: AppRequest) {
     return this.auth.resetPassword(body, meta(req));
+  }
+
+  @Public()
+  @RateLimit('emailSend')
+  @Post('password/forgot')
+  @HttpCode(200)
+  forgotPassword(@Body({ schema: emailBody }) body: { email: string }) {
+    return this.auth.forgotPassword(body.email);
+  }
+
+  @RateLimit('emailSend')
+  @Post('email/send-verification')
+  @HttpCode(200)
+  sendEmailVerification(@CurrentUser() user: AuthUser) {
+    return this.auth.sendEmailVerification(user);
+  }
+
+  @RateLimit('otpVerify')
+  @Post('email/verify')
+  @HttpCode(200)
+  verifyEmail(@CurrentUser() user: AuthUser, @Body({ schema: emailVerifyBody }) body: EmailVerifyBody) {
+    return this.auth.verifyEmail(user, body.otp);
   }
 
   @Post('password')

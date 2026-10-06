@@ -4,6 +4,11 @@ import type { Env } from '../config/env.js';
 import { fetchWithTimeout, isAbort } from '../common/http.js';
 import { ENV } from '../core/tokens.js';
 
+/** Set by the intelligence service when Swiggy rejected the forwarded per-user token. */
+const TOKEN_REJECTED_HEADER = 'x-swiggy-token-rejected';
+
+type OnTokenRejected = () => Promise<void> | void;
+
 export class UpstreamError extends Error {
   constructor(
     message: string,
@@ -37,7 +42,14 @@ export class IntelligenceService {
   async json<T = unknown>(
     method: 'GET' | 'POST',
     path: string,
-    opts: { body?: unknown; timeoutMs: number; swiggyToken?: string | null; requestId?: string; sync?: boolean },
+    opts: {
+      body?: unknown;
+      timeoutMs: number;
+      swiggyToken?: string | null;
+      requestId?: string;
+      sync?: boolean;
+      onTokenRejected?: OnTokenRejected;
+    },
   ): Promise<T> {
     let res: Response;
     try {
@@ -50,6 +62,7 @@ export class IntelligenceService {
     } catch (err) {
       throw new UpstreamError(isAbort(err) ? `timeout on ${path}` : (err as Error).message);
     }
+    await this.checkTokenRejected(res, opts);
     if (!res.ok) throw new UpstreamError(`Intelligence service ${res.status} on ${path}`, res.status);
     return (await res.json()) as T;
   }
@@ -71,7 +84,7 @@ export class IntelligenceService {
   async proxy(
     req: FastifyRequest,
     reply: FastifyReply,
-    opts: { timeoutMs: number; swiggyToken?: string | null; label: string },
+    opts: { timeoutMs: number; swiggyToken?: string | null; label: string; onTokenRejected?: OnTokenRejected },
   ) {
     const target = this.env.AI_SERVICE_URL + req.url;
     const hasBody = !['GET', 'HEAD'].includes(req.method);
@@ -83,6 +96,7 @@ export class IntelligenceService {
         timeoutMs: opts.timeoutMs,
       });
       const text = await res.text();
+      await this.checkTokenRejected(res, opts);
       return reply
         .status(res.status)
         .header('content-type', res.headers.get('content-type') || 'application/json')
@@ -94,6 +108,16 @@ export class IntelligenceService {
         success: false,
         error: aborted ? `${opts.label} service timed out.` : `${opts.label} service unavailable.`,
       });
+    }
+  }
+
+  /** Never throws: dropping a dead token must not fail the user's request. */
+  private async checkTokenRejected(res: Response, opts: { swiggyToken?: string | null; onTokenRejected?: OnTokenRejected }) {
+    if (!opts.swiggyToken || !opts.onTokenRejected || res.headers.get(TOKEN_REJECTED_HEADER) !== '1') return;
+    try {
+      await opts.onTokenRejected();
+    } catch (err) {
+      this.log.warn(`Dropping rejected Swiggy token failed: ${(err as Error).message}`);
     }
   }
 }

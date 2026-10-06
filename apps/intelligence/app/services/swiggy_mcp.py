@@ -23,6 +23,8 @@ import logging
 import random
 import time
 from contextlib import AsyncExitStack, asynccontextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any, AsyncIterator, Optional
 
 from app.config import settings
@@ -65,7 +67,37 @@ def _preview(data: Any, limit: int = 800) -> str:
 
 
 class SwiggyAuthError(Exception):
-    """Raised when no usable token is available or the token is rejected (401/403)."""
+    """Raised when no usable token is available or the token is rejected (401/403/419)."""
+
+
+@dataclass
+class UserTokenState:
+    """The per-user token forwarded for this request, and whether Swiggy rejected it."""
+
+    token: Optional[str]
+    rejected: bool = False
+
+
+_user_token_state: ContextVar[Optional[UserTokenState]] = ContextVar("swiggy_user_token_state", default=None)
+
+
+def track_user_token(token: Optional[str]) -> UserTokenState:
+    """Start tracking the request's x-swiggy-user-token (called by the HTTP middleware).
+
+    The state object is mutable so a rejection noticed in a child task still
+    reaches the middleware, which tells the API to drop the dead token.
+    """
+    state = UserTokenState(token=token)
+    _user_token_state.set(state)
+    return state
+
+
+def _token_rejected(token: Optional[str], detail: str) -> SwiggyAuthError:
+    """Build the auth error, flagging the request when the rejected token is the user's (not bootstrap)."""
+    state = _user_token_state.get()
+    if state and state.token and state.token == token:
+        state.rejected = True
+    return SwiggyAuthError(f"Swiggy rejected the token: {detail}")
 
 
 class SwiggyMCPError(Exception):
@@ -248,7 +280,7 @@ class SwiggyMCPClient:
                     "`python -m scripts.swiggy_auth --save` (auto-applies, no restart).",
                     name, ms,
                 )
-                raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
+                raise _token_rejected(self._token, detail) from exc
             logger.warning("✗ Swiggy tool '%s' transport error in %.0fms: %s", name, ms, detail)
             raise SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True) from exc
 
@@ -350,7 +382,7 @@ class _BoundSession:
                 detail = _unwrap_error(exc)
                 await self._reset()
                 if _is_auth_failure_text(detail):
-                    raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
+                    raise _token_rejected(self._token, detail) from exc
                 raise SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True) from exc
             ms = (time.time() - start) * 1000
             logger.info("← Swiggy tool '%s' returned in %.0fms (session, no-retry)", name, ms)
@@ -395,7 +427,7 @@ class _BoundSession:
                         "`python -m scripts.swiggy_auth --save` — the new token auto-applies "
                         "to new requests (no restart needed).", name,
                     )
-                    raise SwiggyAuthError(f"Swiggy rejected the token: {detail}") from exc
+                    raise _token_rejected(self._token, detail) from exc
                 last_error = SwiggyMCPError(f"Swiggy transport error: {detail}", retryable=True)
                 if "429" in detail:
                     _arm_rate_limit_cooldown()
@@ -446,4 +478,5 @@ def _unwrap_error(exc: BaseException) -> str:
 
 def _is_auth_failure_text(text: str) -> bool:
     lowered = text.lower()
-    return "401" in lowered or "403" in lowered or "unauthorized" in lowered or "forbidden" in lowered
+    # 419 = session revoked at Swiggy (logout / security event): full re-auth needed.
+    return any(k in lowered for k in ("401", "403", "419", "unauthorized", "forbidden"))
