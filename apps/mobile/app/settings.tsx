@@ -104,6 +104,15 @@ export default function SettingsScreen() {
               'Account',
               <Surface style={{ marginHorizontal: space.gutter, paddingHorizontal: 6, paddingVertical: 2 }}>
                 <ListRow title="Swiggy account" meta={user?.swiggyLinked ? 'Connected' : 'Not linked'} onPress={() => router.push('/swiggy-connect')} divider />
+                {user?.email ? (
+                  <ListRow
+                    title="Email"
+                    subtitle={user.email}
+                    meta={user.emailVerified ? 'Verified' : 'Verify'}
+                    onPress={user.emailVerified ? undefined : () => router.push('/verify-email')}
+                    divider
+                  />
+                ) : null}
                 {user && !user.isGuest ? (
                   <ListRow
                     title="Log out"

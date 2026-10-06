@@ -6,6 +6,7 @@ import { DB, ENV, type Database } from '../core/tokens.js';
 import { users } from '../db/schema.js';
 import type { AuthUser } from './auth.types.js';
 import type { LoginBody, OtpVerifyBody, PasswordChangeBody, PasswordResetBody, SignupBody } from './auth.schemas.js';
+import { EmailService, type EmailCodePurpose } from './email.service.js';
 import { OtpService } from './otp.service.js';
 import { burnVerify, hashSecret, verifySecret } from './password.js';
 import { normalizePhone } from './phone.js';
@@ -13,6 +14,12 @@ import { SessionsService } from './sessions.service.js';
 import { SmsService } from './sms.service.js';
 
 type UserRow = typeof users.$inferSelect;
+
+/** Email codes live longer than SMS ones: email can take a minute to arrive. */
+const EMAIL_CODE_TTL_SEC = 15 * 60;
+/** Verify codes are tied to the user and the exact address, so changing email invalidates them. */
+const emailCodeSubject = (purpose: EmailCodePurpose, email: string, userId?: string) =>
+  purpose === 'verify' ? `email-verify:${userId}:${email}` : `email-reset:${email}`;
 export interface ClientMeta {
   userAgent?: string;
   ip?: string;
@@ -45,6 +52,7 @@ export class AuthService {
     private readonly sessions: SessionsService,
     private readonly otp: OtpService,
     private readonly sms: SmsService,
+    private readonly email: EmailService,
   ) {}
 
   phone(raw: unknown): string {
@@ -78,6 +86,8 @@ export class AuthService {
     if (phone && (await this.findByPhone(phone))) fail(409, 'Phone number already registered');
     const passwordHash = await hashSecret(body.password);
     const user = await this.createOrUpgrade(current, { name: body.name, phone, email, passwordHash });
+    // Best effort: the account works unverified; the app offers to resend.
+    if (email) void this.sendEmailCode('verify', email, user.id).catch((err) => this.log.error(`Verification email failed: ${(err as Error).message}`));
     return authPayload(user, await this.sessions.issue(user.id, meta));
   }
 
@@ -101,8 +111,52 @@ export class AuthService {
     return { success: true, message: 'OTP sent' };
   }
 
-  private async checkOtp(phone: string, code: string) {
-    const result = await this.otp.check(phone, code);
+  private async sendEmailCode(purpose: EmailCodePurpose, email: string, userId?: string) {
+    const code = await this.otp.issue(emailCodeSubject(purpose, email, userId), EMAIL_CODE_TTL_SEC);
+    await this.email.sendCode(email, purpose, code, EMAIL_CODE_TTL_SEC / 60);
+  }
+
+  /** (Re)send the 6-digit code that verifies the signed-in user's email. */
+  async sendEmailVerification(current: AuthUser) {
+    const user = await this.db.query.users.findFirst({ where: eq(users.id, current.id) });
+    if (!user?.email) fail(400, 'Add an email address first');
+    if (user.emailVerifiedAt) return { success: true, emailVerified: true };
+    try {
+      await this.sendEmailCode('verify', user.email, user.id);
+    } catch (err) {
+      this.log.error(`Verification email failed: ${(err as Error).message}`);
+      fail(500, 'Failed to send verification email');
+    }
+    return { success: true, emailVerified: false, message: 'Verification code sent' };
+  }
+
+  async verifyEmail(current: AuthUser, code: string) {
+    const user = await this.db.query.users.findFirst({ where: eq(users.id, current.id) });
+    if (!user?.email) fail(400, 'Add an email address first');
+    if (user.emailVerifiedAt) return { success: true, emailVerified: true };
+    const subject = emailCodeSubject('verify', user.email, user.id);
+    await this.checkOtp(subject, code);
+    await this.db.update(users).set({ emailVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(users.id, user.id));
+    await this.otp.consume(subject);
+    return { success: true, emailVerified: true };
+  }
+
+  /** Always answers the same way, so it can't be used to discover which emails have accounts. */
+  async forgotPassword(email: string) {
+    const user = await this.findByEmail(email);
+    if (user) {
+      try {
+        await this.sendEmailCode('reset', email);
+      } catch (err) {
+        this.log.error(`Password reset email failed: ${(err as Error).message}`);
+        fail(500, 'Failed to send reset email');
+      }
+    }
+    return { success: true, message: 'If an account exists for that email, we sent a reset code.' };
+  }
+
+  private async checkOtp(subject: string, code: string) {
+    const result = await this.otp.check(subject, code);
     if (result === 'missing') fail(400, 'OTP expired or not requested');
     if (result === 'locked') fail(400, 'Too many failed attempts. Please request a new OTP.');
     if (result === 'invalid') fail(401, 'Invalid OTP');
@@ -127,18 +181,28 @@ export class AuthService {
     return { ...authPayload(user, await this.sessions.issue(user.id, meta)), isNew };
   }
 
-  /** Forgot password: prove the phone with an OTP, set a new password, sign out everywhere else. */
+  /**
+   * Forgot password: prove the phone (SMS OTP) or email (emailed code), set a
+   * new password, sign out everywhere else. The code also verifies that channel.
+   */
   async resetPassword(body: PasswordResetBody, meta: ClientMeta) {
-    const phone = this.phone(body.phone);
-    await this.checkOtp(phone, body.otp);
-    const user = await this.findByPhone(phone);
+    const viaEmail = !!body.email;
+    const subject = viaEmail ? emailCodeSubject('reset', body.email!) : this.phone(body.phone);
+    await this.checkOtp(subject, body.otp);
+    const user = viaEmail ? await this.findByEmail(body.email!) : await this.findByPhone(subject);
     if (!user) fail(404, 'No account found. Please sign up.');
     const [updated] = await this.db
       .update(users)
-      .set({ passwordHash: await hashSecret(body.password), phoneVerifiedAt: user.phoneVerifiedAt ?? new Date(), updatedAt: new Date() })
+      .set({
+        passwordHash: await hashSecret(body.password),
+        ...(viaEmail
+          ? { emailVerifiedAt: user.emailVerifiedAt ?? new Date() }
+          : { phoneVerifiedAt: user.phoneVerifiedAt ?? new Date() }),
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, user.id))
       .returning();
-    await this.otp.consume(phone);
+    await this.otp.consume(subject);
     await this.sessions.revokeAll(user.id);
     return authPayload(updated, await this.sessions.issue(user.id, meta));
   }

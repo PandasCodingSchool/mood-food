@@ -14,7 +14,7 @@ import type { Env } from '../config/env.js';
 import { ENV, REDIS } from '../core/tokens.js';
 import { fail } from './http.js';
 
-export type LimitName = 'general' | 'ip' | 'ai' | 'signals' | 'otpSend' | 'otpVerify' | 'login' | 'signup';
+export type LimitName = 'general' | 'ip' | 'ai' | 'signals' | 'otpSend' | 'otpVerify' | 'login' | 'signup' | 'emailSend';
 
 interface LimitSpec {
   max: number;
@@ -79,9 +79,12 @@ export class RateLimitGuard implements CanActivate {
         max: 10,
         windowSec: WINDOW,
         message: 'Too many verification attempts. Please try again later.',
-        key: bodyPhone,
+        // Phone or email being reset; for /auth/email/verify (no body account) the signed-in device.
+        key: (req) => bodyAccount(req) || sessionOrIp(req),
       },
       login: { max: 10, windowSec: WINDOW, message: 'Too many login attempts. Please try again later.', key: bodyAccount },
+      // Verification / reset emails: per address (forgot password) or per signed-in device (verify).
+      emailSend: { max: 5, windowSec: WINDOW, message: 'Too many emails requested. Please try again later.', key: (req) => bodyAccount(req) || sessionOrIp(req) },
       // Sign-up has no OTP gate when email is used, so cap account creation per IP.
       signup: { max: env.RATE_LIMIT_SIGNUP, windowSec: WINDOW, message: 'Too many sign-ups from this network. Please try again later.' },
     };

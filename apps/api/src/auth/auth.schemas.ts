@@ -36,11 +36,19 @@ export const otpVerifyBody = z.object({
   name: z.string().trim().max(100).optional(),
 });
 
-export const passwordResetBody = z.object({
-  phone: str('Valid phone number is required'),
-  otp,
-  password: signupBody.shape.password,
-});
+export const emailBody = z.object({ email });
+
+export const emailVerifyBody = z.object({ otp });
+
+/** Forgot password: the code went to the phone (SMS) or the email (Resend). */
+export const passwordResetBody = z
+  .object({
+    phone: str('Valid phone number is required').optional(),
+    email: email.optional(),
+    otp,
+    password: signupBody.shape.password,
+  })
+  .refine(hasAccount, accountRequired);
 
 export const passwordChangeBody = z.object({
   currentPassword: z.string().optional(),
@@ -50,5 +58,6 @@ export const passwordChangeBody = z.object({
 export type SignupBody = z.infer<typeof signupBody>;
 export type LoginBody = z.infer<typeof loginBody>;
 export type OtpVerifyBody = z.infer<typeof otpVerifyBody>;
+export type EmailVerifyBody = z.infer<typeof emailVerifyBody>;
 export type PasswordResetBody = z.infer<typeof passwordResetBody>;
 export type PasswordChangeBody = z.infer<typeof passwordChangeBody>;

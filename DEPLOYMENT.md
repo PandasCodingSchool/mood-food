@@ -107,14 +107,19 @@ SWIGGY_OAUTH_REDIRECT_URI=https://api.moodfood.fun/api/swiggy/oauth/callback
 FRONTEND_ORIGIN=https://app.moodfood.fun
 ADMIN_USERNAME=<not "admin">
 ADMIN_PASSWORD=<strong; the API refuses to boot with "changeme">
-SMS_PROVIDER=twilio
+SMS_PROVIDER=twilio            # or leave unset: the app then hides SMS OTP and offers email + password
 TWILIO_ACCOUNT_SID=…  TWILIO_AUTH_TOKEN=…  TWILIO_PHONE_NUMBER=…
+EMAIL_PROVIDER=resend          # verification + password reset codes
+RESEND_API_KEY=re_…            # the API refuses to boot without it when EMAIL_PROVIDER=resend
+EMAIL_FROM=MoodFood <no-reply@moodfood.fun>
+RATE_LIMIT_SIGNUP=20           # sign-ups per IP per 15 min (email sign-up has no OTP gate)
 EXPO_ACCESS_TOKEN=<for push>
 ```
 
 Notes:
 - **Migrations are forward-only.** For a breaking schema change, use expand → deploy → contract across two releases, so old and new replicas can run side by side.
 - **Private networking:** if the API can't reach `intelligence.railway.internal`, the environment's private network may be IPv6-only. Make uvicorn listen on `::` (and the API too if anything calls it privately).
+- **Email (Resend):** add `moodfood.fun` as a domain in Resend and create its DNS records in Vercel (team pank1999s-projects). Resend's SPF/MX records sit on the `send.` subdomain and DKIM is a `resend._domainkey` TXT, so the Hostinger mail records on the apex stay untouched. Sending only works once Resend shows the domain as verified; until then a sign-up still succeeds, but its verification email fails and is logged. Without `EMAIL_PROVIDER=resend`, codes are only printed in the API log, so forgot password can't work in production.
 - **OTP SMS in India:** sending SMS to Indian numbers needs DLT registration (sender ID and template). Start this early; it can take days. Until then, use password login, or keep `SMS_PROVIDER=console` in staging only.
 
 ### 3.3 `intelligence`

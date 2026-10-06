@@ -1,19 +1,23 @@
-// 2.0 Login: email + password (log in or create an account) is the default.
-// Phone stays available: password login always, the 6-digit OTP flow only
-// when the server reports it can send SMS (/auth/methods). Guest mode kept
-// from v1. Success → Swiggy connect (skipped when already linked) → check-in.
+// 2.0 Login: email + password (log in, create an account, or reset a
+// forgotten password with an emailed code) is the default. Phone stays
+// available: password login always, the 6-digit OTP flow only when the server
+// reports it can send SMS (/auth/methods). Guest mode kept from v1.
+// Success → (new email accounts: verify email) → Swiggy connect (skipped when
+// already linked) → check-in.
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { fontFamily, palette, space } from '@moodfood/tokens';
-import { Button, Icon, OtpBox, Screen, Surface, Text, useTheme } from '@moodfood/ui';
-import { LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
+import { Button, Icon, Screen, Surface, Text, useTheme } from '@moodfood/ui';
+import { CODE_LENGTH, CodeInput, LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
 import {
   continueAsGuest,
   fetchAuthMethods,
+  forgotPassword,
   login as loginWithPassword,
   requestOtp,
+  resetPasswordWithEmail,
   signup,
   verifyOtp,
   type AuthUser,
@@ -22,10 +26,10 @@ import { trackEvent } from '../src/utils/analytics';
 
 const PHONE_RE = /^\+?[0-9\s-]{7,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const OTP_LEN = 6;
+const OTP_LEN = CODE_LENGTH;
 const MIN_PASSWORD = 6;
 type Method = 'email' | 'phone';
-type EmailMode = 'login' | 'signup';
+type EmailMode = 'login' | 'signup' | 'forgot' | 'reset';
 type PhoneStep = 'phone' | 'otp' | 'password';
 
 /** One rounded input row; matches the phone field's surface. */
@@ -58,6 +62,7 @@ export default function LoginScreen() {
   const [countdown, setCountdown] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const otpRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -95,17 +100,42 @@ export default function LoginScreen() {
 
   /* ── Email ── */
 
+  const setMode = (mode: EmailMode) => {
+    setEmailMode(mode);
+    setError('');
+    setNotice('');
+  };
+
+  const sendResetCode = () =>
+    void run(async () => {
+      await forgotPassword(email.trim());
+      setMode('reset');
+      setOtp('');
+      setPassword('');
+      setCountdown(30);
+      setNotice(`If ${email.trim()} has an account, a 6-digit code is on its way.`);
+      setTimeout(() => otpRef.current?.focus(), 250);
+    }, 'forgot_password_error');
+
   const emailSubmit = () => {
-    const signingUp = emailMode === 'signup';
-    if (signingUp && !name.trim()) return setError('Tell us your name.');
     if (!EMAIL_RE.test(email.trim())) return setError('Enter a valid email address.');
+    if (emailMode === 'forgot') return sendResetCode();
+    if (emailMode === 'reset' && otp.length !== OTP_LEN) return setError(`Enter the ${OTP_LEN}-digit code from the email.`);
+    if (emailMode === 'signup' && !name.trim()) return setError('Tell us your name.');
     if (password.length < MIN_PASSWORD) return setError(`Password must be at least ${MIN_PASSWORD} characters.`);
     void run(async () => {
       const account = { email: email.trim() };
-      const user = signingUp ? await signup(name.trim(), account, password) : await loginWithPassword(account, password);
-      trackEvent(signingUp ? 'signup_email_success' : 'login_email_success');
+      if (emailMode === 'signup') {
+        await signup(name.trim(), account, password);
+        trackEvent('signup_email_success');
+        // A code was emailed at sign-up; verify, then carry on to Swiggy connect.
+        router.replace({ pathname: '/verify-email', params: { onboarding: '1' } });
+        return;
+      }
+      const user = emailMode === 'reset' ? await resetPasswordWithEmail(account.email, otp, password) : await loginWithPassword(account, password);
+      trackEvent(emailMode === 'reset' ? 'password_reset_success' : 'login_email_success');
       afterLogin(user);
-    }, signingUp ? 'signup_email_error' : 'login_email_error');
+    }, `${emailMode}_email_error`);
   };
 
   /* ── Phone ── */
@@ -180,21 +210,27 @@ export default function LoginScreen() {
       return;
     }
     if (method === 'phone') return switchMethod('email');
+    if (emailMode === 'forgot' || emailMode === 'reset') return setMode('login');
     router.canGoBack() ? router.back() : router.replace('/onboarding');
   };
 
   const isEmail = method === 'email';
   const signingUp = isEmail && emailMode === 'signup';
-  const title = isEmail
-    ? signingUp ? 'Create your account' : 'Welcome to MoodFood'
-    : step === 'otp' ? 'Check your messages' : 'Log in with phone';
+  const recovering = isEmail && (emailMode === 'forgot' || emailMode === 'reset');
+  const EMAIL_COPY: Record<EmailMode, { title: string; sub: string; cta: string }> = {
+    login: { title: 'Welcome to MoodFood', sub: 'Log in with your email and password.', cta: 'Log in' },
+    signup: { title: 'Create your account', sub: 'Your name, email and a password. That’s it.', cta: 'Create account' },
+    forgot: { title: 'Forgot your password?', sub: 'We’ll email you a 6-digit code to reset it.', cta: 'Send reset code' },
+    reset: { title: 'Check your email', sub: 'Enter the code we sent and choose a new password.', cta: 'Reset password & log in' },
+  };
+  const title = isEmail ? EMAIL_COPY[emailMode].title : step === 'otp' ? 'Check your messages' : 'Log in with phone';
   const sub = isEmail
-    ? signingUp ? 'Your name, email and a password. That’s it.' : 'Log in with your email and password.'
+    ? EMAIL_COPY[emailMode].sub
     : step === 'otp'
       ? `We sent a ${OTP_LEN}-digit code to +91 ${phone}.`
       : step === 'password' ? 'Use the phone number and password on your account.' : 'We’ll text you a one-time code.';
   const primaryLabel = isEmail
-    ? signingUp ? 'Create account' : 'Log in'
+    ? EMAIL_COPY[emailMode].cta
     : step === 'otp' ? (needsName ? 'Create account & continue' : 'Verify & continue') : step === 'password' ? 'Log in' : 'Send OTP';
   const primaryAction = isEmail ? emailSubmit : step === 'otp' ? verify : step === 'password' ? phonePasswordLogin : sendOtp;
 
@@ -215,29 +251,45 @@ export default function LoginScreen() {
               {signingUp ? (
                 <Field value={name} onChangeText={edit(setName)} placeholder="Your name" autoComplete="name" textContentType="name" accessibilityLabel="Your name" returnKeyType="next" />
               ) : null}
-              <Field
-                value={email}
-                onChangeText={edit(setEmail)}
-                placeholder="you@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                textContentType={signingUp ? 'emailAddress' : 'username'}
-                accessibilityLabel="Email"
-                returnKeyType="next"
-              />
-              <Field
-                value={password}
-                onChangeText={edit(setPassword)}
-                placeholder={signingUp ? `Password (${MIN_PASSWORD}+ characters)` : 'Password'}
-                secureTextEntry
-                autoCapitalize="none"
-                autoComplete={signingUp ? 'new-password' : 'current-password'}
-                textContentType={signingUp ? 'newPassword' : 'password'}
-                accessibilityLabel="Password"
-                onSubmitEditing={emailSubmit}
-              />
+              {emailMode === 'reset' ? (
+                <CodeInput ref={otpRef} value={otp} onChange={edit(setOtp)} />
+              ) : (
+                <Field
+                  value={email}
+                  onChangeText={edit(setEmail)}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  textContentType={signingUp ? 'emailAddress' : 'username'}
+                  accessibilityLabel="Email"
+                  returnKeyType={emailMode === 'forgot' ? 'send' : 'next'}
+                  onSubmitEditing={emailMode === 'forgot' ? emailSubmit : undefined}
+                />
+              )}
+              {emailMode !== 'forgot' ? (
+                <Field
+                  value={password}
+                  onChangeText={edit(setPassword)}
+                  placeholder={emailMode === 'login' ? 'Password' : `${emailMode === 'reset' ? 'New password' : 'Password'} (${MIN_PASSWORD}+ characters)`}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoComplete={emailMode === 'login' ? 'current-password' : 'new-password'}
+                  textContentType={emailMode === 'login' ? 'password' : 'newPassword'}
+                  accessibilityLabel={emailMode === 'reset' ? 'New password' : 'Password'}
+                  onSubmitEditing={emailSubmit}
+                />
+              ) : null}
+              {emailMode === 'reset' ? (
+                <View style={{ paddingHorizontal: space.page, paddingTop: 12, flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  <Pressable disabled={countdown > 0 || busy} onPress={sendResetCode} hitSlop={10} accessibilityRole="button">
+                    <Text variant="caption13" tone={countdown > 0 ? 'ink2' : 'accText'}>
+                      {countdown > 0 ? `Resend in 0:${String(countdown).padStart(2, '0')}` : 'Resend code'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </>
           ) : step !== 'otp' ? (
             <>
@@ -275,25 +327,7 @@ export default function LoginScreen() {
             </>
           ) : (
             <>
-              <Pressable onPress={() => otpRef.current?.focus()} accessibilityLabel="Enter verification code" style={{ marginHorizontal: space.gutter, marginTop: 10, flexDirection: 'row', gap: 8 }}>
-                {Array.from({ length: OTP_LEN }, (_, k) => (
-                  <OtpBox key={k} digit={otp[k]} state={otp.length > k ? 'filled' : otp.length === k ? 'active' : 'empty'} />
-                ))}
-              </Pressable>
-              {/* Real input is invisible; boxes mirror it. SMS autofill works through textContentType/autoComplete. */}
-              <TextInput
-                ref={otpRef}
-                value={otp}
-                onChangeText={(t) => {
-                  setOtp(t.replace(/\D/g, '').slice(0, OTP_LEN));
-                  setError('');
-                }}
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                autoComplete="sms-otp"
-                maxLength={OTP_LEN}
-                style={{ position: 'absolute', opacity: 0, height: 1, width: 1 }}
-              />
+              <CodeInput ref={otpRef} value={otp} onChange={edit(setOtp)} sms />
               <View style={{ paddingHorizontal: space.page, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Icon name="sms" size={17} tone="accText" />
@@ -312,6 +346,11 @@ export default function LoginScreen() {
           )}
         </View>
 
+        {notice && !error ? (
+          <Text variant="caption13" tone="ink2" style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">
+            {notice}
+          </Text>
+        ) : null}
         {error ? (
           <Text variant="caption13" color={palette.danger} style={{ paddingHorizontal: space.page, marginTop: 12 }} accessibilityLiveRegion="polite">
             {error}
@@ -320,21 +359,17 @@ export default function LoginScreen() {
 
         <View style={{ paddingHorizontal: space.gutter, paddingTop: 16, gap: 6 }}>
           <Button block loading={busy} label={primaryLabel} onPress={primaryAction} />
-          {isEmail ? (
-            <Button
-              block
-              variant="ghost"
-              size="sm"
-              label={signingUp ? 'Already have an account? Log in' : 'New here? Create an account'}
-              onPress={() => {
-                setEmailMode(signingUp ? 'login' : 'signup');
-                setError('');
-              }}
-            />
+          {isEmail && emailMode === 'login' ? (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Button variant="ghost" size="sm" label="Forgot password?" onPress={() => setMode('forgot')} />
+              <Button variant="ghost" size="sm" label="Create an account" onPress={() => setMode('signup')} />
+            </View>
+          ) : isEmail ? (
+            <Button block variant="ghost" size="sm" label={signingUp ? 'Already have an account? Log in' : 'Back to log in'} onPress={() => setMode('login')} />
           ) : null}
         </View>
 
-        {step !== 'otp' || isEmail ? (
+        {(isEmail ? !recovering : step !== 'otp') ? (
           <>
             <View style={{ paddingHorizontal: space.page, paddingTop: 18, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />

@@ -34,6 +34,7 @@ export const users = pgTable('users', {
   role: userRole('role').notNull().default('user'),
   isGuest: boolean('is_guest').notNull().default(false),
   phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   // Personalization columns synced from the learning service.
   personaArchetype: varchar('persona_archetype', { length: 100 }),
   questionBudget: integer('question_budget').notNull().default(3),

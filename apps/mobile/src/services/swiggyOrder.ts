@@ -201,6 +201,39 @@ export async function getRestaurantMenu(restaurantId: string, addressId: string)
   };
 }
 
+export interface MenuSearchHit {
+  id: string;
+  name: string;
+  price?: number | null;
+  restaurantId: string;
+  restaurantName?: string | null;
+}
+
+/** Live Swiggy dishes matching `query` near the address; only hits we can open a restaurant for. Never throws. */
+export async function searchMenu(query: string, addressId: string): Promise<MenuSearchHit[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/menu-search`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ query, address_id: addressId }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.success) return [];
+    return ((data.items as Record<string, unknown>[]) || [])
+      .filter((i) => i.id && i.restaurant_id)
+      .map((i) => ({
+        id: String(i.id),
+        name: String(i.name),
+        price: i.price as number | null,
+        restaurantId: String(i.restaurant_id),
+        restaurantName: i.restaurant_name as string | null,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function sendMenuChat(
   restaurantId: string,
   addressId: string,

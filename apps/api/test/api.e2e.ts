@@ -121,6 +121,32 @@ describe('auth & user management', () => {
     assert.equal((await call('POST', '/auth/signup', { body: { name: 'X', email: 'nope', password: 'secret123' } })).status, 400);
   });
 
+  it('email verification and password reset reject bad codes and never reveal accounts', async () => {
+    const email = `verify${rand()}@example.com`;
+    const up = await call('POST', '/auth/signup', { body: { name: 'V', email, password: 'secret123' } });
+    const token = up.data.session.token;
+    assert.equal((await call('GET', '/user/me', { token })).data.user.emailVerified, false);
+
+    assert.equal((await call('POST', '/auth/email/send-verification', { token })).status, 200);
+    assert.equal((await call('POST', '/auth/email/verify', { token, body: { otp: '000000' } })).status, 401);
+    assert.equal((await call('POST', '/auth/email/verify', { token, body: { otp: 'abc' } })).status, 400);
+
+    // Same answer whether or not the account exists.
+    const known = await call('POST', '/auth/password/forgot', { body: { email } });
+    const unknown = await call('POST', '/auth/password/forgot', { body: { email: `nobody${rand()}@example.com` } });
+    assert.equal(known.status, 200);
+    assert.deepEqual(known.data, unknown.data);
+
+    const bad = await call('POST', '/auth/password/reset', { body: { email, otp: '000000', password: 'newsecret1' } });
+    assert.equal(bad.status, 401);
+    const none = await call('POST', '/auth/password/reset', { body: { email: `nobody${rand()}@example.com`, otp: '123456', password: 'newsecret1' } });
+    assert.equal(none.status, 400);
+
+    // A phone-only account has no address to verify.
+    const phoneOnly = await signup();
+    assert.equal((await call('POST', '/auth/email/send-verification', { token: phoneOnly.token })).status, 400);
+  });
+
   it('lists and revokes device sessions', async () => {
     const { phone, token } = await signup();
     const second = await call('POST', '/auth/login', { body: { phone, password: 'secret123' } });
