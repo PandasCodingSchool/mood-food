@@ -1,6 +1,6 @@
 // 2.0 Login: email + password (log in, create an account, or reset a
-// forgotten password with an emailed code) is the default. Phone stays
-// available: password login always, the 6-digit OTP flow only when the server
+// forgotten password with an emailed code) is the default. Phone login is
+// SMS OTP only (new numbers add a name inline), offered when the server
 // reports it can send SMS (/auth/methods). Guest mode kept from v1.
 // Success → (new email accounts: verify email) → Swiggy connect (skipped when
 // already linked) → check-in.
@@ -30,7 +30,7 @@ const OTP_LEN = CODE_LENGTH;
 const MIN_PASSWORD = 6;
 type Method = 'email' | 'phone';
 type EmailMode = 'login' | 'signup' | 'forgot' | 'reset';
-type PhoneStep = 'phone' | 'otp' | 'password';
+type PhoneStep = 'phone' | 'otp';
 
 /** One rounded input row; matches the phone field's surface. */
 function Field(props: TextInputProps) {
@@ -51,7 +51,7 @@ export default function LoginScreen() {
   const { colors, dark } = useTheme();
   const [method, setMethod] = useState<Method>('email');
   const [emailMode, setEmailMode] = useState<EmailMode>('login');
-  const [step, setStep] = useState<PhoneStep>('password');
+  const [step, setStep] = useState<PhoneStep>('phone');
   const [otpAvailable, setOtpAvailable] = useState(false);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -174,17 +174,11 @@ export default function LoginScreen() {
     }, 'login_otp_error');
   };
 
-  const phonePasswordLogin = () => {
-    if (!validPhone()) return;
-    if (password.length < MIN_PASSWORD) return setError(`Password must be at least ${MIN_PASSWORD} characters.`);
-    void run(async () => afterLogin(await loginWithPassword({ phone: phone.trim() }, password)), 'login_error');
-  };
-
   /* ── Navigation ── */
 
   const switchMethod = (next: Method) => {
     setMethod(next);
-    setStep(next === 'phone' && otpAvailable ? 'phone' : 'password');
+    setStep('phone');
     setNeedsName(false);
     setError('');
   };
@@ -228,11 +222,11 @@ export default function LoginScreen() {
     ? EMAIL_COPY[emailMode].sub
     : step === 'otp'
       ? `We sent a ${OTP_LEN}-digit code to +91 ${phone}.`
-      : step === 'password' ? 'Use the phone number and password on your account.' : 'We’ll text you a one-time code.';
+      : 'We’ll text you a one-time code. New here? We’ll set up your account.';
   const primaryLabel = isEmail
     ? EMAIL_COPY[emailMode].cta
-    : step === 'otp' ? (needsName ? 'Create account & continue' : 'Verify & continue') : step === 'password' ? 'Log in' : 'Send OTP';
-  const primaryAction = isEmail ? emailSubmit : step === 'otp' ? verify : step === 'password' ? phonePasswordLogin : sendOtp;
+    : step === 'otp' ? (needsName ? 'Create account & continue' : 'Verify & continue') : 'Send OTP';
+  const primaryAction = isEmail ? emailSubmit : step === 'otp' ? verify : sendOtp;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -308,22 +302,11 @@ export default function LoginScreen() {
                   autoComplete="tel"
                   textContentType="telephoneNumber"
                   accessibilityLabel="Phone number"
-                  returnKeyType="next"
-                  onSubmitEditing={step === 'phone' ? sendOtp : undefined}
+                  returnKeyType="send"
+                  onSubmitEditing={sendOtp}
                   style={{ flex: 1, height: 52, color: colors.ink, fontFamily: fontFamily.bodySemibold, fontSize: 18, letterSpacing: 0.7 }}
                 />
               </Surface>
-              {step === 'password' ? (
-                <Field
-                  value={password}
-                  onChangeText={edit(setPassword)}
-                  placeholder="Password"
-                  secureTextEntry
-                  autoComplete="current-password"
-                  accessibilityLabel="Password"
-                  onSubmitEditing={phonePasswordLogin}
-                />
-              ) : null}
             </>
           ) : (
             <>
@@ -377,25 +360,11 @@ export default function LoginScreen() {
               <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
             </View>
             <View style={{ paddingHorizontal: space.gutter, paddingTop: 16, gap: 10 }}>
-              {isEmail ? (
+              {!isEmail ? (
+                <Button block variant="glass" size="md" iconLeft="mail" label="Use email instead" onPress={() => switchMethod('email')} />
+              ) : otpAvailable ? (
                 <Button block variant="glass" size="md" iconLeft="call" label="Use phone number instead" onPress={() => switchMethod('phone')} />
-              ) : (
-                <>
-                  {otpAvailable ? (
-                    <Button
-                      block
-                      variant="glass"
-                      size="md"
-                      label={step === 'password' ? 'Use a one-time code instead' : 'Log in with password'}
-                      onPress={() => {
-                        setStep(step === 'password' ? 'phone' : 'password');
-                        setError('');
-                      }}
-                    />
-                  ) : null}
-                  <Button block variant="glass" size="md" iconLeft="mail" label="Use email instead" onPress={() => switchMethod('email')} />
-                </>
-              )}
+              ) : null}
               <Button block variant="glass" size="md" label="Continue as guest" onPress={guest} />
             </View>
             <Text variant="micro12" tone="ink2" align="center" style={{ paddingHorizontal: 28, paddingTop: 22 }}>
