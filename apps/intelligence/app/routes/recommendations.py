@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+
+from starlette.concurrency import run_in_threadpool
 from typing import Optional
 
 from fastapi import APIRouter, Request
@@ -207,14 +209,16 @@ async def _run_pipeline(
     request: Request,
 ) -> RecommendationResponse:
     t0 = time.time()
-    body = live_state.apply_learned_state(body)
+    # Learning-store reads (SQLite) and embedding lookups are blocking: keep
+    # them off the event loop.
+    body = await run_in_threadpool(live_state.apply_learned_state, body)
     final_count = body.recommendation_config.count
-    shortlist = build_shortlist(
-        body.user_context, body.recommendation_config, user_id=body.user_id
+    shortlist = await run_in_threadpool(
+        build_shortlist, body.user_context, body.recommendation_config, user_id=body.user_id
     )
 
     # Anti-rut: make sure wildcard candidates are in front of the ranker.
-    wildcard_ids = _learned_wildcard_ids(body)
+    wildcard_ids = await run_in_threadpool(_learned_wildcard_ids, body)
     if wildcard_ids:
         shortlist_ids = {d.id for d in shortlist}
         for wid in wildcard_ids:
@@ -230,7 +234,7 @@ async def _run_pipeline(
     pool_config = body.recommendation_config.model_copy(update={"count": pool_size})
     pool_body = body.model_copy(update={"recommendation_config": pool_config})
 
-    gpt_response = recommender.get_recommendations(
+    gpt_response = await recommender.get_recommendations(
         pool_body, candidate_dishes=shortlist, live_facts=None
     )
     is_cache_hit = bool(gpt_response.ai_metadata and gpt_response.ai_metadata.cache_hit)
@@ -241,7 +245,8 @@ async def _run_pipeline(
             r.model_copy(update={"rank": i + 1})
             for i, r in enumerate(gpt_pool[:final_count])
         ]
-        return _attach_learning(
+        return await run_in_threadpool(
+            _attach_learning,
             body,
             gpt_response.model_copy(update={
                 "recommendations": final_recs,
@@ -346,7 +351,8 @@ async def _run_pipeline(
         elapsed, pool_size, len(matched_for_response), live_status, is_cache_hit,
     )
 
-    return _attach_learning(
+    return await run_in_threadpool(
+        _attach_learning,
         body,
         gpt_response.model_copy(update={
             "recommendations": selected,

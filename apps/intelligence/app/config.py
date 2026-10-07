@@ -5,10 +5,24 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-6-luna"
     # Lightweight model for fast mid-game assists (option copy, flavor text).
-    openai_mini_model: str = "gpt-4o-mini"
+    openai_mini_model: str = "gpt-6-luna"
+    # Vision + structured output (food-photo moderation, recipes).
+    openai_vision_model: str = "gpt-6-luna"
+    # Some current models reject `temperature`; scripts/openai_smoke.py tells you.
+    openai_supports_temperature: bool = True
+    llm_timeout_s: float = 30.0
     unsplash_access_key: str = ""
+
+    # --- Service security / runtime ---
+    # "production" makes missing secrets fail closed instead of open.
+    environment: str = "development"
+    # Bearer token the API sends (AI_SERVICE_KEY). Empty = auth off (dev only).
+    ai_service_key: str = ""
+    # Comma-separated browser origins; the API calls us server-to-server.
+    allowed_origins: str = ""
+    json_logs: bool = False
 
     # --- Swiggy MCP (Food server) ---
     # Streamable-HTTP MCP endpoint. See https://mcp.swiggy.com/builders

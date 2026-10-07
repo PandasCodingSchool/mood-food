@@ -8,4 +8,4 @@ router = APIRouter()
 
 @router.post("/api/game-assist", response_model=GameAssistResponse)
 async def assist(request: GameAssistRequest) -> GameAssistResponse:
-    return game_assist.get_assist(request)
+    return await game_assist.get_assist(request)

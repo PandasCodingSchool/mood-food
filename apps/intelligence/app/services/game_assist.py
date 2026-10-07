@@ -3,12 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections import OrderedDict
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import settings
+from app.llm import JsonChat
 from app.schemas.game_assist import AssistOption, GameAssistRequest, GameAssistResponse
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,8 @@ Return ONLY valid JSON, no markdown:
 {"flavor_text": "<the rephrased question line>"}""",
 }
 
-_CACHE: dict[str, GameAssistResponse] = {}
+_CACHE: "OrderedDict[str, GameAssistResponse]" = OrderedDict()
+_CACHE_MAX = 512
 
 
 def _cache_key(request: GameAssistRequest) -> str:
@@ -62,25 +64,21 @@ def _build_user_message(request: GameAssistRequest) -> str:
     return "\n".join(lines)
 
 
-def get_assist(
+async def get_assist(
     request: GameAssistRequest,
-    llm: Optional[ChatOpenAI] = None,
+    llm: Optional[JsonChat] = None,
 ) -> GameAssistResponse:
     key = _cache_key(request)
     if key in _CACHE:
+        _CACHE.move_to_end(key)
         return _CACHE[key]
 
     if llm is None:
-        llm = ChatOpenAI(
-            model=settings.openai_mini_model,
-            temperature=0.8,
-            max_tokens=300,
-            model_kwargs={"response_format": {"type": "json_object"}},
-        )
+        llm = JsonChat(model=settings.openai_mini_model, kind="game_assist", temperature=0.8, max_tokens=300)
 
     system = _SYSTEM_PROMPTS[request.kind].replace("{count}", str(request.count))
     try:
-        result = llm.invoke([
+        result = await llm.ainvoke([
             SystemMessage(content=system),
             HumanMessage(content=_build_user_message(request)),
         ])
@@ -109,4 +107,6 @@ def get_assist(
         flavor_text=data.get("flavor_text"),
     )
     _CACHE[key] = response
+    if len(_CACHE) > _CACHE_MAX:
+        _CACHE.popitem(last=False)
     return response

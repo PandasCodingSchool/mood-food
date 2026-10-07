@@ -47,7 +47,8 @@ export class RecommendationsController {
     try {
       const swiggyToken = await this.tokens.activeToken(userId);
       const onTokenRejected = userId && swiggyToken ? () => this.tokens.discardRejected(userId, swiggyToken) : undefined;
-      const response = await this.callWithRetry(aiRequest, swiggyToken, String(req.id), onTokenRejected);
+      // One id end to end: body request_id, X-Request-Id header, predictions, intelligence logs.
+      const response = await this.callWithRetry(aiRequest, swiggyToken, aiRequest.request_id, onTokenRejected);
       if (userId) void this.predictions.recordFromRecommendations(userId, response, aiRequest.request_id);
       return response;
     } catch (err) {

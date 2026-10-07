@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from app.config import settings
+from app.llm import JsonChat
 
 logger = logging.getLogger("menu_scout")
 
@@ -99,11 +99,7 @@ async def scout_ambiguous_matches(
     t0 = time.monotonic()
     logger.info("menu_scout: evaluating %d candidate pair(s)", len(pairs))
 
-    llm = ChatOpenAI(
-        model=settings.openai_mini_model,
-        temperature=0,
-        model_kwargs={"response_format": {"type": "json_object"}},
-    )
+    llm = JsonChat(model=settings.openai_mini_model, kind="menu_scout", temperature=0)
     prompt = _build_prompt(pairs)
 
     try:

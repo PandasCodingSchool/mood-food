@@ -109,6 +109,7 @@ export class GroupsController {
       return await this.intelligence.json('POST', '/api/group/consensus', {
         body: { member_ids: memberIds, guest_swipes: guestSwipes, count: 3 },
         timeoutMs: 30_000,
+        sync: true,
       });
     } catch (err) {
       this.log.warn(`consensus failed: ${(err as Error).message}`);

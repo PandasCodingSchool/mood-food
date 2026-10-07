@@ -6,11 +6,11 @@ import time
 import uuid
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, ValidationError, field_validator
 
 from app.config import settings
+from app.llm import JsonChat
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt
 from app.services import diet
 from app.services.mood_clusters import dishes_for_cluster
@@ -355,9 +355,9 @@ def _build_fallback(count: int, restrictions: diet.RulesLike = None) -> list[Dis
     return sorted(pool, key=lambda d: d.health_score, reverse=True)[:count]
 
 
-def get_recommendations(
+async def get_recommendations(
     request: RecommendationRequest,
-    llm: Optional[ChatOpenAI] = None,
+    llm: Optional[JsonChat] = None,
     candidate_dishes: Optional[list[DishRecord]] = None,
     live_facts: Optional[dict[str, dict]] = None,
 ) -> RecommendationResponse:
@@ -379,10 +379,10 @@ def get_recommendations(
     allowed_ids = {d.id for d in candidates}
 
     if llm is None:
-        llm = ChatOpenAI(
+        llm = JsonChat(
             model=settings.openai_model,
+            kind="rank",
             temperature=request.recommendation_config.temperature,
-            model_kwargs={"response_format": {"type": "json_object"}},
         )
 
     messages = [
@@ -397,7 +397,7 @@ def get_recommendations(
 
     start = time.time()
     try:
-        result = llm.invoke(messages)
+        result = await llm.ainvoke(messages)
     except Exception as exc:
         return _fallback_response(
             str(exc),
@@ -522,7 +522,7 @@ def get_recommendations(
         success=True,
         recommendations=recommendations,
         ai_metadata=AiMetadata(
-            model_used=settings.openai_model,
+            model_used=result.response_metadata.get("model_name") or settings.openai_model,
             tokens_used=token_usage.get("total_tokens"),
             response_time_s=elapsed,
         ),

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/recipe", tags=["recipe"])
 @router.post("/generate", response_model=RecipeResponse)
 async def generate(req: RecipeRequest) -> RecipeResponse:
     try:
-        recipe = get_recipe(req.dish, req.servings)
+        recipe = await get_recipe(req.dish, req.servings)
         return RecipeResponse(success=True, recipe=recipe)
     except Exception as exc:  # noqa: BLE001 - surface any generation failure cleanly
         logger.warning("recipe generation failed for %r: %s", req.dish, exc)

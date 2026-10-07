@@ -52,7 +52,7 @@ def _mood_archetype_vector(user_id: str, ctx: UserContext) -> Optional[np.ndarra
     if weight < 0.55:  # no meaningful pull for this mood bucket
         return None
     anchor = _ARCHETYPE_ANCHOR_TEXT.get(archetype)
-    return embeddings.embed_text(anchor) if anchor else None
+    return embeddings.embed_text(anchor, allow_remote=False) if anchor else None
 
 
 def session_vector(user_id: str, ctx: UserContext) -> Optional[np.ndarray]:
@@ -63,7 +63,7 @@ def session_vector(user_id: str, ctx: UserContext) -> Optional[np.ndarray]:
 
     craving_tags = list(ctx.game_data.craving_tags) if ctx.game_data else []
     if craving_tags:
-        craving_vec = embeddings.embed_tags(craving_tags)
+        craving_vec = embeddings.embed_tags(craving_tags, allow_remote=False)
         if craving_vec is not None:
             parts.append(BETA_CRAVING * craving_vec)
 
@@ -107,3 +107,11 @@ def retrieval_scores(user_id: Optional[str], ctx: UserContext) -> dict[str, floa
     except Exception:  # noqa: BLE001 — retrieval must never break recommendations
         logger.exception("Retrieval stage failed; continuing without it")
         return {}
+
+
+def startup_texts() -> list[str]:
+    """Every short text the request path may embed: warmed once at boot."""
+    from app.services.game_assist import CRAVING_VOCABULARY
+
+    tags = {*embeddings.SENSORY_TAGS, *CRAVING_VOCABULARY}
+    return [*_ARCHETYPE_ANCHOR_TEXT.values(), *(embeddings.craving_text(t) for t in sorted(tags))]

@@ -115,7 +115,7 @@ def _mock_llm(payload: dict) -> MagicMock:
     llm = MagicMock()
     resp = MagicMock()
     resp.content = json.dumps(payload)
-    llm.invoke.return_value = resp
+    llm.ainvoke = AsyncMock(return_value=resp)
     return llm
 
 
@@ -129,7 +129,7 @@ def _make_categories():
     ]
 
 
-def test_menu_chat_happy_path_filters_to_valid_item_ids():
+async def test_menu_chat_happy_path_filters_to_valid_item_ids():
     llm = _mock_llm({
         "reply": "The Paneer Tikka is a great vegetarian pick!",
         "suggested_item_ids": ["i2", "not-a-real-id"],
@@ -139,37 +139,37 @@ def test_menu_chat_happy_path_filters_to_valid_item_ids():
         address_id="a1",
         messages=[MenuChatMessage(role="user", content="I'm vegetarian, what should I get?")],
     )
-    result = get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
+    result = await get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
     assert result.success is True
     assert "Paneer Tikka" in result.reply
     assert result.suggested_item_ids == ["i2"]  # invalid id filtered out
 
 
-def test_menu_chat_requires_last_message_from_user():
+async def test_menu_chat_requires_last_message_from_user():
     req = MenuChatRequest(
         restaurant_id="r1",
         address_id="a1",
         messages=[MenuChatMessage(role="assistant", content="Hi there!")],
     )
-    result = get_menu_chat_reply(req, "Spice House", _make_categories(), llm=_mock_llm({}))
+    result = await get_menu_chat_reply(req, "Spice House", _make_categories(), llm=_mock_llm({}))
     assert result.success is False
 
 
-def test_menu_chat_soft_fails_on_llm_error():
+async def test_menu_chat_soft_fails_on_llm_error():
     llm = MagicMock()
-    llm.invoke.side_effect = RuntimeError("boom")
+    llm.ainvoke = AsyncMock(side_effect=RuntimeError("boom"))
     req = MenuChatRequest(
         restaurant_id="r1",
         address_id="a1",
         messages=[MenuChatMessage(role="user", content="What's good here?")],
     )
-    result = get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
+    result = await get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
     assert result.success is True  # soft-fail, not a hard error — chat UX must stay usable
     assert result.reply
     assert result.suggested_item_ids == []
 
 
-def test_menu_chat_includes_dish_context_and_personalization_in_prompt(monkeypatch):
+async def test_menu_chat_includes_dish_context_and_personalization_in_prompt(monkeypatch):
     from app.schemas.swiggy import MenuChatDishContext
 
     monkeypatch.setattr(
@@ -189,15 +189,15 @@ def test_menu_chat_includes_dish_context_and_personalization_in_prompt(monkeypat
         messages=[MenuChatMessage(role="user", content="Anything similar?")],
         user_id="u1",
     )
-    get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
+    await get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
 
-    system_prompt = llm.invoke.call_args[0][0][0].content
+    system_prompt = llm.ainvoke.call_args[0][0][0].content
     assert "Butter Chicken" in system_prompt
     assert "Comfort Seeker" in system_prompt
     assert "comfort" in system_prompt.lower()
 
 
-def test_menu_chat_includes_allergies_and_dietary_prefs_as_hard_constraints():
+async def test_menu_chat_includes_allergies_and_dietary_prefs_as_hard_constraints():
     llm = _mock_llm({"reply": "Sure!", "suggested_item_ids": []})
     req = MenuChatRequest(
         restaurant_id="r1",
@@ -207,16 +207,16 @@ def test_menu_chat_includes_allergies_and_dietary_prefs_as_hard_constraints():
             diets=["vegetarian"], allergies=["peanuts", "shellfish"], cuisines=["indian"],
         ),
     )
-    get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
+    await get_menu_chat_reply(req, "Spice House", _make_categories(), llm=llm)
 
-    system_prompt = llm.invoke.call_args[0][0][0].content
+    system_prompt = llm.ainvoke.call_args[0][0][0].content
     assert "vegetarian" in system_prompt.lower()
     assert "peanuts" in system_prompt.lower()
     assert "shellfish" in system_prompt.lower()
     assert "ALLERGIES" in system_prompt
 
 
-def test_menu_chat_prompt_includes_every_menu_item_no_truncation():
+async def test_menu_chat_prompt_includes_every_menu_item_no_truncation():
     # A large menu (well past the old 60-item cap) must appear in full —
     # Captain should never reason over only a subset of the live menu.
     categories = [
@@ -234,8 +234,8 @@ def test_menu_chat_prompt_includes_every_menu_item_no_truncation():
         address_id="a1",
         messages=[MenuChatMessage(role="user", content="What's good here?")],
     )
-    get_menu_chat_reply(req, "Spice House", categories, llm=llm)
+    await get_menu_chat_reply(req, "Spice House", categories, llm=llm)
 
-    system_prompt = llm.invoke.call_args[0][0][0].content
+    system_prompt = llm.ainvoke.call_args[0][0][0].content
     assert "Dish 0" in system_prompt
     assert "Dish 119" in system_prompt

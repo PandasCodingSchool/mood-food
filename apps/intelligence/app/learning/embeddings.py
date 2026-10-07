@@ -144,12 +144,51 @@ def _load_anchor_cache() -> dict[str, list[float]]:
     return _anchor_cache
 
 
-def embed_text(text: str) -> Optional[np.ndarray]:
-    """Embed a short text (craving tag, archetype anchor) with disk cache."""
+# Sensory craving tags the mobile Craving Radar sends (src/constants/cravingTags.ts).
+SENSORY_TAGS = (
+    "crunchy", "melty", "spicy", "brothy", "fresh", "cheesy",
+    "crispy", "creamy", "sweet", "tangy", "smoky", "juicy",
+)
+
+
+def _text_key(text: str) -> str:
+    return f"{MODEL_VERSION}:{text.strip().lower()}"
+
+
+def craving_text(tag: str) -> str:
+    return f"food craving: {tag}"
+
+
+def warm_text_cache(texts: list[str]) -> int:
+    """Embed any uncached texts in one batch so request paths never call out."""
     cache = _load_anchor_cache()
-    key = f"{MODEL_VERSION}:{text.strip().lower()}"
+    missing = list(dict.fromkeys(t for t in texts if _text_key(t) not in cache))
+    if not missing:
+        return 0
+    vectors = _embed_remote(missing)
+    if vectors is None:
+        return 0
+    for text, vec in zip(missing, vectors):
+        cache[_text_key(text)] = vec.tolist()
+    try:
+        _ANCHOR_CACHE.write_text(json.dumps(cache))
+    except OSError:
+        pass
+    return len(missing)
+
+
+def embed_text(text: str, allow_remote: bool = True) -> Optional[np.ndarray]:
+    """Embed a short text (craving tag, archetype anchor) with disk cache.
+
+    Request paths pass ``allow_remote=False``: an uncached text degrades to
+    None instead of blocking a recommendation on an embeddings call.
+    """
+    cache = _load_anchor_cache()
+    key = _text_key(text)
     if key in cache:
         return np.array(cache[key], dtype=np.float32)
+    if not allow_remote:
+        return None
     vectors = _embed_remote([text])
     if vectors is None:
         return None
@@ -161,9 +200,12 @@ def embed_text(text: str) -> Optional[np.ndarray]:
     return vectors[0]
 
 
-def embed_tags(tags: list[str]) -> Optional[np.ndarray]:
+def embed_tags(tags: list[str], allow_remote: bool = True) -> Optional[np.ndarray]:
     """Mean vector of a set of sensory/craving tags."""
-    vectors = [v for v in (embed_text(f"food craving: {t}") for t in tags) if v is not None]
+    vectors = [
+        v for v in (embed_text(craving_text(t), allow_remote=allow_remote) for t in tags)
+        if v is not None
+    ]
     if not vectors:
         return None
     mean = np.mean(vectors, axis=0)

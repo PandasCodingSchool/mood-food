@@ -1,6 +1,9 @@
+import asyncio
 import logging
+import uuid
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -8,12 +11,12 @@ load_dotenv()
 
 from app.config import settings
 
+from app.observability import configure_logging, request_id_var
+
 # Configure logging so the Swiggy MCP loggers actually emit. SWIGGY_DEBUG=true
-# raises the Swiggy loggers to DEBUG (full raw tool payloads).
-logging.basicConfig(
-    level=settings.log_level.upper(),
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+# raises the Swiggy loggers to DEBUG (full raw tool payloads). Every line
+# carries the request id the API sent (X-Request-Id).
+configure_logging(settings.log_level.upper(), json_logs=settings.json_logs)
 if settings.swiggy_debug:
     for name in ("swiggy_mcp", "swiggy_discovery", "swiggy_routes"):
         logging.getLogger(name).setLevel(logging.DEBUG)
@@ -26,16 +29,51 @@ from app.routes.learn import router as learn_router
 from app.routes.recipe import router as recipe_router
 from app.routes.instamart import router as instamart_router
 from app.routes.moderation import router as moderation_router
+from app.security import require_service_key
 from app.services.swiggy_mcp import track_user_token
 
-app = FastAPI(title="FoodMood API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Warm craving/archetype embeddings in the background so the request path
+    # never waits on (or calls) the embeddings API.
+    async def _warm() -> None:
+        from app.learning import embeddings, retrieval
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+        try:
+            n = await asyncio.to_thread(embeddings.warm_text_cache, retrieval.startup_texts())
+            logging.getLogger("startup").info("warmed %d anchor embeddings", n)
+        except Exception as exc:  # noqa: BLE001 — never block boot
+            logging.getLogger("startup").warning("embedding warm-up failed: %s", exc)
+
+    task = asyncio.create_task(_warm())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="FoodMood API", version="1.0.0", lifespan=lifespan)
+
+# Server-to-server only by default; browsers are allowed only when listed.
+_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["*"],
+    )
+
+
+@app.middleware("http")
+async def bind_request_id(request: Request, call_next):
+    """Bind the caller's X-Request-Id (or a fresh one) to logs and echo it back."""
+    rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+    token = request_id_var.set(rid)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-Id"] = rid
+    return response
 
 
 @app.middleware("http")
@@ -48,14 +86,18 @@ async def flag_rejected_user_token(request: Request, call_next):
     return response
 
 
-app.include_router(recommendations_router)
-app.include_router(dish_router)
-app.include_router(game_assist_router)
-app.include_router(swiggy_router)
-app.include_router(learn_router)
-app.include_router(recipe_router)
-app.include_router(instamart_router)
-app.include_router(moderation_router)
+_auth = [Depends(require_service_key)]
+for _router in (
+    recommendations_router,
+    dish_router,
+    game_assist_router,
+    swiggy_router,
+    learn_router,
+    recipe_router,
+    instamart_router,
+    moderation_router,
+):
+    app.include_router(_router, dependencies=_auth)
 
 
 @app.get("/health")

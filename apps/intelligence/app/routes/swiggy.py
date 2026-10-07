@@ -146,7 +146,7 @@ async def menu_chat(req: MenuChatRequest, request: Request) -> MenuChatResponse:
             req.restaurant_id, address_id=req.address_id
         )
         restaurant_name = restaurant.name if restaurant else "this restaurant"
-        return get_menu_chat_reply(req, restaurant_name, categories)
+        return await get_menu_chat_reply(req, restaurant_name, categories)
     except SwiggyAddressRequiredError as exc:
         return MenuChatResponse(success=False, error=str(exc))
     except (SwiggyAuthError, SwiggyMCPError) as exc:

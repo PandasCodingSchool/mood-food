@@ -32,7 +32,7 @@ async def check_food_photo(req: CheckFoodPhotoRequest) -> CheckFoodPhotoResponse
         return CheckFoodPhotoResponse(success=False, error=f"Invalid image data: {exc}")
 
     try:
-        result = is_food_photo(image_bytes, req.mime_type)
+        result = await is_food_photo(image_bytes, req.mime_type)
         return CheckFoodPhotoResponse(success=True, is_food=result.is_food, reason=result.reason)
     except Exception as exc:  # noqa: BLE001 - surface classifier failure cleanly
         logger.warning("check_food_photo failed: %s", exc)
