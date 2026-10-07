@@ -25,7 +25,7 @@ def test_every_dish_against_every_rule(dish):
     assert diet.allows(dish, ["non_veg"]) is ("non_veg" in _tags(dish))
     assert diet.allows(dish, ["gluten_free"]) is ("gluten" not in _allergens(dish))
     assert diet.allows(dish, ["dairy-free"]) is ("dairy" not in _allergens(dish))
-    for allergen in ("dairy", "gluten", "eggs", "nuts", "shellfish"):
+    for allergen in ("dairy", "gluten", "eggs", "nuts", "shellfish", "soy"):
         rules = diet.make_rules(allergies=[allergen])
         assert diet.allows(dish, rules) is (allergen not in _allergens(dish))
 
@@ -35,6 +35,14 @@ def test_vegan_never_allows_dairy_or_eggs():
     assert vegan_ok, "catalog should have vegan dishes"
     assert all(not _allergens(d) & {"dairy", "eggs"} for d in vegan_ok)
     assert all("non_veg" not in _tags(d) for d in vegan_ok)
+
+
+def test_mobile_ids_are_understood():
+    # preferences.tsx sends `gf` for gluten-free and `soy` as an allergy.
+    assert diet.make_rules(restrictions=["gf"]).excluded_allergens == {"gluten"}
+    soy = diet.make_rules(allergies=["soy"])
+    assert not any(diet.allows(d, soy) for d in DISHES if "soy" in d.allergens)
+    assert sum("soy" in d.allergens for d in DISHES) >= 40
 
 
 def test_allergy_aliases_normalize():

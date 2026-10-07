@@ -491,7 +491,7 @@ async def get_recommendations(
             rank=i + 1,
             confidence=float(item.get("confidence", 0.7)),
             dish=_dish_to_summary(dish),
-            image_url=image,
+            image_url=image or None,
             ai_reasoning=AiReasoning(
                 mood_match=item.get("mood_match", ""),
                 context_fit=item.get("context_fit", ""),
@@ -554,7 +554,8 @@ def _swap_candidates(dish: DishRecord, restrictions: diet.RulesLike) -> list[Dis
     """Same-course, diet-appropriate candidates — same cuisine first, else any.
 
     Complimentary items (breads, pickles, accompaniment salads) are never
-    swap-eligible — nobody orders them as a standalone dish.
+    swap-eligible — nobody orders them as a standalone dish. Swap tiles are
+    image-led, so dishes with a photo are preferred when any qualify.
     """
     group = _course_group(dish)
     eligible = [
@@ -563,7 +564,8 @@ def _swap_candidates(dish: DishRecord, restrictions: diet.RulesLike) -> list[Dis
         and _diet_allows(d, restrictions)
     ]
     same_cuisine = [d for d in eligible if d.cuisine == dish.cuisine]
-    return same_cuisine or eligible
+    pool = same_cuisine or eligible
+    return [d for d in pool if d.image_url] or pool
 
 
 def _healthier_swap(dish: DishRecord, restrictions: diet.RulesLike = None) -> DishRecord:
@@ -747,7 +749,7 @@ def _fallback_response(
             rank=i + 1,
             confidence=0.5,
             dish=_dish_to_summary(d),
-            image_url=image,
+            image_url=image or None,
             ai_reasoning=AiReasoning(
                 mood_match="Highly rated comfort pick",
                 context_fit="Suitable for most occasions",

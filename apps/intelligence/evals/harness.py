@@ -31,6 +31,7 @@ PERSONAS = {
     "vegan": {"dietary_restrictions": ["vegan"]},
     "nut+gluten free": {"dietary_restrictions": ["gluten_free"], "allergies": ["nuts"]},
     "non_veg": {"dietary_restrictions": ["non_veg"]},
+    "veg + soy allergy": {"dietary_restrictions": ["veg"], "allergies": ["soy"]},
 }
 SLOTS = ["breakfast", "lunch", "dinner", "late_night"]
 MOODS = ["happy", "tired", "stressed", "adventurous", "celebrating"]

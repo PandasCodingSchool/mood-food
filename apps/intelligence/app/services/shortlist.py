@@ -6,11 +6,12 @@ hard constraints (allergens, diet, budget, meal-time, explicit avoids).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord
-from app.services import diet
+from app.services import diet, sensory
 from app.services.mood_clusters import dish_ids_for_cluster
 from app.schemas.request import RecommendationConfig, UserContext
 
@@ -59,6 +60,21 @@ MOOD_ALIASES: dict[str, set[str]] = {
     "ill": {"sick"},
     "down": {"sad", "comfort"},
 }
+
+
+# Mobile stores cuisine preferences as short ids (preferences.tsx CUISINES).
+CUISINE_ALIASES = {
+    "ital": "italian", "mex": "mexican", "jpn": "japanese", "ind": "indian", "kor": "korean",
+    "med": "mediterranean", "usa": "american", "us": "american", "chn": "chinese",
+    "indo_chinese": "chinese", "indo-chinese": "chinese",
+}
+
+
+def cuisine_prefs(ctx: UserContext) -> set[str]:
+    prefs = ctx.preferences
+    if not prefs:
+        return set()
+    return {CUISINE_ALIASES.get(c.strip().lower(), c.strip().lower()) for c in prefs.cuisine_types if c.strip()}
 
 
 def mood_tags_for(primary: Optional[str]) -> set[str]:
@@ -192,65 +208,86 @@ def history_adjustment(dish: DishRecord, ctx: UserContext, now: Optional[datetim
     return delta
 
 
-def score_dish(dish: DishRecord, ctx: UserContext) -> float:
-    """Higher is better. Soft signals only — hard filters already applied."""
-    score = 0.0
+# Weight of sensory fit (catalog v2): a perfect fit adds +6, a clash -6.
+SENSORY_WEIGHT = 6.0
+
+
+def score_breakdown(dish: DishRecord, ctx: UserContext, pulls: Optional[list] = None) -> dict[str, float]:
+    """Named contributions to a dish's score (soft signals; hard filters already applied).
+
+    The parts drive both ranking (their sum) and the "why this?" copy, so the
+    explanation always names the signals that actually ranked the dish.
+    """
+    parts: dict[str, float] = {}
     mood = ctx.mood
     prefs = ctx.preferences
     sit = ctx.situational
     game = ctx.game_data
 
     if mood_tags_for(mood.primary) & {t.lower() for t in dish.mood_tags}:
-        score += 8.0
+        parts["mood"] = 8.0
     # Energy proximity (closer = better)
-    score += max(0.0, 4.0 - abs(dish.energy_requirement - mood.energy_level) * 0.6)
+    parts["energy"] = max(0.0, 4.0 - abs(dish.energy_requirement - mood.energy_level) * 0.6)
     if mood.social_context and mood.social_context in dish.social_context_tags:
-        score += 2.0
+        parts["company"] = 2.0
 
     if sit and sit.weather and (sit.weather in dish.weather_tags or "any" in dish.weather_tags):
-        score += 1.5
+        parts["weather"] = 1.5
     if sit and sit.time_of_day:
         mt = _TIME_ALIASES.get(sit.time_of_day, sit.time_of_day)
         if mt in dish.meal_time:
-            score += 1.5
+            parts["meal_time"] = 1.5
 
     if prefs:
-        cuisines = {c.lower() for c in prefs.cuisine_types}
-        if dish.cuisine.lower() in cuisines or any(c in dish.name.lower() for c in cuisines):
-            score += 5.0
+        cuisines = cuisine_prefs(ctx)
+        # Free-text entries ("biryani") may match dish names; short codes may not.
+        if dish.cuisine.lower() in cuisines or any(len(c) >= 5 and c in dish.name.lower() for c in cuisines):
+            parts["cuisine"] = 5.0
         if prefs.spice_tolerance:
             want = _SPICE_RANK.get(prefs.spice_tolerance, 2)
             have = _SPICE_RANK.get(dish.spice_level, 2)
-            score += max(0.0, 3.0 - abs(want - have))
+            parts["spice"] = max(0.0, 3.0 - abs(want - have))
 
     if game:
         positives = [*(game.liked or []), *(game.cravings or []), *(game.cuisines or [])]
         name_l = dish.name.lower()
+        craving = 0.0
         for i, p in enumerate(positives):
             pl = p.lower()
             if pl in name_l or pl == dish.cuisine.lower() or pl in dish.category.lower():
                 # Earlier cravings weigh more.
-                score += max(1.0, 4.0 - i * 0.4)
+                craving += max(1.0, 4.0 - i * 0.4)
+        if craving:
+            parts["game_signals"] = craving
         if game.slider_values:
             if game.slider_values.adventurous is not None:
-                score += max(0.0, 3.0 - abs(dish.adventurousness_score - game.slider_values.adventurous) * 0.4)
+                parts["adventure"] = max(0.0, 3.0 - abs(dish.adventurousness_score - game.slider_values.adventurous) * 0.4)
             if game.slider_values.health_conscious is not None:
                 target = game.slider_values.health_conscious
-                score += max(0.0, 3.0 - abs(dish.health_score - target) * 0.35)
+                parts["health"] = max(0.0, 3.0 - abs(dish.health_score - target) * 0.35)
         if game.cluster:
-            preferred = set(dish_ids_for_cluster(game.cluster.id))
-            if dish.id in preferred:
-                score += 10.0
+            if dish.id in set(dish_ids_for_cluster(game.cluster.id)):
+                parts["cluster"] = 10.0
 
-    score += history_adjustment(dish, ctx)
+    sensory_fit = sensory.fit(dish, sensory.target_pulls(ctx) if pulls is None else pulls)
+    if sensory_fit is not None:
+        parts["sensory"] = round(SENSORY_WEIGHT * (2 * sensory_fit - 1), 3)
+
+    history = history_adjustment(dish, ctx)
+    if history:
+        parts["history"] = history
 
     # Mild diversity bias toward mains over complimentary leftovers.
     if dish.tier == "main":
-        score += 0.5
+        parts["tier"] = 0.5
     elif dish.tier == "complimentary":
-        score -= 5.0
+        parts["tier"] = -5.0
+    return parts
 
-    return score
+
+def score_dish(dish: DishRecord, ctx: UserContext) -> float:
+    """Higher is better: the sum of ``score_breakdown``."""
+    return sum(score_breakdown(dish, ctx).values())
 
 
 def diversify(scored: list[tuple[float, DishRecord]], limit: int, diversity: str = "medium") -> list[DishRecord]:
@@ -283,17 +320,26 @@ def diversify(scored: list[tuple[float, DishRecord]], limit: int, diversity: str
     return picked
 
 
-def build_shortlist(
+@dataclass
+class ScoredDish:
+    """A shortlist candidate with its total and the named parts behind it."""
+
+    dish: DishRecord
+    total: float
+    parts: dict[str, float]
+
+
+def build_scored_shortlist(
     ctx: UserContext,
     config: Optional[RecommendationConfig] = None,
     size: int = DEFAULT_SHORTLIST_SIZE,
     user_id: Optional[str] = None,
-) -> list[DishRecord]:
-    """Embedding retrieval → hard-filter → score → diversify → top N.
+) -> list[ScoredDish]:
+    """Embedding retrieval → hard-filter → score → diversify → top N, with breakdowns.
 
     The retrieval stage blends the learned taste/craving/mood session vector
-    into scoring (weight 12, matching the strongest heuristic signals). With
-    no learned state it contributes nothing and behavior is unchanged.
+    into scoring (weight 12, matching the strongest heuristic signals) as the
+    ``taste`` part. With no learned state it contributes nothing.
     """
     config = config or RecommendationConfig()
     from app.learning.retrieval import retrieval_scores
@@ -304,14 +350,29 @@ def build_shortlist(
     if not pool:
         # Absolute last resort: diet-only filter on full catalog.
         pool = [d for d in DISHES if diet.allows(d, _restrictions(ctx))]
-    scored = sorted(
-        ((score_dish(d, ctx) + 12.0 * retrieval.get(d.id, 0.0), d) for d in pool),
-        key=lambda x: x[0],
-        reverse=True,
-    )
+    pulls = sensory.target_pulls(ctx)
+    scored: list[ScoredDish] = []
+    for d in pool:
+        parts = score_breakdown(d, ctx, pulls)
+        if retrieval.get(d.id):
+            parts["taste"] = round(12.0 * retrieval[d.id], 3)
+        scored.append(ScoredDish(d, sum(parts.values()), parts))
+    scored.sort(key=lambda s: s.total, reverse=True)
     # Prefer enough candidates for live matching + ranking.
     target = max(size, config.count * 4)
-    return diversify(scored, min(target, len(scored)), diversity=config.diversity or "medium")
+    by_id = {s.dish.id: s for s in scored}
+    picked = diversify([(s.total, s.dish) for s in scored], min(target, len(scored)), diversity=config.diversity or "medium")
+    return [by_id[d.id] for d in picked]
+
+
+def build_shortlist(
+    ctx: UserContext,
+    config: Optional[RecommendationConfig] = None,
+    size: int = DEFAULT_SHORTLIST_SIZE,
+    user_id: Optional[str] = None,
+) -> list[DishRecord]:
+    """Shortlist dishes only (see ``build_scored_shortlist``)."""
+    return [s.dish for s in build_scored_shortlist(ctx, config, size, user_id)]
 
 
 def dishes_for_prompt(dishes: list[DishRecord]) -> str:

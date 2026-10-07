@@ -6,7 +6,9 @@ nut-allergic user is protected identically everywhere.
 
 Catalog vocabulary (``app/data/dishes.json``):
   dietary_tags: vegetarian, vegan, non_veg
-  allergens:    dairy, gluten, eggs, nuts, shellfish
+  allergens:    dairy, gluten, eggs, nuts, shellfish, soy
+
+Unsupported (no catalog data yet, ignored): jain, halal, kosher, keto.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ _RESTRICTION_ALIASES = {
 # "X-free" restrictions are enforced as allergen exclusions.
 _FREE_FROM = {
     "gluten_free": "gluten",
+    "gf": "gluten",
     "dairy_free": "dairy",
     "lactose_free": "dairy",
     "egg_free": "eggs",
@@ -58,6 +61,8 @@ _ALLERGEN_ALIASES = {
     "prawn": "shellfish",
     "prawns": "shellfish",
     "shrimp": "shellfish",
+    "soy": "soy",
+    "soya": "soy",
 }
 
 # Animal products a vegan dish must not contain.

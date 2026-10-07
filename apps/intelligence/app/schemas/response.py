@@ -63,7 +63,8 @@ class Recommendation(BaseModel):
     # True when this pick is an anti-rut wildcard ("shake it up?").
     is_wildcard: bool = False
     dish: DishSummary
-    image_url: str
+    # None until the dish has a catalog photo; clients fall back to the live Swiggy image.
+    image_url: Optional[str] = None
     ai_reasoning: AiReasoning
     practical_details: PracticalDetails
     restaurant: Restaurant

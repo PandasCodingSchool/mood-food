@@ -213,7 +213,7 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
     },
     {
       "id": "in_024",
-      "name": "Vindaloo",
+      "name": "Chicken Vindaloo",
       "cuisine": "indian",
       "category": "indulgent",
       "dietary_tags": [
@@ -263,7 +263,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "gluten",
-        "eggs"
+        "eggs",
+        "soy"
       ],
       "mood_tags": [
         "comfort",
@@ -285,7 +286,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
         "non_veg"
       ],
       "allergens": [
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "happy",
@@ -308,7 +310,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "gluten",
-        "nuts"
+        "nuts",
+        "soy"
       ],
       "mood_tags": [
         "comfort",
@@ -331,7 +334,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "nuts",
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "energetic",
@@ -615,7 +619,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "gluten",
-        "eggs"
+        "eggs",
+        "soy"
       ],
       "mood_tags": [
         "comfort",
@@ -637,7 +642,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
         "non_veg"
       ],
       "allergens": [
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "happy",
@@ -660,7 +666,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "gluten",
-        "nuts"
+        "nuts",
+        "soy"
       ],
       "mood_tags": [
         "comfort",
@@ -808,7 +815,7 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
     },
     {
       "id": "in_024",
-      "name": "Vindaloo",
+      "name": "Chicken Vindaloo",
       "cuisine": "indian",
       "category": "indulgent",
       "dietary_tags": [
@@ -880,7 +887,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "gluten",
-        "nuts"
+        "nuts",
+        "soy"
       ],
       "mood_tags": [
         "comfort",
@@ -895,7 +903,7 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
     },
     {
       "id": "it_003",
-      "name": "Spaghetti Carbonara",
+      "name": "Chicken Carbonara",
       "cuisine": "italian",
       "category": "comfort_food",
       "dietary_tags": [
@@ -994,7 +1002,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
         "non_veg"
       ],
       "allergens": [
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "energetic",
@@ -1053,7 +1062,7 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
     },
     {
       "id": "in_024",
-      "name": "Vindaloo",
+      "name": "Chicken Vindaloo",
       "cuisine": "indian",
       "category": "indulgent",
       "dietary_tags": [
@@ -1102,7 +1111,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
         "vegetarian"
       ],
       "allergens": [
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "energetic",
@@ -1145,7 +1155,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
         "non_veg"
       ],
       "allergens": [
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "adventurous",
@@ -1363,7 +1374,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       ],
       "allergens": [
         "nuts",
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "energetic",
@@ -1425,7 +1437,7 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
     },
     {
       "id": "am_020",
-      "name": "Hot Dogs",
+      "name": "Chicken Hot Dogs",
       "cuisine": "american",
       "category": "street_food",
       "dietary_tags": [
@@ -1468,25 +1480,6 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       "image_url": "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxDcmlzcHklMjBGcmllZCUyMENoaWNrZW58ZW58MHx8fHwxNzgzNTAxNjY5fDA&ixlib=rb-4.1.0&q=80&w=1080"
     },
     {
-      "id": "am_003",
-      "name": "BBQ Ribs",
-      "cuisine": "american",
-      "category": "indulgent",
-      "dietary_tags": [
-        "non_veg"
-      ],
-      "allergens": [],
-      "mood_tags": [
-        "celebratory",
-        "happy"
-      ],
-      "price_inr": 800,
-      "prep_time_min": 30,
-      "calories": 900,
-      "health_score": 3.0,
-      "image_url": "https://images.unsplash.com/photo-1544025162-d76694265947?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxCQlElMjBSaWJzfGVufDB8fHx8MTc4MDMxMjEyMHww&ixlib=rb-4.1.0&q=80&w=1080"
-    },
-    {
       "id": "am_012",
       "name": "Grilled BBQ Chicken Steak",
       "cuisine": "american",
@@ -1507,7 +1500,7 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
     },
     {
       "id": "am_008",
-      "name": "Philly Cheesesteak",
+      "name": "Chicken Philly Cheesesteak",
       "cuisine": "american",
       "category": "indulgent",
       "dietary_tags": [
@@ -1526,6 +1519,28 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
       "calories": 480,
       "health_score": 6.5,
       "image_url": "https://images.unsplash.com/photo-1734769853702-c7444c039c8c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxQaGlsbHklMjBDaGVlc2VzdGVha3xlbnwwfHx8fDE3ODM1MDE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080"
+    },
+    {
+      "id": "am_022",
+      "name": "Baked Mac and Cheese with Chicken",
+      "cuisine": "american",
+      "category": "indulgent",
+      "dietary_tags": [
+        "non_veg"
+      ],
+      "allergens": [
+        "gluten",
+        "dairy"
+      ],
+      "mood_tags": [
+        "romantic",
+        "celebratory"
+      ],
+      "price_inr": 1200,
+      "prep_time_min": 60,
+      "calories": 680,
+      "health_score": 5.0,
+      "image_url": "https://images.unsplash.com/photo-1701484185547-a71576b65e1a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w5NjY0NjB8MHwxfHNlYXJjaHwxfHxCYWtlZCUyME1hYyUyMGFuZCUyMENoZWVzZSUyMHdpdGglMjBDaGlja2VufGVufDB8fHx8MTc4MzUwMTY5NHww&ixlib=rb-4.1.0&q=80&w=1080"
     }
   ],
   "relaxed": [
@@ -1601,7 +1616,8 @@ export const FALLBACK_DISHES: Record<string, FallbackDish[]> = {
         "non_veg"
       ],
       "allergens": [
-        "gluten"
+        "gluten",
+        "soy"
       ],
       "mood_tags": [
         "adventurous",

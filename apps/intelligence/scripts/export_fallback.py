@@ -30,7 +30,8 @@ def _eligible(mood: str):
     tags = mood_tags_for(mood)
     pool = [
         d for d in DISHES
-        if d.tier == "main" and d.delivery_friendly and tags & set(d.mood_tags)
+        # The offline path has no live Swiggy image to fall back on.
+        if d.tier == "main" and d.delivery_friendly and d.image_url and tags & set(d.mood_tags)
     ]
     pool.sort(key=lambda d: (CUISINE_RANK.get(d.cuisine, 9), d.price_inr))
     return pool[:PER_MOOD]

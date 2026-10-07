@@ -1,4 +1,5 @@
 """Deterministic shortlist hard-filter + scoring tests."""
+import pytest
 
 from app.data.dishes import DISHES_BY_ID
 from app.schemas.request import (
@@ -130,7 +131,10 @@ def test_tired_gets_mood_bonus_on_comfort_dish():
     comfort = next(d for d in DISHES_BY_ID.values() if "comfort" in d.mood_tags)
     tired = UserContext(mood=Mood(primary="tired", energy_level=3))
     unmatched = UserContext(mood=Mood(primary="zzz_unknown", energy_level=3))
-    assert score_dish(comfort, tired) - score_dish(comfort, unmatched) == 8.0
+    from app.services.shortlist import score_breakdown
+
+    assert score_breakdown(comfort, tired)["mood"] == 8.0
+    assert "mood" not in score_breakdown(comfort, unmatched)
 
 
 def test_allergies_enforced_in_backfill_and_alternatives():
@@ -193,3 +197,65 @@ def test_badly_rated_is_penalised_even_if_repeated():
 
 def test_bad_dates_are_ignored():
     assert history_adjustment(PAV, _with_orders(RecentOrder(dish="Pav Bhaji", date="yesterday")), NOW) == 0.0
+
+
+def test_mobile_cuisine_codes_get_the_cuisine_bonus():
+    dish = next(d for d in DISHES_BY_ID.values() if d.cuisine == "mediterranean")
+    with_pref = UserContext(mood=Mood(primary="happy"), preferences=Preferences(cuisine_types=["med"]))
+    without = UserContext(mood=Mood(primary="happy"), preferences=Preferences(cuisine_types=["kor"]))
+    assert score_dish(dish, with_pref) - score_dish(dish, without) == pytest.approx(5.0)
+    # short codes never match by substring ("ind" must not hit "Kind of ...")
+    indian = UserContext(mood=Mood(primary="happy"), preferences=Preferences(cuisine_types=["ind"]))
+    assert all(score_dish(d, indian) >= score_dish(d, without) for d in list(DISHES_BY_ID.values())[:50])
+
+
+# --- catalog v2: sensory fit + breakdown --------------------------------------
+
+from app.services import sensory  # noqa: E402
+from app.services.shortlist import build_scored_shortlist, score_breakdown  # noqa: E402
+
+
+def _by_name(name):
+    return next(d for d in DISHES_BY_ID.values() if d.name == name)
+
+
+def test_breakdown_sums_to_score():
+    ctx = UserContext(mood=Mood(primary="tired", energy_level=2), situational=Situational(weather="rainy", time_of_day="dinner"))
+    for d in list(DISHES_BY_ID.values())[:60]:
+        assert sum(score_breakdown(d, ctx).values()) == pytest.approx(score_dish(d, ctx))
+
+
+def test_rainy_low_energy_prefers_warm_comfort_over_cold_salad():
+    ctx = UserContext(mood=Mood(primary="tired", energy_level=2), situational=Situational(weather="rainy"))
+    pulls = sensory.target_pulls(ctx)
+    assert sensory.fit(_by_name("Dal Makhani"), pulls) > sensory.fit(_by_name("Greek Salad"), pulls) + 0.2
+
+
+def test_hot_day_prefers_light_cooling_food():
+    ctx = UserContext(mood=Mood(primary="happy"), situational=Situational(weather="hot"))
+    pulls = sensory.target_pulls(ctx)
+    assert sensory.fit(_by_name("Curd Rice"), pulls) > sensory.fit(_by_name("Nihari"), pulls)
+
+
+def test_craving_tags_dominate():
+    ctx = UserContext(mood=Mood(primary="happy"), game_data=GameData(type="craving_radar", craving_tags=["crunchy", "spicy"]))
+    top = build_scored_shortlist(ctx)[:5]
+    assert sum(s.dish.sensory["crunchy"] >= 0.5 or s.dish.sensory["spicy"] >= 0.6 for s in top) >= 4
+
+
+def test_words_for_copy():
+    ctx = UserContext(mood=Mood(primary="tired", energy_level=2), situational=Situational(weather="rainy"))
+    words = sensory.strongest_matches(_by_name("Dal Makhani"), sensory.target_pulls(ctx))
+    assert "warm" in words
+
+
+def test_scored_shortlist_carries_parts():
+    ctx = UserContext(mood=Mood(primary="happy"), situational=Situational(time_of_day="dinner", weather="rainy"))
+    for s in build_scored_shortlist(ctx):
+        assert s.total == pytest.approx(sum(s.parts.values()))
+        assert "sensory" in s.parts
+
+
+def test_neutral_context_has_no_sensory_opinion():
+    ctx = UserContext(mood=Mood(primary="happy"))
+    assert all("sensory" not in s.parts for s in build_scored_shortlist(ctx))
