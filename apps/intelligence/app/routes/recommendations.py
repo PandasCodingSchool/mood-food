@@ -22,6 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 
 from app.data.dishes import DISHES_BY_ID
+from app.learning import live_state
 from app.schemas.request import RecommendationRequest
 from app.schemas.response import (
     LearnedMeta,
@@ -206,6 +207,7 @@ async def _run_pipeline(
     request: Request,
 ) -> RecommendationResponse:
     t0 = time.time()
+    body = live_state.apply_learned_state(body)
     final_count = body.recommendation_config.count
     shortlist = build_shortlist(
         body.user_context, body.recommendation_config, user_id=body.user_id

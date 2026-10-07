@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # Node backend base URL for pulling the signals replay feed.
     node_base_url: str = "http://localhost:3001"
 
+    # --- JEV (TypeSafe System One) decision model ---
+    # Fast typed decisions (noul / choice / score) with calibrated confidence.
+    # See https://docs.typesafe.ai/api. Pin a version: thresholds are tuned per model.
+    jev_api_key: str = ""
+    jev_base_url: str = "https://api.typesafe.ai/v1/systemone"
+    jev_model: str = "jev-1.13.0"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

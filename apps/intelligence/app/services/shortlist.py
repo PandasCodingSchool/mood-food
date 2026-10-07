@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Optional
 
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord
+from app.services import diet
 from app.services.mood_clusters import dish_ids_for_cluster
 from app.schemas.request import RecommendationConfig, UserContext
 
@@ -29,6 +30,42 @@ _TIME_ALIASES = {
     "late_night": "late_night",
 }
 
+# Meal slots a dish may come from when delivery is preferred. Neighbouring
+# slots stay eligible (a 9pm dinner can be a late-night dish and vice versa);
+# the exact slot still earns the meal-time score bonus.
+_MEAL_WINDOWS = {
+    "breakfast": {"breakfast"},
+    "lunch": {"lunch", "dinner"},
+    "dinner": {"dinner", "lunch", "late_night"},
+    "late_night": {"late_night", "dinner"},
+}
+
+# Client mood labels that don't exist verbatim in dish.mood_tags → the catalog
+# tags that express them. Unknown moods match themselves.
+MOOD_ALIASES: dict[str, set[str]] = {
+    "celebrating": {"celebratory"},
+    "celebration": {"celebratory"},
+    "tired": {"comfort", "relaxed"},
+    "exhausted": {"comfort", "relaxed"},
+    "sleepy": {"comfort", "relaxed"},
+    "anxious": {"stressed", "comfort"},
+    "overwhelmed": {"stressed", "comfort"},
+    "chill": {"relaxed"},
+    "calm": {"relaxed"},
+    "excited": {"energetic", "celebratory"},
+    "lonely": {"comfort", "nostalgic"},
+    "unwell": {"sick"},
+    "ill": {"sick"},
+    "down": {"sad", "comfort"},
+}
+
+
+def mood_tags_for(primary: Optional[str]) -> set[str]:
+    if not primary:
+        return set()
+    key = primary.strip().lower()
+    return MOOD_ALIASES.get(key, {key})
+
 
 def _budget_max(ctx: UserContext) -> Optional[float]:
     sit = ctx.situational
@@ -40,53 +77,51 @@ def _budget_max(ctx: UserContext) -> Optional[float]:
     return None
 
 
-def _restrictions(ctx: UserContext) -> list[str]:
-    prefs = ctx.preferences
-    if prefs and prefs.dietary_restrictions:
-        return list(prefs.dietary_restrictions)
-    game = ctx.game_data
-    if game and game.diet_preference == "veg":
-        return ["vegetarian"]
-    if game and game.diet_preference == "non-veg":
-        return ["non_veg"]
-    return []
+def _restrictions(ctx: UserContext) -> diet.DietRules:
+    return diet.rules_for(ctx)
 
 
-def _diet_allows(dish: DishRecord, restrictions: list[str]) -> bool:
-    r = {x.lower() for x in (restrictions or [])}
-    tags = {t.lower() for t in dish.dietary_tags}
-    if r & {"vegetarian", "vegan"} and "non_veg" in tags:
-        return False
-    if "non_veg" in r and "non_veg" not in tags:
-        return False
-    return True
+_diet_allows = diet.allows
 
 
-def _avoid_tokens(ctx: UserContext) -> set[str]:
-    tokens: set[str] = set()
-    hist = ctx.history
-    if hist:
-        for a in hist.avoid_these:
-            tokens.update(w.lower() for w in a.split() if len(w) > 2)
+_DISH_NAMES = {d.name.lower(): d.id for d in DISHES}
+
+
+def _avoid_entries(ctx: UserContext) -> list[str]:
+    entries: list[str] = []
+    if ctx.history:
+        entries.extend(ctx.history.avoid_these)
     game = ctx.game_data
     if game:
-        for a in game.disliked:
-            tokens.update(w.lower() for w in a.split() if len(w) > 2)
-        for s in game.swipes:
-            if not s.liked:
-                tokens.update(w.lower() for w in s.item.split() if len(w) > 2)
-    for name in ctx.unavailable_dishes:
-        tokens.update(w.lower() for w in name.split() if len(w) > 2)
-    return tokens
+        entries.extend(game.disliked)
+        entries.extend(s.item for s in game.swipes if not s.liked)
+    entries.extend(ctx.unavailable_dishes)
+    return [e.strip().lower() for e in entries if e and e.strip()]
+
+
+def _avoid_tokens(ctx: UserContext) -> tuple[set[str], set[str]]:
+    """(dish ids to exclude, keyword tokens to exclude).
+
+    An avoid entry naming a catalog dish excludes only that dish — disliking
+    "Chicken Burger" must not ban every chicken dish. Free keywords ("chicken",
+    "mushroom") still exclude any dish whose name contains them.
+    """
+    ids: set[str] = set()
+    tokens: set[str] = set()
+    for entry in _avoid_entries(ctx):
+        if entry in _DISH_NAMES:
+            ids.add(_DISH_NAMES[entry])
+        else:
+            tokens.update(w for w in entry.split() if len(w) > 2)
+    return ids, tokens
 
 
 def hard_filter(ctx: UserContext, dishes: Optional[list[DishRecord]] = None) -> list[DishRecord]:
     """Drop dishes that violate hard constraints."""
     pool = list(dishes if dishes is not None else DISHES)
-    restrictions = _restrictions(ctx)
-    allergies = {a.lower() for a in (ctx.preferences.allergies if ctx.preferences else [])}
+    rules = _restrictions(ctx)
     budget = _budget_max(ctx)
-    avoid = _avoid_tokens(ctx)
+    avoid_ids, avoid = _avoid_tokens(ctx)
     unavailable = {n.lower() for n in ctx.unavailable_dishes}
 
     sit = ctx.situational
@@ -96,17 +131,16 @@ def hard_filter(ctx: UserContext, dishes: Optional[list[DishRecord]] = None) -> 
 
     out: list[DishRecord] = []
     for d in pool:
-        if d.name.lower() in unavailable:
+        if d.name.lower() in unavailable or d.id in avoid_ids:
             continue
-        if allergies & {a.lower() for a in d.allergens}:
-            continue
-        if not _diet_allows(d, restrictions):
+        if not diet.allows(d, rules):
             continue
         if budget is not None and d.price_inr > budget:
             continue
-        if meal_time and d.meal_time and meal_time not in d.meal_time and "any" not in d.meal_time:
-            # Soft: only hard-exclude when delivery preferred and dish is clearly wrong meal.
-            if sit and sit.delivery_preferred:
+        if meal_time and d.meal_time and "any" not in d.meal_time:
+            window = _MEAL_WINDOWS.get(meal_time, {meal_time})
+            # Only hard-exclude clearly wrong meals, and only for delivery.
+            if sit and sit.delivery_preferred and not window & set(d.meal_time):
                 continue
         name_tokens = {w.lower() for w in d.name.split() if len(w) > 2}
         if avoid & name_tokens:
@@ -125,7 +159,7 @@ def score_dish(dish: DishRecord, ctx: UserContext) -> float:
     sit = ctx.situational
     game = ctx.game_data
 
-    if mood.primary and mood.primary.lower() in {t.lower() for t in dish.mood_tags}:
+    if mood_tags_for(mood.primary) & {t.lower() for t in dish.mood_tags}:
         score += 8.0
     # Energy proximity (closer = better)
     score += max(0.0, 4.0 - abs(dish.energy_requirement - mood.energy_level) * 0.6)
@@ -226,7 +260,7 @@ def build_shortlist(
     pool = hard_filter(ctx)
     if not pool:
         # Absolute last resort: diet-only filter on full catalog.
-        pool = [d for d in DISHES if _diet_allows(d, _restrictions(ctx))]
+        pool = [d for d in DISHES if diet.allows(d, _restrictions(ctx))]
     scored = sorted(
         ((score_dish(d, ctx) + 12.0 * retrieval.get(d.id, 0.0), d) for d in pool),
         key=lambda x: x[0],

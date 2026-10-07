@@ -3,6 +3,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { DB, type Database } from '../core/tokens.js';
 import { orderHistory, signals, tasteVector, users } from '../db/schema.js';
 import { IntelligenceService } from '../intelligence/intelligence.service.js';
+import { istParts } from '../common/ist.js';
 
 export const KNOWN_SIGNAL_TYPES = new Set([
   'mood_checkin', 'swipe', 'this_or_that', 'post_meal', 'veto', 'craving', 'occasion',
@@ -20,19 +21,6 @@ export interface StoredSignal {
 interface LearnResult {
   taste_vector?: { embedding: number[]; dim?: number; model_version?: string };
   profile_summary?: { persona_archetype?: string; question_budget?: number; [k: string]: unknown };
-}
-
-/** Time-of-day bucket in IST — the app's market (v1 used the server's clock). */
-function istParts(now: Date) {
-  const ist = new Date(now.getTime() + 5.5 * 3600_000);
-  const hour = ist.getUTCHours();
-  const day = ist.getUTCDay();
-  return {
-    hour,
-    time_of_day: hour < 11 ? 'breakfast' : hour < 16 ? 'lunch' : hour < 22 ? 'dinner' : 'late_night',
-    day_of_week: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][day],
-    is_weekend: day === 0 || day === 6,
-  };
 }
 
 /** The append-only personalization log and its hand-off to the learning service. */

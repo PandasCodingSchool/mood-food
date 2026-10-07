@@ -329,3 +329,50 @@ class TestFallbackResponse:
         result = _fallback_response("test", 2)
         assert result.success is False
         assert "test" in result.error
+
+
+class TestModelOutputValidation:
+    def _run(self, payload):
+        import json as _json
+        mock_llm = MagicMock()
+        resp = MagicMock()
+        resp.content = _json.dumps(payload)
+        resp.response_metadata = {"token_usage": {"total_tokens": 10}}
+        mock_llm.invoke.return_value = resp
+        req = RecommendationRequest(
+            user_context=UserContext(mood=Mood(primary="happy")),
+            recommendation_config=RecommendationConfig(count=2),
+        )
+        return get_recommendations(
+            req, llm=mock_llm, candidate_dishes=[DISHES_BY_ID[i] for i in ("in_002", "in_010", "it_008")]
+        )
+
+    def test_bad_types_are_coerced_not_500(self):
+        result = self._run({"ranked_dishes": [
+            {"dish_id": "in_002", "confidence": "very high", "context_tags": "Cozy", "mood_match": None},
+            {"dish_id": "in_010", "confidence": 7, "context_tags": [1, "Warm", None]},
+        ]})
+        assert result.success is True
+        c0, c1 = (r.confidence for r in result.recommendations)
+        assert c0 == 0.7 and c1 == 1.0
+        assert result.recommendations[0].ai_reasoning.context_tags == ["Cozy"]
+        assert result.recommendations[1].ai_reasoning.context_tags == ["1", "Warm"]
+
+    def test_malformed_items_dropped(self):
+        result = self._run({"ranked_dishes": ["junk", {"no_id": 1}, {"dish_id": "it_008"}]})
+        assert [r.dish.id for r in result.recommendations] == ["it_008"]
+
+    def test_non_object_output_falls_back(self):
+        result = self._run(["not", "an", "object"])
+        assert result.success is False
+
+    def test_no_invented_restaurants(self):
+        result = self._run({
+            "ranked_dishes": [{"dish_id": "in_002"}],
+            "restaurant_suggestions": [{"name": "Imaginary Bistro", "rating": 5}],
+        })
+        assert all(r.restaurant.name != "Imaginary Bistro" for r in result.recommendations)
+
+    def test_prompt_no_longer_requests_restaurants(self):
+        msg = _build_user_message(UserContext(mood=Mood(primary="happy")), RecommendationConfig())
+        assert "restaurant_suggestions" not in msg

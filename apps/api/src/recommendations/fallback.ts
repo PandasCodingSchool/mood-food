@@ -1,72 +1,40 @@
-// Rule-based fallback used when the intelligence service is down. Data ported from v1.
+// Offline fallback used when the intelligence service is down. Serves real
+// catalog dishes (see fallback-dishes.ts, generated from the intelligence
+// catalog) filtered by diet, allergies and budget — never an invented table.
 import { randomInt } from 'node:crypto';
+import { FALLBACK_DISHES, type FallbackDish } from './fallback-dishes.js';
 
-const FOOD: Record<string, Record<string, string[]>> = {
-  // Mood-based recommendations
-  happy: {
-    comfort: ['Pizza', 'Burger', 'Pasta', 'Tacos', 'Fried Chicken'],
-    spicy: ['Thai Curry', 'Szechuan Noodles', 'Hot Wings', 'Vindaloo', 'Jerk Chicken'],
-    sweet: ['Ice Cream Sundae', 'Waffles', 'Donuts', 'Milkshake', 'Cheesecake'],
-    healthy: ['Buddha Bowl', 'Smoothie Bowl', 'Grilled Salmon', 'Quinoa Salad', 'Acai Bowl'],
-    light: ['Sushi Rolls', 'Caprese Salad', 'Gazpacho', 'Bruschetta', 'Spring Rolls'],
-    indulgent: ['BBQ Ribs', 'Lobster Roll', 'Truffle Pasta', 'Wagyu Burger', 'Chocolate Fondue'],
-  },
-  tired: {
-    comfort: ['Mac and Cheese', 'Grilled Cheese', 'Chicken Soup', 'Mashed Potatoes', 'Meatloaf'],
-    spicy: ['Ramen', 'Kimchi Fried Rice', 'Chicken Tikka', 'Buffalo Wings', 'Chili'],
-    sweet: ['Hot Chocolate', 'Apple Pie', 'Bread Pudding', 'Creme Brulee', 'Tiramisu'],
-    healthy: ['Chicken Soup', 'Steamed Fish', 'Vegetable Stir-fry', 'Lentil Soup', 'Oatmeal'],
-    light: ['Chicken Noodle Soup', 'Toast with Avocado', 'Yogurt Parfait', 'Fruit Salad', 'Clear Broth'],
-    indulgent: ['Beef Stew', 'Lobster Bisque', 'Pork Belly', 'Beef Wellington', 'Risotto'],
-  },
-  stressed: {
-    comfort: ['Chocolate Cake', 'Mashed Potatoes', 'Chicken Pot Pie', 'Beef Stew', 'Mac and Cheese'],
-    spicy: ['Hot Wings', 'Spicy Ramen', 'Chili', 'Jalapeno Poppers', 'Spicy Tuna Roll'],
-    sweet: ['Chocolate Lava Cake', 'Brownies', 'Cookies', 'Milkshake', 'Cheesecake'],
-    healthy: ['Herbal Tea', 'Oatmeal', 'Banana', 'Yogurt', 'Nuts and Berries'],
-    light: ['Herbal Tea', 'Crackers', 'Fruit', 'Yogurt', 'Smoothie'],
-    indulgent: ['Poutine', 'Fried Chicken', 'Nachos', 'Fondue', 'BBQ Platter'],
-  },
-  celebrating: {
-    comfort: ['Steak and Fries', 'Pizza Feast', 'Pasta Carbonara', 'Lobster', 'Prime Rib'],
-    spicy: ['Spicy Seafood Boil', 'Korean BBQ', 'Indian Thali', 'Mexican Fiesta', 'Thai Feast'],
-    sweet: ['Champagne and Strawberries', 'Celebration Cake', 'Chocolate Fountain', 'Tiramisu', 'Profiteroles'],
-    healthy: ['Seafood Platter', 'Oysters', 'Grilled Fish', 'Sashimi', 'Ceviche'],
-    light: ['Champagne', 'Oysters', 'Caviar', 'Canapes', 'Smoked Salmon'],
-    indulgent: ['Steakhouse Dinner', 'Omakase', 'Tasting Menu', 'Surf and Turf', 'Champagne Brunch'],
-  },
-  relaxed: {
-    comfort: ['Sunday Roast', 'Pasta', 'Tapas', 'Charcuterie Board', 'Brunch'],
-    spicy: ['Mild Curry', 'Poke Bowl', 'Ceviche', 'Tacos', 'Paella'],
-    sweet: ['Affogato', 'Crepes', 'Fruit Tart', 'Panna Cotta', 'Gelato'],
-    healthy: ['Grain Bowl', 'Mediterranean Plate', 'Sushi', 'Salad Nicoise', 'Grilled Vegetables'],
-    light: ['Salad', 'Soup', 'Tea Sandwiches', 'Crudites', 'Fresh Fruit'],
-    indulgent: ['Cheese Board', 'Wine Pairing', 'Charcuterie', 'Oysters', 'Foie Gras'],
-  },
-  adventurous: {
-    comfort: ['Fusion Tacos', 'Korean Fried Chicken', 'Ramen Burger', 'Sushi Pizza', 'Dim Sum'],
-    spicy: ['Ghost Pepper Wings', 'Szechuan Hot Pot', 'Vindaloo', 'Thai Papaya Salad', 'Ethiopian Doro Wat'],
-    sweet: ['Mochi Ice Cream', 'Bubble Tea', 'Churros with Chocolate', 'Baklava', 'Matcha Desserts'],
-    healthy: ['Poke Bowl', 'Vietnamese Pho', 'Mediterranean Mezze', 'Bibimbap', 'Ceviche'],
-    light: ['Ceviche', 'Sashimi', 'Spring Rolls', 'Raw Bar', 'Edamame'],
-    indulgent: ['Foie Gras', 'Truffle Everything', 'Uni', 'Wagyu', 'Caviar'],
-  },
-};
+export interface FallbackQuery {
+  mood: string;
+  craving: string;
+  budget: string;
+  preference: string;
+  allergies?: string[];
+}
 
-const CUISINES: Record<string, string[]> = {
-  veg: ['Mediterranean', 'Indian', 'Thai', 'Italian', 'Mexican', 'Japanese', 'Chinese'],
-  'non-veg': ['American', 'Korean', 'Japanese', 'Italian', 'Indian', 'Mexican', 'Thai', 'Chinese', 'French'],
-  both: ['Mediterranean', 'Indian', 'Thai', 'Italian', 'Mexican', 'Japanese', 'Chinese', 'Korean', 'American'],
+const BUDGET_MAX: Record<string, number> = { budget: 300, moderate: 800, splurge: 2000 };
+
+const ALLERGEN_ALIASES: Record<string, string> = {
+  milk: 'dairy', lactose: 'dairy', egg: 'eggs', nut: 'nuts', peanut: 'nuts', peanuts: 'nuts',
+  wheat: 'gluten', prawns: 'shellfish', shrimp: 'shellfish', seafood: 'shellfish',
 };
 
 const WHY: Record<string, (food: string) => string> = {
-  happy: (f) => `Perfect for your happy mood! This ${f} will keep the good vibes going.`,
-  tired: (f) => `Great choice when you're feeling tired. This ${f} provides the comfort you need.`,
-  stressed: (f) => `Exactly what you need to unwind. This ${f} is pure comfort.`,
-  celebrating: (f) => `Fits your celebration perfectly! This ${f} makes any occasion special.`,
-  relaxed: (f) => `Ideal for your relaxed state. This ${f} complements your chill mood.`,
-  adventurous: (f) => `Matches your adventurous spirit! Try something new with this ${f}.`,
+  happy: (f) => `Keeps the good mood going — ${f} is a reliable crowd-pleaser.`,
+  tired: (f) => `Low effort, high comfort: ${f} when you're running on empty.`,
+  stressed: (f) => `Something warm and familiar to help you unwind — ${f}.`,
+  celebrating: (f) => `A little celebration on a plate: ${f}.`,
+  relaxed: (f) => `Easy-going and satisfying — ${f} suits a relaxed evening.`,
+  adventurous: (f) => `Feeling bold? ${f} is worth trying tonight.`,
 };
+
+function dietAllows(d: FallbackDish, preference: string): boolean {
+  const p = preference.toLowerCase().replace(/[\s-]/g, '_');
+  if (p === 'vegan') return d.dietary_tags.includes('vegan');
+  if (p === 'veg' || p === 'vegetarian') return !d.dietary_tags.includes('non_veg');
+  if (p === 'non_veg' || p === 'nonveg') return d.dietary_tags.includes('non_veg');
+  return true;
+}
 
 function pickDistinct<T>(items: readonly T[], n: number): T[] {
   const pool = [...items];
@@ -75,32 +43,47 @@ function pickDistinct<T>(items: readonly T[], n: number): T[] {
   return out;
 }
 
-/** Three random dishes for (mood, craving), shaped like intelligence recommendations. */
-export function fallbackRecommendations(q: { mood: string; craving: string; budget: string; preference: string }) {
+/** Three real dishes for the mood, shaped like intelligence recommendations. */
+export function fallbackRecommendations(q: FallbackQuery) {
   const mood = q.mood.toLowerCase();
-  const craving = q.craving.toLowerCase().replace(' ', '');
-  const dishes = FOOD[mood]?.[craving] ?? FOOD.happy.comfort;
-  const cuisines = CUISINES[q.preference.toLowerCase()] ?? CUISINES.both;
+  const allergies = new Set((q.allergies ?? []).map((a) => ALLERGEN_ALIASES[a.toLowerCase()] ?? a.toLowerCase()));
+  const safe = (d: FallbackDish) => dietAllows(d, q.preference) && !d.allergens.some((a) => allergies.has(a));
+  const maxPrice = BUDGET_MAX[q.budget.toLowerCase()] ?? Infinity;
+
+  const moodPool = FALLBACK_DISHES[mood] ?? FALLBACK_DISHES.happy;
+  const everything = [...new Map(Object.values(FALLBACK_DISHES).flat().map((d) => [d.id, d])).values()];
+  // Relax budget, then mood — never diet or allergies.
+  const tiers = [
+    moodPool.filter((d) => safe(d) && d.price_inr <= maxPrice),
+    moodPool.filter(safe),
+    everything.filter(safe),
+  ];
+  const pool = tiers.find((t) => t.length >= 3) ?? tiers[2];
   const why = WHY[mood] ?? WHY.happy;
 
-  return pickDistinct(dishes, 3).map((name, index) => ({
+  return pickDistinct(pool, 3).map((d, index) => ({
     id: `fb_${index}`,
     rank: index + 1,
-    confidence: 0.75,
+    confidence: 0.5,
     dish: {
-      id: `fb_dish_${index}`,
-      name,
-      cuisine: cuisines[randomInt(cuisines.length)],
-      category: 'general',
-      tags: [q.mood, q.craving],
+      id: d.id,
+      name: d.name,
+      cuisine: d.cuisine,
+      category: d.category,
+      tags: [...d.dietary_tags, ...d.mood_tags],
     },
-    image_url: null,
+    image_url: d.image_url,
     ai_reasoning: {
-      mood_match: `Matches ${q.mood} mood`,
-      context_fit: `Fits ${q.budget} budget and ${q.craving} craving`,
-      psychological_hook: why(name.toLowerCase()),
+      mood_match: `A dependable pick for a ${q.mood} mood`,
+      context_fit: 'Shown while personalised picks are briefly unavailable',
+      psychological_hook: why(d.name),
     },
-    practical_details: { estimated_price: 0, preparation_time: 20, calories: 0, health_score: 5 },
+    practical_details: {
+      estimated_price: d.price_inr,
+      preparation_time: d.prep_time_min,
+      calories: d.calories,
+      health_score: d.health_score,
+    },
     restaurant: null,
     alternatives: [],
     pairing_suggestions: [],

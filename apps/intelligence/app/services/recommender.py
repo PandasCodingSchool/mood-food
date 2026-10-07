@@ -8,11 +8,17 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from pydantic import BaseModel, ValidationError, field_validator
 
 from app.config import settings
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord, get_dishes_for_prompt
+from app.services import diet
 from app.services.mood_clusters import dishes_for_cluster
-from app.services.shortlist import build_shortlist, dishes_for_prompt as shortlist_prompt
+from app.services.shortlist import (
+    _budget_max,
+    build_shortlist,
+    dishes_for_prompt as shortlist_prompt,
+)
 
 # (drink, reason) keyed by cuisine
 _DRINK_PAIRINGS: dict[str, tuple[str, str]] = {
@@ -89,10 +95,8 @@ def _build_user_message(
     hist = ctx.history
 
     sliders = (game.slider_values if game and game.slider_values else None)
-    budget_max = (sit.budget.max if sit and sit.budget else None)
-    # No explicit budget: synthesize from the game's budget tier.
-    if budget_max is None and game and game.budget_tier:
-        budget_max = {"budget": 300, "moderate": 800, "splurge": 2000}[game.budget_tier]
+    # Explicit budget, else synthesized from the game's budget tier.
+    budget_max = _budget_max(ctx)
     budget_str = f"₹{budget_max}" if budget_max else "not specified"
 
     # Cluster context: look up dish IDs for the mood-journey's resolved cluster
@@ -204,7 +208,6 @@ def _build_user_message(
     dish_block = shortlist_prompt(candidates) if candidates else get_dishes_for_prompt()
 
     live_block = ""
-    restaurant_json = ""
     if live_facts:
         lines = []
         for dish_id, fact in live_facts.items():
@@ -219,11 +222,6 @@ def _build_user_message(
             + "\n".join(lines)
             + "\nOnly rank dish_ids from the DISH LIST. Prefer live-available dishes.\n"
         )
-    else:
-        restaurant_json = """,
-  "restaurant_suggestions": [
-    {"name": "...", "rating": 4.2, "distance_km": 1.5, "delivery_time_min": 25, "is_open": true}
-  ]"""
 
     return f"""PAYLOAD:
   mood={mood.primary} | energy={mood.energy_level}/10 | social={mood.social_context}
@@ -249,8 +247,62 @@ Return exactly {config.count} dishes as JSON:
     }}
   ],
   "mood_profile": "one sentence describing the user's emotional state",
-  "preference_evolution": "one sentence prediction"{restaurant_json}
+  "preference_evolution": "one sentence prediction"
 }}"""
+
+
+class _RankedItem(BaseModel):
+    """One ranked dish as returned by the model, coerced to safe types."""
+
+    dish_id: str
+    confidence: float = 0.7
+    mood_match: str = ""
+    context_fit: str = ""
+    psychological_hook: str = ""
+    nostalgia_factor: Optional[str] = None
+    context_tags: list[str] = []
+
+    model_config = {"extra": "ignore"}
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _confidence(cls, v):
+        try:
+            return min(1.0, max(0.0, float(v)))
+        except (TypeError, ValueError):
+            return 0.7
+
+    @field_validator("mood_match", "context_fit", "psychological_hook", mode="before")
+    @classmethod
+    def _text(cls, v):
+        return "" if v is None else str(v)
+
+    @field_validator("nostalgia_factor", mode="before")
+    @classmethod
+    def _optional_text(cls, v):
+        return None if v in (None, "", "null") else str(v)
+
+    @field_validator("context_tags", mode="before")
+    @classmethod
+    def _tags(cls, v):
+        if isinstance(v, str):
+            v = [v]
+        if not isinstance(v, list):
+            return []
+        return [str(t) for t in v if t][:3]
+
+
+def _parse_ranked(data: object) -> tuple[list[dict], dict]:
+    """Validated ranked items + the top-level dict; malformed items are dropped."""
+    if not isinstance(data, dict):
+        raise ValueError("model output is not a JSON object")
+    items: list[dict] = []
+    for raw in data.get("ranked_dishes") or []:
+        try:
+            items.append(_RankedItem.model_validate(raw).model_dump())
+        except ValidationError:
+            continue
+    return items, data
 
 
 _CACHE: dict[str, tuple[float, RecommendationResponse]] = {}
@@ -298,7 +350,7 @@ def _dish_to_summary(dish: DishRecord) -> DishSummary:
     )
 
 
-def _build_fallback(count: int, restrictions: Optional[list[str]] = None) -> list[DishRecord]:
+def _build_fallback(count: int, restrictions: diet.RulesLike = None) -> list[DishRecord]:
     pool = [d for d in DISHES if _diet_allows(d, restrictions or [])]
     return sorted(pool, key=lambda d: d.health_score, reverse=True)[:count]
 
@@ -359,8 +411,8 @@ def get_recommendations(
     token_usage = result.response_metadata.get("token_usage", {})
 
     try:
-        data = json.loads(result.content)
-    except json.JSONDecodeError:
+        parsed, data = _parse_ranked(json.loads(result.content))
+    except (json.JSONDecodeError, ValueError):
         return _fallback_response(
             "Invalid JSON from model",
             request.recommendation_config.count,
@@ -369,10 +421,7 @@ def get_recommendations(
             live_facts=live_facts,
         )
 
-    ranked_raw = [
-        it for it in data.get("ranked_dishes", [])
-        if it.get("dish_id") in allowed_ids
-    ]
+    ranked_raw = [it for it in parsed if it["dish_id"] in allowed_ids]
     # Prefer live-verified dishes when available.
     if live_facts:
         live_ids = set(live_facts.keys())
@@ -401,7 +450,6 @@ def get_recommendations(
     ranked = [it for it in ranked if it.get("dish_id") in allowed_ids][
         : request.recommendation_config.count
     ]
-    restaurant_pool: list[dict] = [] if live_facts else data.get("restaurant_suggestions", [])
 
     recommendations: list[Recommendation] = []
     used_swap_ids: set[str] = set()
@@ -423,8 +471,9 @@ def get_recommendations(
             price = (live.get("item") or {}).get("price") or dish.price_inr
             image = (live.get("item") or {}).get("image_url") or dish.image_url
         else:
-            rest_data = restaurant_pool[i] if i < len(restaurant_pool) else {
-                "name": "Local Kitchen", "rating": 4.0,
+            # No live match: never invent a restaurant name.
+            rest_data = {
+                "name": "Local restaurants", "rating": 4.0,
                 "distance_km": 2.0, "delivery_time_min": 30, "is_open": True,
             }
             price = dish.price_inr
@@ -478,8 +527,8 @@ def get_recommendations(
             response_time_s=elapsed,
         ),
         insights=Insights(
-            detected_mood_profile=data.get("mood_profile", ""),
-            preference_evolution=data.get("preference_evolution"),
+            detected_mood_profile=str(data.get("mood_profile") or ""),
+            preference_evolution=(str(data["preference_evolution"]) if data.get("preference_evolution") else None),
         ),
     )
     if not request.user_context.unavailable_dishes and not live_facts:
@@ -497,18 +546,11 @@ def _course_group(dish: DishRecord) -> set[str]:
     return _MAIN_CATEGORIES if dish.category in _MAIN_CATEGORIES else {dish.category}
 
 
-def _diet_allows(dish: DishRecord, restrictions: list[str]) -> bool:
-    """Whether a dish satisfies the user's veg/non-veg preference."""
-    r = {x.lower() for x in (restrictions or [])}
-    tags = {t.lower() for t in dish.dietary_tags}
-    if r & {"vegetarian", "vegan"} and "non_veg" in tags:
-        return False
-    if "non_veg" in r and "non_veg" not in tags:
-        return False
-    return True
+# Legacy name kept for callers/tests; the single implementation lives in diet.py.
+_diet_allows = diet.allows
 
 
-def _swap_candidates(dish: DishRecord, restrictions: list[str]) -> list[DishRecord]:
+def _swap_candidates(dish: DishRecord, restrictions: diet.RulesLike) -> list[DishRecord]:
     """Same-course, diet-appropriate candidates — same cuisine first, else any.
 
     Complimentary items (breads, pickles, accompaniment salads) are never
@@ -524,28 +566,28 @@ def _swap_candidates(dish: DishRecord, restrictions: list[str]) -> list[DishReco
     return same_cuisine or eligible
 
 
-def _healthier_swap(dish: DishRecord, restrictions: Optional[list[str]] = None) -> DishRecord:
+def _healthier_swap(dish: DishRecord, restrictions: diet.RulesLike = None) -> DishRecord:
     candidates = [c for c in _swap_candidates(dish, restrictions or []) if c.health_score > dish.health_score]
     return max(candidates, key=lambda d: d.health_score, default=dish)
 
 
-def _budget_swap(dish: DishRecord, restrictions: Optional[list[str]] = None) -> DishRecord:
+def _budget_swap(dish: DishRecord, restrictions: diet.RulesLike = None) -> DishRecord:
     candidates = [c for c in _swap_candidates(dish, restrictions or []) if c.price_inr < dish.price_inr]
     return min(candidates, key=lambda d: d.price_inr, default=dish)
 
 
-def _restrictions_of(request: RecommendationRequest) -> list[str]:
-    prefs = request.user_context.preferences
-    return list(prefs.dietary_restrictions) if prefs and prefs.dietary_restrictions else []
+def _restrictions_of(request: RecommendationRequest) -> diet.DietRules:
+    """Diet + allergen rules, honouring the game's diet choice like the shortlist."""
+    return diet.rules_for(request.user_context)
 
 
-def _apply_diet_filter(ranked: list[dict], restrictions: list[str], count: int) -> list[dict]:
+def _apply_diet_filter(ranked: list[dict], restrictions: diet.RulesLike, count: int) -> list[dict]:
     """Deterministically drop diet-violating dishes and backfill to `count`.
 
     GPT is instructed to exclude but isn't reliable — this guarantees veg-only /
     non-veg-only when a preference is set. Empty restrictions => unchanged (mixed).
     """
-    if not restrictions:
+    if diet.as_rules(restrictions).is_empty:
         return ranked
 
     def ok(item: dict) -> bool:
@@ -573,7 +615,7 @@ def _apply_diet_filter(ranked: list[dict], restrictions: list[str], count: int) 
 
 def _build_alternatives(
     dish: DishRecord,
-    restrictions: list[str],
+    restrictions: diet.RulesLike,
     exclude_ids: "set[str] | frozenset[str]" = frozenset(),
 ) -> list[Alternative]:
     """Always offer BOTH a healthier and a second swap when possible.
@@ -662,7 +704,7 @@ def get_dish_detail(dish_id: str) -> DishDetailResponse:
 def _fallback_response(
     error: str,
     count: int,
-    restrictions: Optional[list[str]] = None,
+    restrictions: diet.RulesLike = None,
     preferred: Optional[list[DishRecord]] = None,
     live_facts: Optional[dict[str, dict]] = None,
 ) -> RecommendationResponse:

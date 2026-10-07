@@ -1,30 +1,32 @@
 // Maps the app's camelCase recommendation request to the intelligence
-// service's snake_case contract (FE-API-CONTRACT). Ported unchanged from v1.
+// service's snake_case contract (FE-API-CONTRACT). The server owns the time
+// bucket (IST) — clients bucket differently (mobile sends "night" from 19:00).
+
+import { istParts } from '../common/ist.js';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const TIME_OF_DAY: Record<string, string> = {
-  morning: 'breakfast',
-  breakfast: 'breakfast',
-  afternoon: 'lunch',
-  lunch: 'lunch',
-  evening: 'dinner',
-  dinner: 'dinner',
-  night: 'late_night',
-  late_night: 'late_night',
-};
-export const mapTimeOfDay = (t: unknown) => TIME_OF_DAY[String(t).toLowerCase()] ?? 'dinner';
-
 const nonEmpty = (o: Obj | undefined) => !!o && Object.keys(o).length > 0;
+
+// gameData keys mapped explicitly below; anything else (wheel `segment`, quiz
+// `scoops`, swipe `likedCount`, …) is preserved under `raw` instead of dropped.
+const KNOWN_GAME_KEYS = new Set([
+  'type', 'liked', 'disliked', 'cravings', 'cuisines', 'budgetTier', 'dietPreference', 'moodVector',
+  'swipes', 'cravingTags', 'duelResults', 'pantryItems', 'sliderValues', 'moodAxes', 'cluster', 'raw', 'mood',
+]);
+const extraGameKeys = (game: Obj) =>
+  Object.fromEntries(Object.entries(game).filter(([k, v]) => !KNOWN_GAME_KEYS.has(k) && v !== undefined));
 const list = (v: unknown) => (Array.isArray(v) && v.length ? v : null);
 
-export function buildAiRequest(body: Obj, userId: string | undefined, requestId: string) {
+export function buildAiRequest(body: Obj, userId: string | undefined, requestId: string, now: Date = new Date()) {
   const ctx: Obj = body?.userContext ?? {};
   const game: Obj = ctx.gameData ?? {};
   const prefs: Obj = ctx.preferences ?? {};
   const sit: Obj = ctx.situational ?? {};
   const cfg: Obj = body?.recommendationConfig ?? {};
   const mood: Obj = ctx.mood ?? {};
+  const ist = istParts(now);
+  const gameRaw = { ...extraGameKeys(game), ...(game.raw ?? {}) };
 
   const user_context = {
     mood: {
@@ -46,18 +48,16 @@ export function buildAiRequest(body: Obj, userId: string | undefined, requestId:
         ...(prefs.spiceTolerance && { spice_tolerance: prefs.spiceTolerance }),
       },
     }),
-    ...(nonEmpty(sit) && {
-      situational: {
-        ...(sit.timeOfDay && { time_of_day: mapTimeOfDay(sit.timeOfDay) }),
-        ...(sit.dayOfWeek && { day_of_week: sit.dayOfWeek }),
-        ...(sit.weather && { weather: sit.weather }),
-        ...(sit.budget && { budget: { max: sit.budget.max, min: sit.budget.min, currency: sit.budget.currency } }),
-        ...(sit.timeAvailable != null && { time_available: sit.timeAvailable }),
-        ...(sit.deliveryPreferred != null && { delivery_preferred: sit.deliveryPreferred }),
-        ...(sit.occasion && { occasion: sit.occasion }),
-        ...(sit.hoursSinceLastMeal != null && { hours_since_last_meal: sit.hoursSinceLastMeal }),
-      },
-    }),
+    situational: {
+      time_of_day: ist.time_of_day,
+      day_of_week: sit.dayOfWeek || ist.day_of_week,
+      ...(sit.weather && { weather: sit.weather }),
+      ...(sit.budget && { budget: { max: sit.budget.max, min: sit.budget.min, currency: sit.budget.currency } }),
+      ...(sit.timeAvailable != null && { time_available: sit.timeAvailable }),
+      ...(sit.deliveryPreferred != null && { delivery_preferred: sit.deliveryPreferred }),
+      ...(sit.occasion && { occasion: sit.occasion }),
+      ...(sit.hoursSinceLastMeal != null && { hours_since_last_meal: sit.hoursSinceLastMeal }),
+    },
     ...(nonEmpty(game) && {
       game_data: {
         ...(game.type && { type: game.type }),
@@ -99,7 +99,7 @@ export function buildAiRequest(body: Obj, userId: string | undefined, requestId:
         ...(game.cluster && {
           cluster: { id: game.cluster.id, name: game.cluster.name, secondary_id: game.cluster.secondaryId },
         }),
-        ...(game.raw && { raw: game.raw }),
+        ...(nonEmpty(gameRaw) && { raw: gameRaw }),
       },
     }),
   };
@@ -129,6 +129,7 @@ export function extractQuizData(body: Obj) {
     mood: String(ctx.mood?.primary || game.mood || 'happy'),
     craving: String(game.cravings?.[0] || game.craving || ctx.preferences?.cuisineTypes?.[0] || 'comfort'),
     budget: String(game.budgetTier || (max > 800 ? 'splurge' : max > 300 ? 'moderate' : 'budget')),
-    preference: String(ctx.preferences?.dietaryRestrictions?.[0] || 'no-preference'),
+    preference: String(ctx.preferences?.dietaryRestrictions?.[0] || game.dietPreference || 'no-preference'),
+    allergies: Array.isArray(ctx.preferences?.allergies) ? (ctx.preferences.allergies as unknown[]).map(String) : [],
   };
 }
