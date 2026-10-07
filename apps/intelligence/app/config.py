@@ -96,7 +96,16 @@ class Settings(BaseSettings):
     jev_breaker_failures: int = 3
     jev_breaker_cooldown_s: float = 60.0
     # Per-decision-site rollout: off | shadow (log only, user sees no change) | jev.
-    ranker_provider: str = "off"
+    ranker_provider: str = "jev"
+    # Blend: final = (1-w)*deterministic + w*JEV fit.
+    jev_weight: float = 0.65
+    # Commit confidence thresholds for meta.suggested_count (1 card / 2-card duel).
+    commit_one_threshold: float = 0.75
+    commit_two_threshold: float = 0.45
+    # Polish the hero card's copy with the LLM while Swiggy matching runs.
+    polish_hero_copy: bool = True
+    polish_timeout_s: float = 1.5
+    scout_provider: str = "jev"  # jev | gpt
 
     model_config = {
         "env_file": ".env",

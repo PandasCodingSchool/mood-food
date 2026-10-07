@@ -132,28 +132,34 @@ def mood_fit(r: Result, k: int = 5) -> Optional[float]:
 
 
 async def _live(results: list[Result]) -> None:
-    from app.decisions import ranker
+    """Rank each named scenario with the production decision engine (JEV live)."""
+    from app.decisions import engine
+    from app.services.shortlist import build_scored_shortlist
 
-    safe, agree, fits, lat = 0, [], [], []
+    safe, fits, diverse, lat, commits = 0, [], [], [], []
     for r in results:
-        out = await ranker.rank(r.scenario.ctx, r.pool, seed=r.scenario.name)
-        if out is None:
+        scored = build_scored_shortlist(r.scenario.ctx)
+        t0 = time.perf_counter()
+        res = await engine.rank(r.scenario.ctx, scored)
+        c = await engine.commit(r.scenario.ctx, res.ranked, seed=r.scenario.name)
+        lat.append((time.perf_counter() - t0) * 1000)
+        if res.provider != "jev":
             print(f"  ✗ {r.scenario.name}: no JEV answer")
             continue
         rules = diet.rules_for(r.scenario.ctx)
-        by_id = {d.id: d for d in r.pool}
-        top = [by_id[i] for i in out["ranked"][:3]]
+        top = [s.dish for s in res.ranked[:3]]
         safe += all(diet.allows(d, rules) for d in top)
         tags = mood_tags_for(r.scenario.ctx.mood.primary)
         fits.append(sum(bool(tags & set(d.mood_tags)) for d in top) / max(1, len(top)))
-        agree.append(ranker.agreement(out["ranked"], [d.id for d in r.pool]) or 0)
-        lat.append(out["latency_ms"])
-        print(f"  {r.scenario.name}: {[d.name for d in top]} commit={out.get('commit', {}).get('confidence')}")
-    n = len(lat)
+        diverse.append(len({(d.cuisine, d.protein) for d in top}))
+        commits.append(c["confidence"] if c else 0)
+        print(f"  {r.scenario.name}: {[d.name for d in top]} commit={c and c['confidence']}")
+    n = len(fits)
     if n:
         print(
-            f"\nJEV scorecard ({n} scenarios): top-3 diet-safe {safe}/{n} | mood fit {sum(fits) / n:.2f} "
-            f"| agreement with shortlist top-3 {sum(agree) / n:.2f} | p50 latency {sorted(lat)[n // 2]:.0f} ms"
+            f"\nEngine scorecard ({n} scenarios): top-3 diet-safe {safe}/{n} | mood fit {sum(fits) / n:.2f} "
+            f"| distinct cuisine/protein in top-3 {sum(diverse) / n:.1f} | mean commit {sum(commits) / n:.2f} "
+            f"| p50 rank+commit {sorted(lat)[n // 2]:.0f} ms"
         )
 
 

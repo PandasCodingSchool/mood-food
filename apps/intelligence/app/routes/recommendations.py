@@ -25,8 +25,8 @@ from fastapi import APIRouter, Request
 
 from app.config import settings
 from app.data.dishes import DISHES_BY_ID
-from app.decisions import ranker as jev_ranker
-from app.learning import live_state, runs
+from app.decisions import engine, ranker as jev_ranker
+from app.learning import live_state, paging, runs
 from app.schemas.request import RecommendationRequest
 from app.schemas.response import (
     LearnedMeta,
@@ -37,7 +37,7 @@ from app.schemas.response import (
 )
 from app.schemas.swiggy import EnrichDishInput
 from app.services import recommender
-from app.services.shortlist import build_shortlist
+from app.services.shortlist import ScoredDish, build_scored_shortlist, score_breakdown
 
 logger = logging.getLogger(__name__)
 
@@ -238,18 +238,20 @@ async def _run_pipeline(
     # them off the event loop.
     body = await run_in_threadpool(live_state.apply_learned_state, body)
     final_count = body.recommendation_config.count
-    shortlist = await run_in_threadpool(
-        build_shortlist, body.user_context, body.recommendation_config, user_id=body.user_id
+    scored = await run_in_threadpool(
+        build_scored_shortlist, body.user_context, body.recommendation_config, user_id=body.user_id
     )
     t_shortlist = time.time()
 
     # Anti-rut: make sure wildcard candidates are in front of the ranker.
     wildcard_ids = await run_in_threadpool(_learned_wildcard_ids, body)
     if wildcard_ids:
-        shortlist_ids = {d.id for d in shortlist}
+        shortlist_ids = {s.dish.id for s in scored}
         for wid in wildcard_ids:
             if wid not in shortlist_ids and wid in DISHES_BY_ID:
-                shortlist.append(DISHES_BY_ID[wid])
+                parts = score_breakdown(DISHES_BY_ID[wid], body.user_context)
+                scored.append(ScoredDish(DISHES_BY_ID[wid], sum(parts.values()), parts))
+    shortlist = [s.dish for s in scored]
     logger.info(
         "ai-recommendations: shortlist=%d mood=%s address=%s",
         len(shortlist), body.user_context.mood.primary, body.swiggy_address_id,
@@ -260,12 +262,64 @@ async def _run_pipeline(
     pool_config = body.recommendation_config.model_copy(update={"count": pool_size})
     pool_body = body.model_copy(update={"recommendation_config": pool_config})
 
-    gpt_response = await recommender.get_recommendations(
-        pool_body, candidate_dishes=shortlist, live_facts=None
-    )
+    ranker_used = "gpt"
+    eng: Optional[engine.EngineResult] = None
+    fp = paging.fingerprint(body)
+    excluded: frozenset[str] = frozenset()
+    if settings.ranker_provider == "jev":
+        excluded = await run_in_threadpool(paging.exclusions, body.user_id, fp)
+        eng = await engine.rank(body.user_context, scored, exclude=excluded, diversity=body.recommendation_config.diversity or "medium")
+    if eng is not None and eng.provider == "jev":
+        ranker_used = "jev"
+        conf = {i: eng.jev_fit.get(i, 0.4 + 0.4 * eng.blended[i]) for i in eng.blended}
+        gpt_response = await run_in_threadpool(lambda: recommender.recommendations_from_ranking(
+            pool_body, eng.ranked[:pool_size], confidence=conf, jev_fit=eng.jev_fit,
+            model=eng.model, response_time_s=round(eng.latency_ms / 1000, 2), tokens=eng.input_tokens,
+        ))
+    else:
+        # JEV off, down or unsure → GPT ranks; GPT failing → deterministic shortlist order.
+        gpt_response = await recommender.get_recommendations(
+            pool_body, candidate_dishes=shortlist, live_facts=None
+        )
+        if not gpt_response.success:
+            ranker_used = "deterministic"
     is_cache_hit = bool(gpt_response.ai_metadata and gpt_response.ai_metadata.cache_hit)
     gpt_pool: list[Recommendation] = list(gpt_response.recommendations)
     t_rank = time.time()
+
+    # Commit confidence + hero copy polish run while Swiggy matching does.
+    commit_task = (
+        asyncio.create_task(engine.commit(body.user_context, eng.ranked, seed=body.request_id or fp))
+        if ranker_used == "jev" and eng is not None else None
+    )
+    polish_task = None
+    if ranker_used == "jev" and gpt_pool:
+        from app.services.polish import polish
+
+        polish_task = asyncio.create_task(polish(gpt_pool[0].ai_reasoning, gpt_pool[0].dish.name))
+
+    async def _finish(final: RecommendationResponse) -> RecommendationResponse:
+        """Engine extras: mind-reader commit, polished hero copy, meta, paging."""
+        commit_result = await commit_task if commit_task else None
+        recs = list(final.recommendations)
+        mode = body.recommendation_config.mode
+        if commit_result and mode in ("mind_reader", "sos") and commit_result["confidence"] >= 0.5:
+            chosen = next((r for r in gpt_pool if r.dish.id == commit_result["dish_id"]), None)
+            if chosen and recs and chosen.dish.id != recs[0].dish.id:
+                recs = [chosen.model_copy(update={"rank": 1})] + [r for r in recs if r.dish.id != chosen.dish.id][: final_count - 1]
+        if polish_task is not None and recs:
+            polished = await polish_task
+            if polished is not None and recs[0].dish.id == gpt_pool[0].dish.id:
+                recs[0] = recs[0].model_copy(update={"ai_reasoning": polished})
+        recs = [r.model_copy(update={"rank": i + 1}) for i, r in enumerate(recs)]
+        if ranker_used == "jev":
+            await run_in_threadpool(paging.remember, body.user_id, fp, [r.dish.id for r in recs], excluded)
+        meta = (final.meta or LearnedMeta(mode=mode)).model_copy(update={
+            "ranker": ranker_used,
+            "commit_confidence": commit_result["confidence"] if commit_result else None,
+            "suggested_count": engine.suggested_count(commit_result, final_count) if commit_result else None,
+        })
+        return final.model_copy(update={"recommendations": recs, "meta": meta})
 
     def _trace(final: RecommendationResponse) -> RecommendationResponse:
         """Record the decision after responding; outcomes join on request_id."""
@@ -275,7 +329,7 @@ async def _run_pipeline(
             body.request_id,
             user_id=body.user_id,
             mode=body.recommendation_config.mode,
-            ranker_provider="gpt",
+            ranker_provider=ranker_used,
             model=meta.model_used if meta else None,
             shortlist=[d.id for d in shortlist],
             ranked=[r.dish.id for r in gpt_pool],
@@ -291,7 +345,7 @@ async def _run_pipeline(
             },
             tokens=meta.tokens_used if meta else None,
         ))
-        if settings.ranker_provider == "shadow" and body.request_id:
+        if settings.ranker_provider == "shadow" and ranker_used == "gpt" and body.request_id:
             _spawn(_shadow_rank(body, shortlist, [r.dish.id for r in gpt_pool], recorded))
         return final
 
@@ -300,7 +354,7 @@ async def _run_pipeline(
             r.model_copy(update={"rank": i + 1})
             for i, r in enumerate(gpt_pool[:final_count])
         ]
-        return _trace(await run_in_threadpool(
+        return _trace(await _finish(await run_in_threadpool(
             _attach_learning,
             body,
             gpt_response.model_copy(update={
@@ -309,7 +363,7 @@ async def _run_pipeline(
                 "request_id": body.request_id,
             }),
             wildcard_ids,
-        ))
+        )))
 
     # Step 2 — Progressive live enrichment of the GPT-ranked pool.
     live_facts: dict[str, dict] = {}
@@ -406,7 +460,7 @@ async def _run_pipeline(
         elapsed, pool_size, len(matched_for_response), live_status, is_cache_hit,
     )
 
-    return _trace(await run_in_threadpool(
+    return _trace(await _finish(await run_in_threadpool(
         _attach_learning,
         body,
         gpt_response.model_copy(update={
@@ -417,4 +471,4 @@ async def _run_pipeline(
             "request_id": body.request_id,
         }),
         wildcard_ids,
-    ))
+    )))

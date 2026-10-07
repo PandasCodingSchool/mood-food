@@ -458,64 +458,21 @@ async def get_recommendations(
         if dish is None:
             continue
 
-        live = (live_facts or {}).get(dish.id)
-        if live and live.get("restaurant"):
-            rest = live["restaurant"]
-            rest_data = {
-                "name": rest.get("name", "Local Kitchen"),
-                "rating": rest.get("rating") or 4.0,
-                "distance_km": rest.get("distance_km") or 2.0,
-                "delivery_time_min": rest.get("eta_min") or 30,
-                "is_open": rest.get("is_open", True),
-            }
-            price = (live.get("item") or {}).get("price") or dish.price_inr
-            image = (live.get("item") or {}).get("image_url") or dish.image_url
-        else:
-            # No live match: never invent a restaurant name.
-            rest_data = {
-                "name": "Local restaurants", "rating": 4.0,
-                "distance_km": 2.0, "delivery_time_min": 30, "is_open": True,
-            }
-            price = dish.price_inr
-            image = dish.image_url
-
-        alts = (
-            _build_alternatives(dish, restrictions, used_swap_ids)
-            if request.recommendation_config.include_alternatives else []
-        )
-        for a in alts:
-            used_swap_ids.add(a.dish_id)
-
-        recommendations.append(Recommendation(
-            id=f"rec_{uuid.uuid4().hex[:8]}",
+        recommendations.append(_make_recommendation(
+            request,
             rank=i + 1,
+            dish=dish,
             confidence=float(item.get("confidence", 0.7)),
-            dish=_dish_to_summary(dish),
-            image_url=image or None,
-            ai_reasoning=AiReasoning(
+            reasoning=AiReasoning(
                 mood_match=item.get("mood_match", ""),
                 context_fit=item.get("context_fit", ""),
                 psychological_hook=item.get("psychological_hook", ""),
                 nostalgia_factor=item.get("nostalgia_factor"),
                 context_tags=item.get("context_tags", []),
             ),
-            practical_details=PracticalDetails(
-                estimated_price=float(price),
-                preparation_time=dish.prep_time_min,
-                calories=dish.calories,
-                health_score=dish.health_score,
-            ),
-            restaurant=Restaurant(
-                name=rest_data.get("name", "Local Kitchen"),
-                rating=float(rest_data.get("rating", 4.0)),
-                distance_km=float(rest_data.get("distance_km", 2.0)),
-                delivery_time_min=int(rest_data.get("delivery_time_min", 30)),
-                is_open=bool(rest_data.get("is_open", True)),
-            ),
-            alternatives=alts,
-            pairing_suggestions=[
-                _pairing_for(dish),
-            ] if request.recommendation_config.include_explanations else [],
+            restrictions=restrictions,
+            used_swap_ids=used_swap_ids,
+            live=(live_facts or {}).get(dish.id),
         ))
 
     response = RecommendationResponse(
@@ -534,6 +491,105 @@ async def get_recommendations(
     if not request.user_context.unavailable_dishes and not live_facts:
         _cache_put(key, response)
     return response
+
+
+def _make_recommendation(
+    request: RecommendationRequest,
+    *,
+    rank: int,
+    dish: DishRecord,
+    confidence: float,
+    reasoning: AiReasoning,
+    restrictions: diet.RulesLike,
+    used_swap_ids: set[str],
+    live: Optional[dict] = None,
+) -> Recommendation:
+    """One card: live Swiggy facts when matched, alternatives, pairing."""
+    if live and live.get("restaurant"):
+        rest = live["restaurant"]
+        rest_data = {
+            "name": rest.get("name", "Local Kitchen"),
+            "rating": rest.get("rating") or 4.0,
+            "distance_km": rest.get("distance_km") or 2.0,
+            "delivery_time_min": rest.get("eta_min") or 30,
+            "is_open": rest.get("is_open", True),
+        }
+        price = (live.get("item") or {}).get("price") or dish.price_inr
+        image = (live.get("item") or {}).get("image_url") or dish.image_url
+    else:
+        # No live match: never invent a restaurant name.
+        rest_data = {
+            "name": "Local restaurants", "rating": 4.0,
+            "distance_km": 2.0, "delivery_time_min": 30, "is_open": True,
+        }
+        price = dish.price_inr
+        image = dish.image_url
+
+    alts = (
+        _build_alternatives(dish, restrictions, used_swap_ids)
+        if request.recommendation_config.include_alternatives else []
+    )
+    for a in alts:
+        used_swap_ids.add(a.dish_id)
+
+    return Recommendation(
+        id=f"rec_{uuid.uuid4().hex[:8]}",
+        rank=rank,
+        confidence=max(0.0, min(1.0, confidence)),
+        dish=_dish_to_summary(dish),
+        image_url=image or None,
+        ai_reasoning=reasoning,
+        practical_details=PracticalDetails(
+            estimated_price=float(price),
+            preparation_time=dish.prep_time_min,
+            calories=dish.calories,
+            health_score=dish.health_score,
+        ),
+        restaurant=Restaurant(
+            name=rest_data.get("name", "Local Kitchen"),
+            rating=float(rest_data.get("rating", 4.0)),
+            distance_km=float(rest_data.get("distance_km", 2.0)),
+            delivery_time_min=int(rest_data.get("delivery_time_min", 30)),
+            is_open=bool(rest_data.get("is_open", True)),
+        ),
+        alternatives=alts,
+        pairing_suggestions=[_pairing_for(dish)] if request.recommendation_config.include_explanations else [],
+    )
+
+
+def recommendations_from_ranking(
+    request: RecommendationRequest,
+    ranked: list,
+    *,
+    confidence: dict[str, float],
+    jev_fit: Optional[dict[str, float]] = None,
+    model: Optional[str] = None,
+    response_time_s: float,
+    tokens: Optional[int] = None,
+) -> RecommendationResponse:
+    """Cards for an engine ranking (no LLM): grounded template copy per dish."""
+    from app.services import explain
+
+    restrictions = _restrictions_of(request)
+    seed = request.request_id or ""
+    used_swap_ids: set[str] = set()
+    recs = []
+    for i, scored in enumerate(ranked):
+        recs.append(_make_recommendation(
+            request,
+            rank=i + 1,
+            dish=scored.dish,
+            confidence=confidence.get(scored.dish.id, 0.5),
+            reasoning=explain.explain(scored, request.user_context, seed=seed, jev_fit=(jev_fit or {}).get(scored.dish.id)),
+            restrictions=restrictions,
+            used_swap_ids=used_swap_ids,
+        ))
+    return RecommendationResponse(
+        success=True,
+        recommendations=recs,
+        ai_metadata=AiMetadata(model_used=model or "deterministic", tokens_used=tokens, response_time_s=response_time_s),
+        insights=Insights(detected_mood_profile=explain.mood_profile(request.user_context)),
+    )
 
 
 # Categories that count as a "main course" — a swap for a main must stay a main
