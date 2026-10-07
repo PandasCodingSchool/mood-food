@@ -6,12 +6,13 @@ import { Public } from '../auth/auth.guard.js';
 import type { AppRequest } from '../auth/auth.types.js';
 import type { Env } from '../config/env.js';
 import { RateLimit } from '../common/rate-limit.js';
-import { ENV } from '../core/tokens.js';
+import { DB, ENV, type Database } from '../core/tokens.js';
 import { IntelligenceService, UpstreamError } from '../intelligence/intelligence.service.js';
 import { PredictionsService } from '../signals/predictions.service.js';
 import { SwiggyTokensService } from '../swiggy/swiggy-tokens.service.js';
 import { fallbackRecommendations } from './fallback.js';
 import { buildAiRequest, extractQuizData } from './request-builder.js';
+import { applyServerContext, loadServerContext } from './user-context.js';
 
 const anyObject = z.record(z.string(), z.unknown()).default({});
 type AiResponse = Parameters<PredictionsService['recordFromRecommendations']>[1];
@@ -31,6 +32,7 @@ export class RecommendationsController {
 
   constructor(
     @Inject(ENV) private readonly env: Env,
+    @Inject(DB) private readonly db: Database,
     private readonly intelligence: IntelligenceService,
     private readonly tokens: SwiggyTokensService,
     private readonly predictions: PredictionsService,
@@ -42,7 +44,14 @@ export class RecommendationsController {
   async recommend(@Req() req: AppRequest, @Body({ schema: anyObject }) body: Record<string, unknown>) {
     const userId = req.user?.id;
     const requestId = randomUUID();
-    const aiRequest = buildAiRequest(body, userId, requestId);
+    let aiRequest = buildAiRequest(body, userId, requestId);
+    if (userId) {
+      try {
+        aiRequest = applyServerContext(aiRequest, await loadServerContext(this.db, userId));
+      } catch (err) {
+        this.log.warn(`server context unavailable: ${(err as Error).message}`);
+      }
+    }
 
     try {
       const swiggyToken = await this.tokens.activeToken(userId);

@@ -144,3 +144,52 @@ def test_allergies_enforced_in_backfill_and_alternatives():
     for dish in list(DISHES_BY_ID.values())[:20]:
         for alt in _build_alternatives(dish, rules):
             assert "dairy" not in DISHES_BY_ID[alt.dish_id].allergens
+
+
+# --- WP5: order history shapes the shortlist ------------------------------------
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from app.schemas.request import RecentOrder  # noqa: E402
+from app.services.shortlist import history_adjustment  # noqa: E402
+
+NOW = datetime(2026, 10, 7, 20, 0, tzinfo=timezone.utc)
+PAV = DISHES_BY_ID["in_007"]
+
+
+def _with_orders(*orders):
+    return UserContext(mood=Mood(primary="happy"), history=History(recent_orders=list(orders)))
+
+
+def _ago(hours):
+    return (NOW - timedelta(hours=hours)).isoformat()
+
+
+def test_no_history_no_change():
+    assert history_adjustment(PAV, UserContext(mood=Mood(primary="happy")), NOW) == 0.0
+    assert history_adjustment(PAV, _with_orders(RecentOrder(dish="Something Else", date=_ago(2))), NOW) == 0.0
+
+
+def test_just_had_it_is_penalised():
+    assert history_adjustment(PAV, _with_orders(RecentOrder(dish="pav bhaji", date=_ago(3))), NOW) == -6.0
+    assert history_adjustment(PAV, _with_orders(RecentOrder(dish="Pav Bhaji", date=_ago(30))), NOW) == 0.0
+
+
+def test_routine_favourite_is_boosted():
+    ctx = _with_orders(
+        RecentOrder(dish="Pav Bhaji", date=_ago(50), rating=5),
+        RecentOrder(dish="Pav Bhaji", date=_ago(200)),
+    )
+    assert history_adjustment(PAV, ctx, NOW) == 3.0
+
+
+def test_badly_rated_is_penalised_even_if_repeated():
+    ctx = _with_orders(
+        RecentOrder(dish="Pav Bhaji", date=_ago(50), rating=2),
+        RecentOrder(dish="Pav Bhaji", date=_ago(200), rating=5),
+    )
+    assert history_adjustment(PAV, ctx, NOW) == -4.0
+
+
+def test_bad_dates_are_ignored():
+    assert history_adjustment(PAV, _with_orders(RecentOrder(dish="Pav Bhaji", date="yesterday")), NOW) == 0.0

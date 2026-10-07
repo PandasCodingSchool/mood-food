@@ -6,6 +6,7 @@ hard constraints (allergens, diet, budget, meal-time, explicit avoids).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord
@@ -151,6 +152,46 @@ def hard_filter(ctx: UserContext, dishes: Optional[list[DishRecord]] = None) -> 
     return out
 
 
+# Order-history adjustments (history comes from the API's order log + ratings).
+RECENT_HOURS = 24
+RECENT_PENALTY = 6.0      # just had it — don't suggest it again tonight
+ROUTINE_BOOST = 3.0       # ordered 2+ times and never rated badly: a known favourite
+LOW_RATING_PENALTY = 4.0  # rated it 2/5 or worse
+
+
+def _hours_ago(iso: Optional[str], now: datetime) -> Optional[float]:
+    if not iso:
+        return None
+    try:
+        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return (now - when).total_seconds() / 3600
+
+
+def history_adjustment(dish: DishRecord, ctx: UserContext, now: Optional[datetime] = None) -> float:
+    """Score delta from the user's own order history; 0 with no history."""
+    hist = ctx.history
+    if not hist or not hist.recent_orders:
+        return 0.0
+    names = {dish.name.lower(), *(a.lower() for a in dish.swiggy_aliases)}
+    mine = [o for o in hist.recent_orders if o.dish.strip().lower() in names]
+    if not mine:
+        return 0.0
+    now = now or datetime.now(timezone.utc)
+    delta = 0.0
+    if any((h := _hours_ago(o.date, now)) is not None and h < RECENT_HOURS for o in mine):
+        delta -= RECENT_PENALTY
+    ratings = [o.rating for o in mine if o.rating is not None]
+    if ratings and min(ratings) <= 2:
+        delta -= LOW_RATING_PENALTY
+    elif len(mine) >= 2:
+        delta += ROUTINE_BOOST
+    return delta
+
+
 def score_dish(dish: DishRecord, ctx: UserContext) -> float:
     """Higher is better. Soft signals only — hard filters already applied."""
     score = 0.0
@@ -200,6 +241,8 @@ def score_dish(dish: DishRecord, ctx: UserContext) -> float:
             preferred = set(dish_ids_for_cluster(game.cluster.id))
             if dish.id in preferred:
                 score += 10.0
+
+    score += history_adjustment(dish, ctx)
 
     # Mild diversity bias toward mains over complimentary leftovers.
     if dish.tier == "main":
