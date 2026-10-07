@@ -22,5 +22,8 @@ numpy>=1.26
 faiss-cpu>=1.8.0
 openai>=1.92  # chat.completions.parse + max_completion_tokens
 
+# JEV decision model (TypeSafe System One)
+typesafe-sdk==0.7.2
+
 # Postgres model store (DATABASE_URL); SQLite stays the default
 psycopg[binary,pool]==3.3.6

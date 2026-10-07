@@ -23,7 +23,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Request
 
+from app.config import settings
 from app.data.dishes import DISHES_BY_ID
+from app.decisions import ranker as jev_ranker
 from app.learning import live_state, runs
 from app.schemas.request import RecommendationRequest
 from app.schemas.response import (
@@ -125,6 +127,29 @@ async def get_recommendations(
             if _INFLIGHT.get(key) is fut:
                 _INFLIGHT.pop(key, None)
         asyncio.create_task(_clear())
+
+
+# Strong refs so fire-and-forget tasks aren't garbage-collected mid-flight.
+_BACKGROUND: set[asyncio.Task] = set()
+
+
+def _spawn(coro) -> None:
+    task = asyncio.create_task(coro)
+    _BACKGROUND.add(task)
+    task.add_done_callback(_BACKGROUND.discard)
+
+
+async def _shadow_rank(body: RecommendationRequest, shortlist, gpt_ranked: list[str], recorded) -> None:
+    """JEV ranks the same shortlist after the user has their answer; both orders are stored."""
+    try:
+        result = await jev_ranker.rank(body.user_context, shortlist, seed=body.request_id or "")
+        if result is None:
+            return
+        result["agreement_top3_vs_gpt"] = jev_ranker.agreement(result["ranked"], gpt_ranked)
+        await recorded  # the run row must exist before we attach to it
+        await run_in_threadpool(runs.attach_shadow, body.request_id, result)
+    except Exception as exc:  # noqa: BLE001 — shadow work never affects users
+        logger.warning("shadow rank failed: %s", exc)
 
 
 def _learned_wildcard_ids(body: RecommendationRequest) -> list[str]:
@@ -246,7 +271,7 @@ async def _run_pipeline(
         """Record the decision after responding; outcomes join on request_id."""
         meta = gpt_response.ai_metadata
         done = time.time()
-        asyncio.get_running_loop().run_in_executor(None, lambda: runs.record(
+        recorded = asyncio.get_running_loop().run_in_executor(None, lambda: runs.record(
             body.request_id,
             user_id=body.user_id,
             mode=body.recommendation_config.mode,
@@ -266,6 +291,8 @@ async def _run_pipeline(
             },
             tokens=meta.tokens_used if meta else None,
         ))
+        if settings.ranker_provider == "shadow" and body.request_id:
+            _spawn(_shadow_rank(body, shortlist, [r.dish.id for r in gpt_pool], recorded))
         return final
 
     if not body.swiggy_address_id or not gpt_pool:

@@ -10,6 +10,18 @@ import app.services.recommender as _recommender_svc
 
 
 @pytest.fixture(autouse=True)
+def no_network_keys(monkeypatch):
+    """Tests never spend money or hit the network: real keys from .env are blanked."""
+    from app.config import settings
+    from app.decisions import jev
+
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    monkeypatch.setattr(settings, "jev_api_key", "")
+    monkeypatch.setattr(settings, "ranker_provider", "off")
+    monkeypatch.setattr(jev, "_client", None)
+
+
+@pytest.fixture(autouse=True)
 def postgres_store(monkeypatch):
     """With TEST_DATABASE_URL set, every test runs on Postgres in a fresh schema.
 

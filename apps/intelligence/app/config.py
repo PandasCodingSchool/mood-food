@@ -87,8 +87,16 @@ class Settings(BaseSettings):
     # Fast typed decisions (noul / choice / score) with calibrated confidence.
     # See https://docs.typesafe.ai/api. Pin a version: thresholds are tuned per model.
     jev_api_key: str = ""
-    jev_base_url: str = "https://api.typesafe.ai/v1/systemone"
+    jev_base_url: str = "https://api.typesafe.ai"  # API root; SDK posts to /v1/systemone
     jev_model: str = "jev-1.13.0"
+    jev_timeout_s: float = 2.0
+    # Guard against oversized state (Jev: 32k tokens for state + longest question).
+    jev_max_state_chars: int = 40_000
+    # Circuit breaker: after N consecutive failures, skip JEV for the cooldown.
+    jev_breaker_failures: int = 3
+    jev_breaker_cooldown_s: float = 60.0
+    # Per-decision-site rollout: off | shadow (log only, user sees no change) | jev.
+    ranker_provider: str = "off"
 
     model_config = {
         "env_file": ".env",
