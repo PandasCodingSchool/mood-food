@@ -11,6 +11,7 @@ import { MiscModule } from './misc/misc.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfileModule } from './profile/profile.module.js';
 import { RecommendationsModule } from './recommendations/recommendations.module.js';
+import { GamesModule } from './games/games.module.js';
 import { SignalsModule } from './signals/signals.module.js';
 import { SocialModule } from './social/social.module.js';
 import { SwiggyModule } from './swiggy/swiggy.module.js';
@@ -24,6 +25,7 @@ import { SwiggyModule } from './swiggy/swiggy.module.js';
     NotificationsModule,
     SignalsModule,
     RecommendationsModule,
+    GamesModule,
     SwiggyModule,
     SocialModule,
     DiyModule,
