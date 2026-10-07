@@ -1,100 +1,62 @@
-# CLAUDE.md
+# CLAUDE.md — MoodFood intelligence service
 
-## Project Overview
+FastAPI service that owns all recommendation intelligence: the food graph,
+user model, decision engine, adaptive games and copy. `apps/api` (NestJS) is
+the only caller: a thin proxy and the durable store (signals log, orders).
+Never put AI logic in the API.
 
-**FoodMood** is an AI-powered food recommendation API. It accepts a rich user-context payload (mood, preferences, situational data, game signals) and returns psychologically-informed dish recommendations ranked by OpenAI GPT-4o.
+## Request flow (`POST /api/ai-recommendations`)
 
-Recommendations are drawn from a **static curated dish list** of 80 dishes across 8 cuisines. The AI ranks dishes from this list — it never hallucates dish names. Each dish has a `image_url` from Unsplash.
+1. `learning/live_state` — mind-reader/SOS use today's check-in, cravings, occasion.
+2. `services/shortlist.build_scored_shortlist` — hard filters (`services/diet`:
+   diet + allergens, budget, meal window, avoids), then `score_breakdown`
+   (named parts: mood, energy, cuisine, sensory, history, taste, …), diversify.
+3. Ranking, by `RANKER_PROVIDER` (default `jev`):
+   - `decisions/engine.rank` — deterministic score blended with JEV fit
+     (`JEV_WEIGHT`), MMR diversity; `engine.commit` → commit confidence.
+   - JEV unavailable → GPT (`services/recommender.get_recommendations`) →
+     deterministic order if GPT fails. `shadow` = GPT serves, JEV logged.
+4. Swiggy enrichment (`services/swiggy_discovery`) — borderline matches are
+   verified by `services/menu_scout` (JEV, GPT fallback) and the food graph cache.
+5. Cards (`recommender._make_recommendation`), grounded copy
+   (`services/explain`), optional hero polish (`services/polish`), refresh
+   paging (`learning/paging`), telemetry (`learning/runs` → `recommendation_runs`).
 
----
+## Modules
 
-## Stack
-
-- **Python 3.12 + FastAPI** — API framework
-- **Pydantic v2** — request/response schema validation
-- **OpenAI GPT-4o** — recommendation ranking and reasoning
-- **Docker** — containerised deployment
-- **pytest** — tests (OpenAI always mocked)
-
----
-
-## Architecture
-
-```
-app/
-  main.py                  # FastAPI app entry point
-  routes/recommendations.py # POST /api/ai-recommendations
-  schemas/
-    request.py             # UserContext, Mood, Preferences, Situational, GameData...
-    response.py            # RecommendationResponse, Recommendation, AiReasoning...
-  data/dishes.py           # 80 DishRecord objects with payload-aligned attributes
-  services/recommender.py  # Prompt building → GPT-4o → response enrichment
-tests/
-  conftest.py              # Fixtures and mock OpenAI responses
-  test_schemas.py          # Pydantic validation tests
-  test_recommender.py      # Prompt-building and service logic tests
-  test_routes.py           # Endpoint integration tests
-```
-
-### Key Design: Payload-Aligned Dish Attributes
-
-Each `DishRecord` has attributes that directly mirror payload fields so GPT-4o can match precisely:
-
-| Dish attribute | Payload field |
+| Path | What |
 |---|---|
-| `mood_tags` | `mood.primary` |
-| `energy_requirement` | `mood.energy_level` |
-| `social_context_tags` | `mood.social_context` |
-| `dietary_tags` | `preferences.dietary_restrictions` |
-| `allergens` | `preferences.allergies` |
-| `spice_level` | `preferences.spice_tolerance` |
-| `weather_tags` | `situational.weather` |
-| `meal_time` | `situational.time_of_day` |
-| `price_inr` | `situational.budget.max` |
-| `prep_time_min` | `situational.time_available` |
-| `delivery_friendly` | `situational.delivery_preferred` |
-| `adventurousness_score` | `game_data.slider_values.adventurous` |
-| `health_score` | `game_data.slider_values.health_conscious` |
+| `data/dishes.json` | Catalog v2 (456 dishes) — built by `scripts/build_catalog.py` from `scripts/catalog/*`; edit those, not the JSON |
+| `services/sensory.py` | Situation → sensory pulls; dish fit; copy words |
+| `decisions/` | `jev.py` client (breaker, timeouts), `questions.py`, `engine.py`, `ranker.py` (shadow) |
+| `food_graph/mapping.py` | Swiggy item → dish (exact, guarded candidates, JEV Choice), cached in `menu_item_map` |
+| `games/` | Adaptive games: info-gain question choice, early stop, signals |
+| `learning/` | Store (SQLite or Postgres), learner (signal folds), user model, embeddings, orchestrator, persona, … |
+| `llm.py` | Shared async OpenAI client (`JsonChat`, `parse_structured`) — models from config |
+| `security.py` / `observability.py` | Service auth, sync key; request ids, JSON logs, call timing |
 
----
+Other endpoints: `/api/games/*`, `/api/food-graph/*`, `/api/learn/*`,
+`/api/profile/{id}`, `/api/swiggy/*`, `/api/instamart/*`, `/api/recipe/*`.
 
-## API Endpoint
+## Rules
 
-**POST `/api/ai-recommendations`**
-
-Minimal payload:
-```json
-{
-  "user_context": {
-    "mood": { "primary": "stressed", "energy_level": 3 }
-  }
-}
-```
-
-Full payload fields: see `app/schemas/request.py`.
-
----
+- Hard constraints live in code (`services/diet`), never only in prompts.
+- JEV (docs.typesafe.ai): keep numbers/time math in code, pass named buckets;
+  shuffle Choice options (`jev.shuffled_choice`); every JEV call site needs a
+  non-JEV path.
+- Swiggy MCP: verify tools/params against mcp.swiggy.com/builders before use.
+- Store SQL must be portable (SQLite + Postgres): `?` placeholders,
+  `ON CONFLICT … excluded.`; Postgres DDL goes in `app/db/migrations/NNNN_*.sql`.
 
 ## Commands
 
 ```bash
-# Setup
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # add your OPENAI_API_KEY
-
-# Run locally
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 uvicorn app.main:app --reload
-
-# Run tests (no API key needed — OpenAI is mocked)
-pytest
-
-# Docker
-docker compose up --build
+pytest                                   # OpenAI/JEV always mocked; keys blanked in conftest
+TEST_DATABASE_URL=postgresql://… pytest  # same suite on Postgres + pgvector
+pytest -m eval                           # golden scenarios; python -m evals.harness --live adds JEV
+python scripts/jev_smoke.py              # live JEV check
+python scripts/openai_smoke.py           # verify configured OpenAI models
+python scripts/build_catalog.py          # rebuild catalog v2; then scripts/export_fallback.py
 ```
-
----
-
-## Reference Documents
-
-- `ref_docs/Ai-schema.md` — original schema spec (superseded by Pydantic models)
