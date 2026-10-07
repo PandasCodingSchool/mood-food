@@ -114,6 +114,15 @@ CREATE TABLE IF NOT EXISTS text_embeddings (
     embedding TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS menu_item_map (
+    item_key TEXT PRIMARY KEY,
+    item_name TEXT NOT NULL,
+    dish_id TEXT,
+    confidence REAL NOT NULL,
+    method TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS recommendation_runs (
     request_id TEXT PRIMARY KEY,
     user_id TEXT,

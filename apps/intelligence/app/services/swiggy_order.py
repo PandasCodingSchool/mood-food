@@ -16,6 +16,8 @@ Ordering-specific rules enforced here (see intelligence/SWIGGY_TOOLS.md):
 
 from __future__ import annotations
 
+import re
+
 import logging
 from typing import Any, Optional
 
@@ -122,6 +124,22 @@ def _is_cod_eligible(coupon: Coupon) -> bool:
     return True
 
 
+_QTY_SUFFIX = re.compile(r"\s*(?:x\s*\d+|\(\s*x?\s*\d+\s*\))\s*$", re.I)
+
+
+def _ordered_item_names(raw: dict) -> list[str]:
+    """Item names from reorderMeta.orderItems, else the `orderedItems` text."""
+    names: list[str] = []
+    for action in raw.get("actions") or []:
+        meta = action.get("reorderMeta") if isinstance(action, dict) else None
+        for item in (meta or {}).get("orderItems") or []:
+            if isinstance(item, dict) and item.get("name"):
+                names.append(str(item["name"]).strip())
+    if not names and isinstance(raw.get("orderedItems"), str):
+        names = [_QTY_SUFFIX.sub("", part).strip() for part in raw["orderedItems"].split(",")]
+    return [n for n in dict.fromkeys(names) if n]
+
+
 def _normalize_order_summary(raw: dict) -> Optional[OrderSummary]:
     oid = _first(raw, "orderId", "order_id", "id")
     if oid is None:
@@ -133,9 +151,14 @@ def _normalize_order_summary(raw: dict) -> Optional[OrderSummary]:
     ]
     return OrderSummary(
         order_id=str(oid),
-        status=_first(raw, "status", "orderStatus"),
-        restaurant_name=_first(restaurant, "name") if restaurant else None,
+        status=_first(raw, "orderStatus", "status"),
+        restaurant_name=_first(raw, "restaurantName") or (_first(restaurant, "name") if restaurant else None),
         items=items,
+        restaurant_id=_first(raw, "restaurantId"),
+        ordered_at=_first(raw, "orderedTime"),
+        order_total=_first(raw, "orderTotal"),
+        is_active=raw.get("isActiveOrder") if isinstance(raw.get("isActiveOrder"), bool) else None,
+        item_names=_ordered_item_names(raw),
     )
 
 
@@ -205,12 +228,17 @@ class SwiggyOrderService:
         await self.client.call_tool("flush_food_cart", {})
 
     async def get_orders(self, address_id: str, order_count: int = 5) -> OrdersResponse:
-        raw = await self.client.call_tool(
-            "get_food_orders", {"addressId": address_id, "orderCount": min(order_count, 20)}
-        )
+        # Documented params are addressId and activeOnly only; trim client-side.
+        raw = await self.client.call_tool("get_food_orders", {"addressId": address_id})
         rows = _as_list(raw, "orders", "data")
         orders = [o for o in (_normalize_order_summary(r) for r in rows) if o is not None]
-        return OrdersResponse(success=True, orders=orders)
+        return OrdersResponse(success=True, orders=orders[: max(1, order_count)])
+
+    async def most_recent_address_id(self) -> Optional[str]:
+        """The user's own addresses come sorted by last order date (most recent first)."""
+        raw = await self.client.call_tool("get_addresses", {})
+        rows = _as_list(raw, "addresses", "data")
+        return str(_first(rows[0], "id", "addressId", "address_id")) if rows else None
 
     async def get_order_details(self, order_id: str) -> OrderDetailsResponse:
         raw = await self.client.call_tool("get_food_order_details", {"orderId": order_id})

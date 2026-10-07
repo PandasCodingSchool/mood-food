@@ -7,6 +7,7 @@ import type { AuthUser } from '../auth/auth.types.js';
 import type { Env } from '../config/env.js';
 import { fail } from '../common/http.js';
 import { ENV, REDIS } from '../core/tokens.js';
+import { SwiggyHistoryService } from './swiggy-history.service.js';
 import { SWIGGY_AUTH_BASE as AUTH_BASE, SwiggyTokensService } from './swiggy-tokens.service.js';
 
 const STATE_TTL_SEC = 10 * 60;
@@ -24,6 +25,7 @@ export class SwiggyOAuthController {
     @Inject(ENV) private readonly env: Env,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly tokens: SwiggyTokensService,
+    private readonly history: SwiggyHistoryService,
   ) {}
 
   /** Dynamic client registration, cached for a day per redirect URI. */
@@ -97,12 +99,24 @@ export class SwiggyOAuthController {
         }),
       });
       if (!res.ok) throw new Error(`Swiggy token exchange failed: ${res.status} ${await res.text()}`);
-      await this.tokens.save(userId, (await res.json()) as { access_token: string; user_id?: string; expires_in?: number });
+      const token = (await res.json()) as { access_token: string; user_id?: string; expires_in?: number };
+      await this.tokens.save(userId, token);
+      // Warm start from past Swiggy orders; runs in the background, never blocks linking.
+      void this.history.importFor(userId, token.access_token);
       return page('success');
     } catch (err) {
       this.log.error(`callback failed: ${(err as Error).message}`);
       return page('error', 'Could not link your Swiggy account. Please try again.', 500);
     }
+  }
+
+  /** Re-run the Swiggy order-history import (idempotent). */
+  @Post('import-history')
+  @HttpCode(200)
+  async importHistory(@CurrentUser() user: AuthUser) {
+    const token = await this.tokens.activeToken(user.id);
+    if (!token) fail(400, 'Swiggy is not linked');
+    return { success: true, ...(await this.history.importFor(user.id, token as string)) };
   }
 
   @Post('unlink')

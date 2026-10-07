@@ -254,6 +254,12 @@ class OrderSummary(BaseModel):
     status: Optional[str] = None
     restaurant_name: Optional[str] = None
     items: list[CartLine] = Field(default_factory=list)
+    # get_food_orders (docs: mcp.swiggy.com/builders/docs/reference/food/get_food_orders)
+    restaurant_id: Optional[str] = None
+    ordered_at: Optional[str] = None
+    order_total: Optional[str] = None
+    is_active: Optional[bool] = None
+    item_names: list[str] = Field(default_factory=list)
 
 
 class OrdersResponse(BaseModel):

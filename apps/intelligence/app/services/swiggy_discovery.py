@@ -752,14 +752,41 @@ class SwiggyDiscoveryService:
                 for d in dishes
                 if d.id in unmatched_ids and d.id in _scout_candidates
             ]
+            # Food graph cache: items already verified for a dish skip the scout;
+            # items verified as a *different* dish are dropped.
+            cached_accepts: dict[tuple[str, str], ScoutDecision] = {}
             if scout_pairs:
-                scout_decisions = await scout_ambiguous_matches(scout_pairs)
+                from app.food_graph import mapping
+
+                remaining = []
+                for dish_in, cand in scout_pairs:
+                    known = await asyncio.to_thread(mapping.lookup, cand.item_name)
+                    if known and known.dish_id == dish_in.dish_id and known.confidence >= 0.9:
+                        cached_accepts[(dish_in.dish_id, cand.item_id)] = ScoutDecision(True, known.confidence, f"graph:{known.method}")
+                    elif known and known.method in ("jev", "exact", "scout") and known.dish_id != dish_in.dish_id:
+                        continue
+                    else:
+                        remaining.append((dish_in, cand))
+                scout_pairs = remaining
+            if scout_pairs or cached_accepts:
+                scout_decisions = await scout_ambiguous_matches(scout_pairs) if scout_pairs else {}
+                if scout_decisions is not None:
+                    by_pair = {(d.dish_id, c.item_id): c.item_name for d, c in scout_pairs}
+                    for pair, decision in scout_decisions.items():
+                        if pair in by_pair:
+                            await asyncio.to_thread(mapping.remember, by_pair[pair], pair[0], decision.confidence, "scout")
+                if scout_decisions is not None:
+                    scout_decisions = {**scout_decisions, **cached_accepts}
                 if scout_decisions is None:
                     # No judge available: keep the old closest-fill behaviour so
-                    # live cards still populate.
+                    # live cards still populate (cached verdicts still apply).
+                    pending_ids = {d.dish_id for d, _ in scout_pairs}
                     scout_decisions = {
-                        (d.id, _scout_candidates[d.id][0].id): ScoutDecision(True, 0.0, "closest-fill (unverified)")
-                        for d in dishes if d.id in unmatched_ids and d.id in _scout_candidates
+                        **cached_accepts,
+                        **{
+                            (d.id, _scout_candidates[d.id][0].id): ScoutDecision(True, 0.0, "closest-fill (unverified)")
+                            for d in dishes if d.id in pending_ids
+                        },
                     }
                 for d in dishes:
                     if d.id not in unmatched_ids or d.id not in _scout_candidates:

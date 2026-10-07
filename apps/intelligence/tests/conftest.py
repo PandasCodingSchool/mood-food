@@ -22,6 +22,18 @@ def no_network_keys(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def tmp_sqlite_store(tmp_path, monkeypatch):
+    """Every test gets a throwaway SQLite store (tests may override the path)."""
+    from app.config import settings
+    import app.learning.store as store_mod
+
+    monkeypatch.setattr(settings, "model_store_path", str(tmp_path / "store.db"))
+    store_mod.close()
+    yield
+    store_mod.close()
+
+
+@pytest.fixture(autouse=True)
 def postgres_store(monkeypatch):
     """With TEST_DATABASE_URL set, every test runs on Postgres in a fresh schema.
 
