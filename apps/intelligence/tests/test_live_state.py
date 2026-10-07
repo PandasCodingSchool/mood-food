@@ -16,9 +16,9 @@ def clean_store(tmp_path, monkeypatch):
     import app.learning.store as store_mod
 
     monkeypatch.setattr(settings, "model_store_path", str(tmp_path / "model.db"))
-    store_mod._conn = None
+    store_mod.close()
     yield
-    store_mod._conn = None
+    store_mod.close()
 
 
 def _req(mode="mind_reader", user_id="u1"):

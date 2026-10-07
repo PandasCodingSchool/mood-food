@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { desc, eq, sql } from 'drizzle-orm';
 import { DB, type Database } from '../core/tokens.js';
@@ -10,6 +11,32 @@ export const KNOWN_SIGNAL_TYPES = new Set([
   'mind_reader_verdict', 'wildcard_verdict', 'sos', 'day_story', 'bracket', 'group_swipe',
   'nostalgia', 'hunger', 'pantry', 'blind_bet', 'quest_event', 'game_signals', 'order',
 ]);
+
+export interface IncomingSignal {
+  type: string;
+  payload: unknown;
+  context?: Record<string, unknown>;
+  clientTs?: string;
+  clientEventId?: string;
+}
+
+/** Stable JSON (sorted keys) so equal payloads hash equally. */
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v as object)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
+/** Retry identity: the client's event id, else type + payload + client timestamp. Null = no dedupe. */
+export function dedupeKey(s: IncomingSignal): string | null {
+  const basis = s.clientEventId ? `id:${s.clientEventId}` : s.clientTs ? `ts:${s.type}|${s.clientTs}|${canonical(s.payload)}` : null;
+  return basis ? createHash('sha256').update(basis).digest('hex') : null;
+}
 
 export interface StoredSignal {
   id: number;
@@ -51,15 +78,27 @@ export class SignalsService {
     };
   }
 
-  /** Store a batch, forward it to learning, mirror what comes back. Returns the learned profile summary if any. */
-  async append(userId: string, batch: Array<{ type: string; payload: unknown; context?: Record<string, unknown> }>) {
+  /**
+   * Store a batch, forward it to learning, mirror what comes back. Returns the learned profile summary if any.
+   * A re-sent signal (same dedupe key) is skipped, so client retries never double-count.
+   */
+  async append(userId: string, batch: IncomingSignal[]) {
     const base = await this.serverContext(userId);
     const rows = await this.db
       .insert(signals)
-      .values(batch.map((s) => ({ userId, type: s.type, payload: s.payload, context: { ...s.context, ...base } })))
+      .values(
+        batch.map((s) => ({
+          userId,
+          type: s.type,
+          payload: s.payload,
+          context: { ...s.context, ...(s.clientTs && { client_ts: s.clientTs }), ...base },
+          dedupeKey: dedupeKey(s),
+        })),
+      )
+      .onConflictDoNothing({ target: [signals.userId, signals.dedupeKey] })
       .returning({ id: signals.id, type: signals.type, payload: signals.payload, context: signals.context });
     const stored = rows as StoredSignal[];
-    const learned = await this.forward(userId, stored);
+    const learned = stored.length ? await this.forward(userId, stored) : null;
     return { stored: stored.length, profile: learned?.profile_summary ?? null };
   }
 

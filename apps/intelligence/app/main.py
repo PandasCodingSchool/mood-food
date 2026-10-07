@@ -34,20 +34,25 @@ from app.services.swiggy_mcp import track_user_token
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Warm craving/archetype embeddings in the background so the request path
-    # never waits on (or calls) the embeddings API.
+    # Build missing dish embeddings and warm craving/archetype anchors in the
+    # background so the request path never waits on (or calls) the embeddings API.
     async def _warm() -> None:
         from app.learning import embeddings, retrieval
 
+        log = logging.getLogger("startup")
         try:
+            built = await asyncio.to_thread(embeddings.build_dish_matrix)
             n = await asyncio.to_thread(embeddings.warm_text_cache, retrieval.startup_texts())
-            logging.getLogger("startup").info("warmed %d anchor embeddings", n)
+            log.info("dish embeddings ready=%s; warmed %d anchor embeddings", built, n)
         except Exception as exc:  # noqa: BLE001 — never block boot
-            logging.getLogger("startup").warning("embedding warm-up failed: %s", exc)
+            log.warning("embedding warm-up failed: %s", exc)
 
     task = asyncio.create_task(_warm())
     yield
     task.cancel()
+    from app.learning import store
+
+    store.close()
 
 
 app = FastAPI(title="FoodMood API", version="1.0.0", lifespan=lifespan)

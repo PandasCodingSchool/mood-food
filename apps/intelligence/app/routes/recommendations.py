@@ -24,7 +24,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 
 from app.data.dishes import DISHES_BY_ID
-from app.learning import live_state
+from app.learning import live_state, runs
 from app.schemas.request import RecommendationRequest
 from app.schemas.response import (
     LearnedMeta,
@@ -216,6 +216,7 @@ async def _run_pipeline(
     shortlist = await run_in_threadpool(
         build_shortlist, body.user_context, body.recommendation_config, user_id=body.user_id
     )
+    t_shortlist = time.time()
 
     # Anti-rut: make sure wildcard candidates are in front of the ranker.
     wildcard_ids = await run_in_threadpool(_learned_wildcard_ids, body)
@@ -239,13 +240,40 @@ async def _run_pipeline(
     )
     is_cache_hit = bool(gpt_response.ai_metadata and gpt_response.ai_metadata.cache_hit)
     gpt_pool: list[Recommendation] = list(gpt_response.recommendations)
+    t_rank = time.time()
+
+    def _trace(final: RecommendationResponse) -> RecommendationResponse:
+        """Record the decision after responding; outcomes join on request_id."""
+        meta = gpt_response.ai_metadata
+        done = time.time()
+        asyncio.get_running_loop().run_in_executor(None, lambda: runs.record(
+            body.request_id,
+            user_id=body.user_id,
+            mode=body.recommendation_config.mode,
+            ranker_provider="gpt",
+            model=meta.model_used if meta else None,
+            shortlist=[d.id for d in shortlist],
+            ranked=[r.dish.id for r in gpt_pool],
+            selected=[r.dish.id for r in final.recommendations],
+            fallback_used=not gpt_response.success,
+            cache_hit=is_cache_hit,
+            live_status=final.live_status,
+            latency_ms={
+                "shortlist": round((t_shortlist - t0) * 1000, 1),
+                "rank": round((t_rank - t_shortlist) * 1000, 1),
+                "enrich": round((done - t_rank) * 1000, 1),
+                "total": round((done - t0) * 1000, 1),
+            },
+            tokens=meta.tokens_used if meta else None,
+        ))
+        return final
 
     if not body.swiggy_address_id or not gpt_pool:
         final_recs = [
             r.model_copy(update={"rank": i + 1})
             for i, r in enumerate(gpt_pool[:final_count])
         ]
-        return await run_in_threadpool(
+        return _trace(await run_in_threadpool(
             _attach_learning,
             body,
             gpt_response.model_copy(update={
@@ -254,7 +282,7 @@ async def _run_pipeline(
                 "request_id": body.request_id,
             }),
             wildcard_ids,
-        )
+        ))
 
     # Step 2 — Progressive live enrichment of the GPT-ranked pool.
     live_facts: dict[str, dict] = {}
@@ -351,7 +379,7 @@ async def _run_pipeline(
         elapsed, pool_size, len(matched_for_response), live_status, is_cache_hit,
     )
 
-    return await run_in_threadpool(
+    return _trace(await run_in_threadpool(
         _attach_learning,
         body,
         gpt_response.model_copy(update={
@@ -362,4 +390,4 @@ async def _run_pipeline(
             "request_id": body.request_id,
         }),
         wildcard_ids,
-    )
+    ))

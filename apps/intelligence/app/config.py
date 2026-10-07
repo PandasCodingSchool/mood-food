@@ -70,11 +70,14 @@ class Settings(BaseSettings):
     # maps, trade-off weights, calibration). Treated as a rebuildable cache over
     # the Node backend's durable signals log — losable, always replayable.
     model_store_path: str = "model_store.db"
+    # Postgres for the model store (overrides model_store_path when set). Local:
+    # postgresql://moodfood:moodfood@localhost:5432/moodfood (pgvector image).
+    database_url: str = ""
+    database_schema: str = "intelligence"
+    database_pool_max: int = 5
     # OpenAI embedding model for the dish "item tower" and craving/mood anchors.
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 256
-    # Cached dish-embedding matrix (rebuilt when dishes.json changes).
-    dish_embeddings_path: str = "app/data/dish_embeddings.npz"
     # Shared secret for the Node replay feed (x-sync-key header, both tiers).
     sync_key: str = ""
     # Node backend base URL for pulling the signals replay feed.

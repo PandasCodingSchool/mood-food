@@ -21,9 +21,9 @@ def clean_store(tmp_path, monkeypatch):
     # Reset the cached connection so each test gets a fresh store.
     import app.learning.store as store_mod
 
-    store_mod._conn = None
+    store_mod.close()
     yield
-    store_mod._conn = None
+    store_mod.close()
 
 
 @pytest.fixture

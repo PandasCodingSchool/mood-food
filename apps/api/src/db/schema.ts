@@ -13,6 +13,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -158,9 +159,14 @@ export const signals = pgTable(
     type: varchar('type', { length: 100 }).notNull(),
     payload: jsonb('payload').notNull(),
     context: jsonb('context'),
+    /** Client retry guard: re-sent batches hit the unique index and are skipped. */
+    dedupeKey: varchar('dedupe_key', { length: 64 }),
     createdAt: createdAt(),
   },
-  (t) => [index('idx_signals_user').on(t.userId, t.id)],
+  (t) => [
+    index('idx_signals_user').on(t.userId, t.id),
+    uniqueIndex('uq_signals_user_dedupe').on(t.userId, t.dedupeKey),
+  ],
 );
 
 /** Durable mirror of the learned taste embedding (Python owns the live copy). */

@@ -21,6 +21,9 @@ const signalShape = z.object({
   type: z.string().refine((t) => KNOWN_SIGNAL_TYPES.has(t)),
   payload: z.unknown().refine((p) => p != null),
   context: z.record(z.string(), z.unknown()).optional(),
+  // Retry identity: mobile stamps clientTs on every signal; clientEventId wins when sent.
+  clientTs: z.string().max(64).optional(),
+  clientEventId: z.string().max(100).optional(),
 });
 const replayQuery = z.object({
   userId: z.uuid({ error: 'userId is required' }),

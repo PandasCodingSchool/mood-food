@@ -83,7 +83,11 @@ def test_warm_text_cache_batches_missing(monkeypatch, tmp_path):
     from app.learning import embeddings, retrieval
 
     monkeypatch.setattr(embeddings, "_anchor_cache", {})
-    monkeypatch.setattr(embeddings, "_ANCHOR_CACHE", tmp_path / "anchors.json")
+    from app.config import settings
+    from app.learning import store
+
+    monkeypatch.setattr(settings, "model_store_path", str(tmp_path / "m.db"))
+    store.close()
     calls = []
 
     def fake_remote(texts):
@@ -96,3 +100,12 @@ def test_warm_text_cache_batches_missing(monkeypatch, tmp_path):
     assert len(calls) == 1
     assert embeddings.warm_text_cache(texts) == 0  # all cached now
     assert embeddings.embed_text(embeddings.craving_text("smoky"), allow_remote=False) is not None
+    monkeypatch.setattr(embeddings, "_anchor_cache", None)  # reload from the store
+    assert embeddings.embed_text(embeddings.craving_text("smoky"), allow_remote=False) is not None
+    store.close()
+
+
+async def test_missing_key_fails_fast(monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    with pytest.raises(llm_mod.LLMUnavailable):
+        await llm_mod.JsonChat(model="m", kind="rank").ainvoke([HumanMessage(content="x")])

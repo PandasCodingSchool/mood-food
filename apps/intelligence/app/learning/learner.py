@@ -41,8 +41,9 @@ def _dish_vector(payload: dict) -> Optional[Any]:
 def _handle_mood_checkin(user_id: str, signal_id: int, payload: dict, context: dict) -> None:
     day = str(context.get("server_ts", datetime.now(timezone.utc).isoformat()))[:10]
     store.execute(
-        """INSERT OR IGNORE INTO mood_checkins (user_id, signal_id, energy, stress, hunger, social, day)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO mood_checkins (user_id, signal_id, energy, stress, hunger, social, day)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, signal_id) DO NOTHING""",
         (
             user_id,
             signal_id,

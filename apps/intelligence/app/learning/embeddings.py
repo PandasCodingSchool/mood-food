@@ -1,11 +1,13 @@
 """Item tower: frozen OpenAI embeddings over dish attribute sentences.
 
-The dish matrix is built offline (``intelligence/scripts/build_dish_embeddings.py``)
-and cached to an ``.npz`` keyed by a hash of dishes.json. At request time
-everything is a local numpy lookup — no API calls on the hot path.
+The dish matrix lives in the model store (``dish_embeddings``; pgvector on
+Postgres) keyed by model version and a hash of dishes.json. It is built at
+service startup when missing (or via ``scripts/build_dish_embeddings.py``).
+At request time everything is a local numpy lookup — no API calls on the hot
+path.
 
-Craving tags and mood-archetype anchors are embedded lazily and cached in a
-small JSON sidecar so repeat sessions stay free.
+Craving tags and mood-archetype anchors are cached in ``text_embeddings`` and
+warmed at startup, so repeat sessions stay free.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -20,17 +23,19 @@ import numpy as np
 
 from app.config import settings
 from app.data.dishes import DISHES, DishRecord
+from app.learning import store
 
 logger = logging.getLogger("learning")
 
 MODEL_VERSION = f"{settings.embedding_model}-{settings.embedding_dim}"
 
 _DISHES_JSON = Path(__file__).parent.parent / "data" / "dishes.json"
-_ANCHOR_CACHE = Path(settings.model_store_path).with_suffix(".anchors.json")
-
 _matrix: Optional[np.ndarray] = None
 _dish_ids: list[str] = []
 _anchor_cache: Optional[dict[str, list[float]]] = None
+# When the store had no matrix, don't re-query it on every request.
+_EMPTY_RECHECK_S = 60.0
+_empty_checked_at: float = 0.0
 
 
 def dish_sentence(d: DishRecord) -> str:
@@ -75,41 +80,56 @@ def _embed_remote(texts: list[str]) -> Optional[np.ndarray]:
         return None
 
 
+def _vec_text(vec) -> str:
+    return json.dumps([round(float(x), 7) for x in vec])
+
+
+def _stored_matrix_info() -> tuple[int, Optional[str]]:
+    row = store.fetchone(
+        "SELECT COUNT(*) AS n, MAX(dishes_hash) AS h FROM dish_embeddings WHERE model_version = ?",
+        (MODEL_VERSION,),
+    )
+    return (int(row["n"]), row["h"]) if row else (0, None)
+
+
 def build_dish_matrix(force: bool = False) -> bool:
-    """Build and cache the dish embedding matrix. Returns True on success."""
-    path = Path(settings.dish_embeddings_path)
+    """Embed every dish into the store unless it is already current. True on success."""
+    global _matrix, _dish_ids
     current_hash = dishes_hash()
-    if path.exists() and not force:
-        cached = np.load(path, allow_pickle=True)
-        if str(cached.get("dishes_hash")) == current_hash and str(cached.get("model_version")) == MODEL_VERSION:
-            return True
+    n, stored_hash = _stored_matrix_info()
+    if not force and n == len(DISHES) and stored_hash == current_hash:
+        return True
     vectors = _embed_remote([dish_sentence(d) for d in DISHES])
     if vectors is None:
         return False
-    np.savez(
-        path,
-        matrix=vectors,
-        dish_ids=np.array([d.id for d in DISHES]),
-        dishes_hash=current_hash,
-        model_version=MODEL_VERSION,
+    store.execute("DELETE FROM dish_embeddings WHERE model_version = ?", (MODEL_VERSION,))
+    store.executemany(
+        "INSERT INTO dish_embeddings (dish_id, model_version, dishes_hash, embedding) VALUES (?, ?, ?, ?)",
+        [(d.id, MODEL_VERSION, current_hash, _vec_text(v)) for d, v in zip(DISHES, vectors)],
     )
+    _matrix, _dish_ids = None, []
     logger.info("Built dish embedding matrix: %s dishes, dim %s", len(DISHES), vectors.shape[1])
     return True
 
 
 def load_dish_matrix() -> tuple[Optional[np.ndarray], list[str]]:
-    """Load the cached matrix (stale-hash tolerant: warns but still serves)."""
-    global _matrix, _dish_ids
+    """Load the matrix from the store (stale-hash tolerant: warns but still serves)."""
+    global _matrix, _dish_ids, _empty_checked_at
     if _matrix is not None:
         return _matrix, _dish_ids
-    path = Path(settings.dish_embeddings_path)
-    if not path.exists():
+    if time.monotonic() - _empty_checked_at < _EMPTY_RECHECK_S:
         return None, []
-    cached = np.load(path, allow_pickle=True)
-    if str(cached.get("dishes_hash")) != dishes_hash():
-        logger.warning("dish_embeddings.npz is stale vs dishes.json — run build_dish_embeddings.py")
-    _matrix = np.asarray(cached["matrix"], dtype=np.float32)
-    _dish_ids = [str(i) for i in cached["dish_ids"]]
+    rows = store.fetchall(
+        "SELECT dish_id, dishes_hash, embedding FROM dish_embeddings WHERE model_version = ? ORDER BY dish_id",
+        (MODEL_VERSION,),
+    )
+    if not rows:
+        _empty_checked_at = time.monotonic()
+        return None, []
+    if rows[0]["dishes_hash"] != dishes_hash():
+        logger.warning("dish embeddings are stale vs dishes.json — they rebuild on next startup")
+    _dish_ids = [r["dish_id"] for r in rows]
+    _matrix = np.asarray([json.loads(r["embedding"]) for r in rows], dtype=np.float32)
     return _matrix, _dish_ids
 
 
@@ -137,11 +157,19 @@ def get_dish_vector_by_name(name: str) -> Optional[np.ndarray]:
 def _load_anchor_cache() -> dict[str, list[float]]:
     global _anchor_cache
     if _anchor_cache is None:
-        try:
-            _anchor_cache = json.loads(_ANCHOR_CACHE.read_text())
-        except (OSError, json.JSONDecodeError):
-            _anchor_cache = {}
+        _anchor_cache = {
+            r["key"]: json.loads(r["embedding"])
+            for r in store.fetchall("SELECT key, embedding FROM text_embeddings")
+        }
     return _anchor_cache
+
+
+def _save_anchors(items: dict[str, list[float]]) -> None:
+    store.executemany(
+        "INSERT INTO text_embeddings (key, embedding) VALUES (?, ?) "
+        "ON CONFLICT (key) DO UPDATE SET embedding = excluded.embedding",
+        [(k, _vec_text(v)) for k, v in items.items()],
+    )
 
 
 # Sensory craving tags the mobile Craving Radar sends (src/constants/cravingTags.ts).
@@ -168,12 +196,9 @@ def warm_text_cache(texts: list[str]) -> int:
     vectors = _embed_remote(missing)
     if vectors is None:
         return 0
-    for text, vec in zip(missing, vectors):
-        cache[_text_key(text)] = vec.tolist()
-    try:
-        _ANCHOR_CACHE.write_text(json.dumps(cache))
-    except OSError:
-        pass
+    fresh = {_text_key(text): vec.tolist() for text, vec in zip(missing, vectors)}
+    cache.update(fresh)
+    _save_anchors(fresh)
     return len(missing)
 
 
@@ -193,10 +218,7 @@ def embed_text(text: str, allow_remote: bool = True) -> Optional[np.ndarray]:
     if vectors is None:
         return None
     cache[key] = vectors[0].tolist()
-    try:
-        _ANCHOR_CACHE.write_text(json.dumps(cache))
-    except OSError:
-        pass
+    _save_anchors({key: cache[key]})
     return vectors[0]
 
 

@@ -15,6 +15,13 @@
       "when": 1791294799850,
       "tag": "0001_email_verified_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791361933144,
+      "tag": "0002_signal_dedupe",
+      "breakpoints": true
     }
   ]
 }

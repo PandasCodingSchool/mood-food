@@ -23,8 +23,9 @@ SIMILARITY_BAND = (0.55, 0.75)
 def record_pick(user_id: str, signal_id: int, dish_id: Optional[str], kind: str) -> None:
     archetype = mood_map.archetype_of_dish_id(dish_id)
     store.execute(
-        """INSERT OR IGNORE INTO recent_picks (user_id, signal_id, dish_id, archetype, kind)
-           VALUES (?, ?, ?, ?, ?)""",
+        """INSERT INTO recent_picks (user_id, signal_id, dish_id, archetype, kind)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, signal_id) DO NOTHING""",
         (user_id, signal_id, dish_id, archetype, kind),
     )
 

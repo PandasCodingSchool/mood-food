@@ -19,10 +19,20 @@ from app.observability import timed_call
 _ROLES = {"system": "system", "human": "user", "user": "user", "ai": "assistant", "assistant": "assistant"}
 
 
-@lru_cache(maxsize=1)
+class LLMUnavailable(RuntimeError):
+    """No API key configured: callers fall back immediately instead of a doomed call."""
+
+
 def async_openai() -> AsyncOpenAI:
+    if not settings.openai_api_key:
+        raise LLMUnavailable("OPENAI_API_KEY is not set")
+    return _client(settings.openai_api_key)
+
+
+@lru_cache(maxsize=1)
+def _client(api_key: str) -> AsyncOpenAI:
     return AsyncOpenAI(
-        api_key=settings.openai_api_key or None,
+        api_key=api_key,
         timeout=settings.llm_timeout_s,
         max_retries=1,
     )

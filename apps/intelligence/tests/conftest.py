@@ -1,9 +1,36 @@
+import os
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
 from app.main import app
 import app.services.recommender as _recommender_svc
+
+
+@pytest.fixture(autouse=True)
+def postgres_store(monkeypatch):
+    """With TEST_DATABASE_URL set, every test runs on Postgres in a fresh schema.
+
+        TEST_DATABASE_URL=postgresql://moodfood:moodfood@localhost:55432/moodfood pytest
+    """
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        yield
+        return
+    import psycopg
+    from app.config import settings
+    import app.learning.store as store_mod
+
+    schema = f"t_{uuid.uuid4().hex[:12]}"
+    monkeypatch.setattr(settings, "database_url", url)
+    monkeypatch.setattr(settings, "database_schema", schema)
+    store_mod.close()
+    yield
+    store_mod.close()
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
 
 
 @pytest.fixture(autouse=True)
