@@ -18,8 +18,40 @@ from app.services import sensory
 from app.services.shortlist import ScoredDish
 
 
-def _pick(options: list[str], seed: str) -> str:
-    return options[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(options)]
+def _pick(options: list[str], seed: str, avoid: Optional[set[str]] = None) -> str:
+    """Stable choice by hash, skipping lines already used elsewhere in this response."""
+    start = int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(options)
+    rotated = options[start:] + options[:start]
+    return next((o for o in rotated if not avoid or o not in avoid), rotated[0])
+
+
+_METHOD = {
+    "dum": "slow-cooked dum style", "tandoor": "fresh off the tandoor", "curry": "a proper slow-simmered curry",
+    "simmered": "slow-simmered", "griddled": "hot off the griddle", "steamed": "light and steamed",
+    "fried": "crisp-fried", "grilled": "flame-grilled", "stir_fried": "wok-tossed", "baked": "oven-baked",
+    "roasted": "roasted", "smoked": "smoky", "raw": "fresh and no-cook", "chilled": "served chilled",
+}
+_REGION = {
+    "punjab": "Punjabi", "hyderabad": "Hyderabadi", "lucknow": "Lucknowi", "kerala": "Kerala", "karnataka": "Karnataka",
+    "tamil_nadu": "Tamil", "bengal": "Bengali", "kolkata": "Kolkata", "mumbai": "Mumbai", "goa": "Goan",
+    "gujarat": "Gujarati", "rajasthan": "Rajasthani", "kashmir": "Kashmiri", "andhra": "Andhra", "chettinad": "Chettinad",
+    "mangalore": "Mangalorean", "maharashtra": "Maharashtrian", "konkan": "Konkani", "bihar": "Bihari",
+    "parsi": "Parsi", "north_east": "North-Eastern", "delhi": "Delhi", "old_delhi": "Old Delhi",
+    "indo_chinese": "Indo-Chinese", "seoul": "Korean", "tokyo": "Japanese", "bangkok": "Thai", "levant": "Levantine",
+}
+
+
+def _dish_fact(d: DishRecord) -> Optional[str]:
+    """A short, true, dish-specific line from the food graph."""
+    region = _REGION.get(d.region or "")
+    method = _METHOD.get(d.cooking_method or "")
+    if region and method:
+        return f"A {region} favourite, {method}."
+    if region:
+        return f"A {region} classic."
+    if method:
+        return f"{d.name}, {method}."
+    return None
 
 
 def _moment(ctx: UserContext) -> Optional[str]:
@@ -56,7 +88,10 @@ def explain(
     seed: str,
     jev_fit: Optional[float] = None,
     price: Optional[float] = None,
+    used: Optional[set[str]] = None,
 ) -> AiReasoning:
+    """``used`` collects lines already shown in this response so cards don't repeat."""
+    used = used if used is not None else set()
     d: DishRecord = scored.dish
     parts = scored.parts
     pulls = sensory.target_pulls(ctx)
@@ -71,7 +106,8 @@ def explain(
             f"{_joined(words).capitalize()} — just right for {moment}.",
             f"Exactly the {_joined(words)} kind of food {moment} calls for.",
             f"{_joined(words).capitalize()}, made for {moment}.",
-        ], key)
+            f"{d.name} brings the {_joined(words)} comfort {moment} wants.",
+        ], key, used)
     elif words:
         mood_match = f"{_joined(words).capitalize()} — matches what you're in the mood for."
     elif parts.get("mood"):
@@ -90,20 +126,25 @@ def explain(
 
     # psychological_hook — the strongest personal signal
     craving_tags = list(game.craving_tags) if game else []
+    hooks: list[str] = []
     if parts.get("history", 0) > 0:
-        hook = _pick(["One of your repeat favourites.", "You keep coming back to this one — for good reason."], key)
-    elif parts.get("cluster"):
-        hook = f"It matches your {game.cluster.name} result from Tonight's Story." if game and game.cluster else "It matches your story result."
-    elif craving_tags and parts.get("sensory", 0) > 2:
-        hook = f"Hits your craving for {_joined(craving_tags[:2])}."
-    elif parts.get("taste", 0) > 3:
-        hook = "Close to dishes you've loved before."
-    elif parts.get("cuisine"):
-        hook = f"From {d.cuisine.title()}, one of your favourite cuisines."
-    elif jev_fit is not None and jev_fit >= 0.75:
-        hook = f"Our decision model rates it a strong fit for you right now ({round(jev_fit * 100)}%)."
-    else:
-        hook = mood_match
+        hooks += ["One of your repeat favourites.", "You keep coming back to this one — for good reason."]
+    if parts.get("cluster") and game and game.cluster:
+        hooks.append(f"It matches your {game.cluster.name} result from Tonight's Story.")
+    if craving_tags and parts.get("sensory", 0) > 2:
+        hooks.append(f"Hits your craving for {_joined(craving_tags[:2])}.")
+    if parts.get("taste", 0) > 3:
+        hooks.append("Close to dishes you've loved before.")
+    fact = _dish_fact(d)
+    if fact:
+        hooks.append(fact)
+    # The model-score line is a fallback, and only ever once per response.
+    if jev_fit is not None and jev_fit >= 0.75 and not any(u.startswith("Our decision model") for u in used):
+        hooks.append(f"Our decision model rates it a strong fit for you right now ({round(jev_fit * 100)}%).")
+    if parts.get("cuisine"):
+        hooks.append(f"From {d.cuisine.title()}, one of your favourite cuisines.")
+    hook = next((h for h in hooks if h not in used), None) or mood_match
+    used.update({mood_match, hook})
 
     nostalgia = None
     anchors = {a.food.lower() for a in ctx.comfort_anchors}

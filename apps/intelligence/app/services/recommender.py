@@ -573,6 +573,7 @@ def recommendations_from_ranking(
     restrictions = _restrictions_of(request)
     seed = request.request_id or ""
     used_swap_ids: set[str] = set()
+    used_lines: set[str] = set()
     recs = []
     for i, scored in enumerate(ranked):
         recs.append(_make_recommendation(
@@ -580,7 +581,9 @@ def recommendations_from_ranking(
             rank=i + 1,
             dish=scored.dish,
             confidence=confidence.get(scored.dish.id, 0.5),
-            reasoning=explain.explain(scored, request.user_context, seed=seed, jev_fit=(jev_fit or {}).get(scored.dish.id)),
+            reasoning=explain.explain(
+                scored, request.user_context, seed=seed, jev_fit=(jev_fit or {}).get(scored.dish.id), used=used_lines,
+            ),
             restrictions=restrictions,
             used_swap_ids=used_swap_ids,
         ))

@@ -245,3 +245,17 @@ def test_route_refresh_returns_next_page(tmp_path, monkeypatch):
     ids1 = {r["dish"]["id"] for r in first["recommendations"]}
     ids2 = {r["dish"]["id"] for r in second["recommendations"]}
     assert ids1 and ids2 and not ids1 & ids2
+
+
+def test_cards_in_one_response_do_not_repeat_lines():
+    from app.schemas.request import RecommendationConfig, RecommendationRequest
+    from app.services.recommender import recommendations_from_ranking
+
+    ctx = _ctx(prefs=Preferences(dietary_restrictions=["veg"], cuisine_types=["ind"]))
+    ranked = build_scored_shortlist(ctx)[:3]
+    resp = recommendations_from_ranking(
+        RecommendationRequest(user_context=ctx, recommendation_config=RecommendationConfig(count=3), request_id="r"),
+        ranked, confidence={}, model="jev-1.13.0", response_time_s=0.1,
+    )
+    lines = [r.ai_reasoning.mood_match for r in resp.recommendations] + [r.ai_reasoning.psychological_hook for r in resp.recommendations]
+    assert len(set(lines)) == len(lines)
