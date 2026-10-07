@@ -1,8 +1,13 @@
-"""Lightweight semantic scout for ambiguous Swiggy menu candidates.
+"""Semantic scout for ambiguous Swiggy menu candidates.
 
-Makes ONE batched LLM call per enrich request for at most MAX_PAIRS ambiguous
-dish/item pairs. Does NOT override deterministic hard conflicts — protein and
-form mismatches already excluded by match_confidence() before pairs reach here.
+One batched call per enrich request for at most MAX_PAIRS borderline
+dish/item pairs: JEV first (one "same dish?" Noul per pair, accepted at
+JEV_SCOUT_THRESHOLD), GPT as fallback judge. Does NOT override deterministic
+hard conflicts — protein and form mismatches are excluded by
+match_confidence() before pairs reach here.
+
+Returns ``None`` when no judge could answer, so callers can tell "rejected"
+apart from "couldn't check" and keep their previous behaviour.
 """
 from __future__ import annotations
 
@@ -23,6 +28,8 @@ logger = logging.getLogger("menu_scout")
 MAX_PAIRS = 12
 _TIMEOUT_S = 3.0
 _MIN_CONFIDENCE = 0.75
+# A false accept means the user orders a dish that isn't what we showed.
+JEV_SCOUT_THRESHOLD = 0.9
 
 _SYSTEM_PROMPT = """\
 You are a strict semantic food-menu compatibility judge.
@@ -86,15 +93,73 @@ def _build_prompt(pairs: list[tuple[ScoutDishInput, ScoutCandidateInput]]) -> st
 
 async def scout_ambiguous_matches(
     pairs: list[tuple[ScoutDishInput, ScoutCandidateInput]],
-) -> dict[tuple[str, str], ScoutDecision]:
-    """Make ONE LLM call to evaluate at most MAX_PAIRS ambiguous dish/item pairs.
-
-    Returns only accepted decisions (compatible=True and confidence >= _MIN_CONFIDENCE).
-    On timeout, error, or malformed output: returns {} and logs a warning.
-    """
+) -> Optional[dict[tuple[str, str], ScoutDecision]]:
+    """Accepted pairs only; ``None`` when neither JEV nor GPT could judge."""
     if not pairs:
         return {}
+    pairs = pairs[:MAX_PAIRS]
+    if settings.scout_provider == "jev":
+        decided = await _scout_jev(pairs)
+        if decided is not None:
+            return decided
+    return await _scout_gpt(pairs)
 
+
+def _jev_state(pairs: list[tuple[ScoutDishInput, ScoutCandidateInput]]) -> dict:
+    veg = {True: "vegetarian", False: "non-vegetarian"}
+    return {
+        f"p{i + 1}": {
+            "target_dish": {"name": d.dish_name, "also_known_as": d.aliases or None, "cuisine": d.cuisine},
+            "menu_item": {
+                "name": c.item_name,
+                "description": (c.description or "")[:160] or None,
+                "diet": veg.get(c.is_veg) if c.is_veg is not None else None,
+                "restaurant": c.restaurant_name,
+            },
+        }
+        for i, (d, c) in enumerate(pairs)
+    }
+
+
+async def _scout_jev(
+    pairs: list[tuple[ScoutDishInput, ScoutCandidateInput]],
+) -> Optional[dict[tuple[str, str], ScoutDecision]]:
+    from typesafe_sdk import Noul
+
+    from app.decisions import jev
+
+    client = jev.get_client()
+    if client is None:
+        return None
+    questions = {
+        f"p{i + 1}": Noul(
+            instructions=(
+                f"Is `p{i + 1}.menu_item` the same dish as `p{i + 1}.target_dish`, "
+                "or a close variant someone ordering the target would happily accept?"
+            ),
+            criteria={
+                "true": "Same dish or a genuine close variant (naming/portion/style difference only).",
+                "false": "A different dish, a different main protein, or veg vs non-veg mismatch.",
+            },
+        )
+        for i in range(len(pairs))
+    }
+    decision = await client.decide("menu_scout", _jev_state(pairs), questions, timeout_s=_TIMEOUT_S)
+    if decision is None:
+        return None
+    accepted: dict[tuple[str, str], ScoutDecision] = {}
+    for i, (d, c) in enumerate(pairs):
+        p = decision.nouls.get(f"p{i + 1}")
+        if p is not None and p >= JEV_SCOUT_THRESHOLD:
+            accepted[(d.dish_id, c.item_id)] = ScoutDecision(compatible=True, confidence=p, reason=f"jev:{p:.2f}")
+    logger.info("menu_scout(jev): accepted %d/%d pair(s) in %.0f ms", len(accepted), len(pairs), decision.latency_ms)
+    return accepted
+
+
+async def _scout_gpt(
+    pairs: list[tuple[ScoutDishInput, ScoutCandidateInput]],
+) -> Optional[dict[tuple[str, str], ScoutDecision]]:
+    """ONE LLM call; only compatible pairs at >= _MIN_CONFIDENCE. None on failure."""
     pairs = pairs[:MAX_PAIRS]
     t0 = time.monotonic()
     logger.info("menu_scout: evaluating %d candidate pair(s)", len(pairs))
@@ -111,10 +176,10 @@ async def scout_ambiguous_matches(
         parsed = json.loads(result.content)
     except TimeoutError:
         logger.warning("menu_scout: timed out after %.1fs — skipping", _TIMEOUT_S)
-        return {}
+        return None
     except Exception as exc:
         logger.warning("menu_scout: error (%s) — skipping", exc)
-        return {}
+        return None
 
     elapsed = time.monotonic() - t0
     accepted: dict[tuple[str, str], ScoutDecision] = {}

@@ -22,7 +22,7 @@ from app.schemas.swiggy import (
     SwiggyRestaurant,
 )
 from app.services.dish_tier import TierClassifyInput, _keyword_fallback
-from app.services.menu_scout import ScoutCandidateInput, ScoutDishInput, scout_ambiguous_matches
+from app.services.menu_scout import ScoutCandidateInput, ScoutDecision, ScoutDishInput, scout_ambiguous_matches
 from app.services.swiggy_mcp import (
     SwiggyAddressRequiredError,
     SwiggyAuthError,
@@ -614,10 +614,11 @@ class SwiggyDiscoveryService:
                         existing = _scout_candidates.get(dish.id)
                         if existing is None or conf > existing[2]:
                             _scout_candidates[dish.id] = (item, bl_rest, conf)
-            chosen = best or closest
-            if chosen is None:
-                return None
-            conf, item = chosen
+            if best is None:
+                # A borderline (closest) hit is queued for the scout instead of
+                # being accepted unchecked; it still spares the restaurant drill.
+                return _PENDING_SCOUT if closest is not None else None
+            conf, item = best
             restaurant = SwiggyRestaurant(
                 id=item.restaurant_id or f"menu:{item.id}",
                 name=item.restaurant_name or "Swiggy Restaurant",
@@ -692,28 +693,14 @@ class SwiggyDiscoveryService:
                 if best is not None and best[0] >= _MATCH_CONFIDENCE_THRESHOLD:
                     break
 
-            chosen = best or closest
-            if chosen is not None:
-                conf, restaurant, item = chosen
+            # Only confident matches are accepted here; a borderline closest
+            # candidate is already queued in _scout_candidates for verification.
+            if best is not None:
+                conf, restaurant, item = best
                 restaurant = self._backfill_restaurant_meta(restaurant)
                 logger.info(
                     "enrich: dish %r -> %r @ %r ₹%s (conf=%.1f)",
                     dish.name, item.name, restaurant.name, item.price, conf,
-                )
-                return EnrichedMatch(
-                    dish_id=dish.id, matched=True, restaurant=restaurant, item=item,
-                )
-            # Last resort: accept a previously queued closest candidate.
-            queued = _scout_candidates.get(dish.id)
-            if queued is not None:
-                item, restaurant, conf = queued
-                if restaurant is not None:
-                    restaurant = self._backfill_restaurant_meta(restaurant)
-                logger.info(
-                    "enrich: closest-fill dish %r -> %r @ %r ₹%s (conf=%.1f)",
-                    dish.name, item.name,
-                    restaurant.name if restaurant else "?",
-                    item.price, conf,
                 )
                 return EnrichedMatch(
                     dish_id=dish.id, matched=True, restaurant=restaurant, item=item,
@@ -729,7 +716,10 @@ class SwiggyDiscoveryService:
                 return cached[1].model_copy()
 
             menu_hit = await match_via_menu_search(dish)
-            result = menu_hit if menu_hit is not None else await match_via_restaurants(dish, idx)
+            if menu_hit is _PENDING_SCOUT:
+                result = EnrichedMatch(dish_id=dish.id, matched=False)
+            else:
+                result = menu_hit if menu_hit is not None else await match_via_restaurants(dish, idx)
             if result.matched:
                 _ENRICH_CACHE[cache_key] = (time.time() + _ENRICH_TTL_S, result.model_copy())
             return result
@@ -764,6 +754,13 @@ class SwiggyDiscoveryService:
             ]
             if scout_pairs:
                 scout_decisions = await scout_ambiguous_matches(scout_pairs)
+                if scout_decisions is None:
+                    # No judge available: keep the old closest-fill behaviour so
+                    # live cards still populate.
+                    scout_decisions = {
+                        (d.id, _scout_candidates[d.id][0].id): ScoutDecision(True, 0.0, "closest-fill (unverified)")
+                        for d in dishes if d.id in unmatched_ids and d.id in _scout_candidates
+                    }
                 for d in dishes:
                     if d.id not in unmatched_ids or d.id not in _scout_candidates:
                         continue
@@ -1108,6 +1105,9 @@ def _best_confident_match(
 
 
 _BORDERLINE_MIN_SCORE = 1.5
+
+# Sentinel: menu search found only a borderline candidate (queued for the scout).
+_PENDING_SCOUT = object()
 
 
 def _best_borderline_match(
