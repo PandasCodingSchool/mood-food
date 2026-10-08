@@ -44,7 +44,8 @@ def _style(chart: alt.Chart, height: int) -> alt.Chart:
 
 
 def client() -> LabClient:
-    if "lab_client" not in st.session_state:
+    # A client kept from before a code reload is an instance of the *old* class (stale methods): replace it.
+    if not isinstance(st.session_state.get("lab_client"), LabClient):
         st.session_state.lab_client = LabClient()
     return st.session_state.lab_client
 

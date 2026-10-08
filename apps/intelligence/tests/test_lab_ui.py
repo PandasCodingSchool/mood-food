@@ -154,3 +154,14 @@ def test_brain_page_builds_the_brain(lab_client):
         at = _app(PAGES / "7_Brain.py", lab_client)
         _button(at, "Build my brain from Swiggy + Instamart").click().run()
     assert not at.exception and any(m.label == "Evidence (time-decayed)" for m in at.metric)
+
+
+def test_stale_client_from_an_old_code_version_is_replaced(lab_client):
+    class OldLabClient:  # what a session holds after the lab code reloads: not the current class
+        def brain(self, user_id, slot=None, daytype=None):
+            raise AssertionError("stale client used")
+
+    at = AppTest.from_file(str(ROOT / "lab" / "Home.py"), default_timeout=30)
+    at.session_state["lab_client"] = OldLabClient()
+    at.run()
+    assert isinstance(at.session_state["lab_client"], LabClient)
