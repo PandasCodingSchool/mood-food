@@ -242,6 +242,9 @@ async def evals() -> dict:
 
     t0 = time.perf_counter()
     result = await run_in_threadpool(run)
+    from evals import backtest
+
+    result["backtest"] = await run_in_threadpool(backtest.run)
     return {"result": result, "trace": [], "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}
 
 
@@ -304,3 +307,52 @@ async def lab_groceries_import() -> dict:
         go_to = [asdict(i) for i in result.go_to]
         facts = compute(orders, go_to)
     return _traced({"stats": result.stats(), "orders": orders, "go_to": go_to, "facts": facts}, events, t0)
+
+
+# --- brain --------------------------------------------------------------------------
+
+class LabBrainRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=100)
+    slot: Optional[str] = None
+    daytype: Optional[str] = None
+
+
+@router.post("/brain/build")
+async def lab_brain_build(body: LabBrainRequest) -> dict:
+    """Import the service token's food + grocery history and fold it into ``user_id`` the way the API does."""
+    from dataclasses import asdict
+
+    from app.brain import summary
+    from app.history.grocery import import_groceries
+    from app.history.ingest import import_orders
+    from app.history.signals import food_signals, grocery_signals
+    from app.learning import learner
+    from app.services.swiggy_mcp import SwiggyAuthError, SwiggyMCPClient
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        try:
+            food = await import_orders(SwiggyMCPClient())
+            groc = await import_groceries(SwiggyMCPClient(mcp_url=settings.swiggy_instamart_mcp_url))
+        except SwiggyAuthError as exc:
+            raise HTTPException(status_code=401, detail=f"Swiggy token missing or rejected: {exc}") from exc
+        sigs = food_signals([o.to_dict() for o in food.orders]) + grocery_signals([o.to_dict() for o in groc.orders],
+                                                                                   [asdict(i) for i in groc.go_to])
+
+        def fold() -> dict:
+            for sgl in sigs:
+                learner.apply_signal(body.user_id, sgl)
+            return summary.build(body.user_id, body.slot, body.daytype)
+
+        data = await run_in_threadpool(fold)
+    return _traced({**data, "imported": {"food": food.stats(), "groceries": groc.stats(), "signals": len(sigs)}}, events, t0)
+
+
+@router.post("/brain")
+async def lab_brain(body: LabBrainRequest) -> dict:
+    """The brain for ``user_id`` as it stands (optionally for another slot / daytype)."""
+    from app.brain import summary
+
+    t0 = time.perf_counter()
+    data = await run_in_threadpool(summary.build, body.user_id, body.slot, body.daytype)
+    return {"result": data, "trace": [], "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}

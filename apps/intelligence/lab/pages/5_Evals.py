@@ -37,3 +37,14 @@ if res:
     df["top"] = df["top"].map(", ".join)
     df["failures"] = df["failures"].map(lambda f: "; ".join(f) or "✓")
     st.dataframe(df, hide_index=True, width="stretch")
+
+    bt = r.get("backtest")
+    if bt:
+        st.subheader("Brain backtest")
+        st.caption(f"{bt['predictions']} synthetic orders, each predicted only from the orders before it. "
+                   "brain = context-aware (slot, weekday/weekend); overall = same user ignoring context; popular = no personalisation.")
+        st.dataframe(pd.DataFrame([{"predictor": m, "feature": f, "hit@1": bt[m][f]["hit@1"], "hit@3": bt[m][f]["hit@3"]}
+                                   for m in ("brain", "overall", "popular") for f in ("cuisine", "protein", "form")]),
+                     hide_index=True, width="stretch",
+                     column_config={"hit@1": st.column_config.ProgressColumn("hit@1", min_value=0, max_value=1, format="%.2f"),
+                                    "hit@3": st.column_config.ProgressColumn("hit@3", min_value=0, max_value=1, format="%.2f")})

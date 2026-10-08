@@ -112,7 +112,66 @@ def _groceries(res):
     ui.jev_calls(res["trace"])
 
 
-tab_food, tab_groc = st.tabs(["Food orders (Swiggy)", "Groceries (Instamart)"])
+def _brain(data: dict, ctx_user: str):
+    food, groc = data["food"], data["groceries"]
+    st.markdown(f"**Brain for `{ctx_user}`** — {food.get('orders', 0)} food orders, {groc.get('orders', 0)} grocery orders, "
+                f"{len(groc.get('top_items', []))} grocery items tracked")
+    if data["facts"]:
+        st.markdown("**What it knows**  \n" + "  \n".join(f"• {f['text']} `{f['id']}`" for f in data["facts"]))
+    if not food.get("orders"):
+        st.info("No food orders yet for this user.")
+        return
+    a, b, c, d = st.columns(4)
+    a.metric("Evidence (time-decayed)", f"{food['evidence']:.1f}", f"{food['orders']} orders", delta_color="off")
+    b.metric("Orders / week", food["orders_per_week"])
+    c.metric("Reorder rate", f"{food['reorder_rate']:.0%}" if food["reorder_rate"] is not None else "—")
+    d.metric("New-dish rate", f"{food['exploration_rate']:.0%}" if food["exploration_rate"] is not None else "—")
+    x, y, z = st.columns(3)
+    with x:
+        st.markdown("**Cuisines**")
+        ui.bar_list(food["cuisine_mix"], "share", fmt=".0%")
+    with y:
+        st.markdown("**Proteins**")
+        ui.bar_list(food["protein_mix"], "share", fmt=".0%")
+    with z:
+        st.markdown("**When**")
+        ui.bar_list({**food["slot_mix"], **{f"({k})": v for k, v in food["daytype_mix"].items()}}, "share", fmt=".0%")
+    st.markdown("**Favourites**")
+    st.dataframe(pd.DataFrame(food["favourites"]), hide_index=True, width="stretch")
+    st.markdown("**Context → choice links** (where a context differs from the user's usual)")
+    if data["relations"]:
+        st.dataframe(pd.DataFrame(data["relations"])[["text", "context", "when", "feature", "value", "p", "lift", "n"]],
+                     hide_index=True, width="stretch")
+    else:
+        st.caption("None yet: the user's orders don't differ by context enough (or come from one context only).")
+    now = data.get("now")
+    if now:
+        st.markdown(f"**Prediction for {now['daytype']} {now['slot'].replace('_', ' ')}** · confidence {now['confidence']:.2f}")
+        cols = st.columns(3)
+        for col, feat in zip(cols, ("cuisine", "protein", "form")):
+            with col:
+                ui.prob_bars(dict(list(now["distributions"][feat].items())[:6]), title=f"P({feat})")
+
+
+tab_brain, tab_food, tab_groc = st.tabs(["Brain", "Food orders (Swiggy)", "Groceries (Instamart)"])
+with tab_brain:
+    user = st.session_state.get("ctx_user") or "lab-user"
+    st.caption("Builds the brain for the sidebar's user from the Swiggy + Instamart history (the same fold the API runs), "
+               "then shows what it knows. Recommend and Games use it for that user.")
+    b1, b2, b3 = st.columns([2, 1, 1])
+    slot = b2.selectbox("Slot", ["lunch", "dinner", "breakfast", "late_night"], key="brain_slot")
+    daytype = b3.selectbox("Day", ["weekday", "weekend"], key="brain_daytype")
+    if b1.button("Build my brain from Swiggy + Instamart", type="primary"):
+        st.session_state.brain = ui.call(ui.client().brain_build, user, slot, daytype)
+    elif "brain" in st.session_state and st.session_state.brain:
+        fresh = ui.call(ui.client().brain, user, slot, daytype)
+        if fresh:
+            st.session_state.brain = {**st.session_state.brain, "result": {**st.session_state.brain["result"], **fresh["result"]}}
+    br = st.session_state.get("brain")
+    if br:
+        _brain(br["result"], user)
+    else:
+        st.info("Press Build to fold your history into the brain.")
 with tab_food:
     if st.button("Import my Swiggy history", type="primary",
                  help="Read-only: get_addresses, get_food_orders and get_food_order_details. No address, phone or payment data is kept."):

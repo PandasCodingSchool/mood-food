@@ -9,12 +9,15 @@
 // in the payload, because the signal log stamps context with *now*.
 // Idempotent: orders are unique per user, signals dedupe on clientEventId.
 import { createHash } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
-import { DB, type Database } from '../core/tokens.js';
+import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
+import { and, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import type { Redis } from 'ioredis';
+import type { Env } from '../config/env.js';
+import { DB, ENV, REDIS, type Database } from '../core/tokens.js';
 import { instamartOrders, orderHistory, signals, swiggyOrders, swiggyUserTokens } from '../db/schema.js';
 import { IntelligenceService } from '../intelligence/intelligence.service.js';
 import { type IncomingSignal, SignalsService } from '../signals/signals.service.js';
+import { SwiggyTokensService } from './swiggy-tokens.service.js';
 
 export interface HistoryItem {
   name: string;
@@ -76,6 +79,10 @@ export function planGroceryImport(orders: GroceryOrder[], goTo: GroceryItem[] = 
 
 /** Re-import at most this often per user (Swiggy shows only the latest few orders). */
 export const REFRESH_EVERY_MS = 6 * 3600_000;
+/** Background job: how often to look for users due a refresh, and how many per tick. */
+const JOB_EVERY_MS = 30 * 60_000;
+const JOB_BATCH = 25;
+const JOB_LOCK = 'swiggy:history-refresh:lock';
 
 function toDate(iso?: string | null): Date | null {
   const d = iso ? new Date(iso) : null;
@@ -140,14 +147,56 @@ export function planImport(orders: HistoryOrder[]) {
 }
 
 @Injectable()
-export class SwiggyHistoryService {
+export class SwiggyHistoryService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly log = new Logger('SwiggyHistory');
+  private timer: NodeJS.Timeout | null = null;
 
   constructor(
     @Inject(DB) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
+    @Inject(REDIS) private readonly redis: Redis,
     private readonly intelligence: IntelligenceService,
     private readonly signals: SignalsService,
+    private readonly tokens: SwiggyTokensService,
   ) {}
+
+  onApplicationBootstrap() {
+    if (this.env.NODE_ENV === 'test') return;
+    this.timer = setInterval(() => void this.refreshDue(), JOB_EVERY_MS);
+    this.timer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * Background refresh: Swiggy shows only a short window of recent orders, so
+   * linked users are re-imported every REFRESH_EVERY_MS even if they never open
+   * the app. One instance at a time (Redis lock); small batches per tick.
+   */
+  async refreshDue(): Promise<number> {
+    const locked = await this.redis.set(JOB_LOCK, '1', 'PX', JOB_EVERY_MS - 60_000, 'NX').catch(() => null);
+    if (locked !== 'OK') return 0;
+    const due = await this.db
+      .select({ userId: swiggyUserTokens.userId })
+      .from(swiggyUserTokens)
+      .where(and(
+        eq(swiggyUserTokens.isActive, true),
+        gt(swiggyUserTokens.expiresAt, new Date()),
+        or(isNull(swiggyUserTokens.historySyncedAt), lt(swiggyUserTokens.historySyncedAt, new Date(Date.now() - REFRESH_EVERY_MS))),
+      ))
+      .limit(JOB_BATCH);
+    let done = 0;
+    for (const { userId } of due) {
+      const token = await this.tokens.activeToken(userId);
+      if (!token) continue;
+      await this.importAll(userId, token);
+      done += 1;
+    }
+    if (done) this.log.log(`background history refresh: ${done} user(s)`);
+    return done;
+  }
 
   /** True when this user's last history check is older than REFRESH_EVERY_MS. */
   async isDue(userId: string): Promise<boolean> {

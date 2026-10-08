@@ -139,3 +139,18 @@ def test_brain_page_groceries_tab(lab_client):
         at = _app(PAGES / "7_Brain.py", lab_client)
         _button(at, "Import my Instamart groceries").click().run()
     assert not at.exception and any(m.label == "Kitchen" for m in at.metric)
+
+
+def test_brain_page_builds_the_brain(lab_client):
+    from unittest.mock import patch
+
+    from tests.test_groceries import FakeIM
+    from tests.test_history import FakeSwiggy
+
+    def client_for(token=None, mcp_url=None):
+        return FakeIM() if mcp_url else FakeSwiggy()
+
+    with patch("app.services.swiggy_mcp.SwiggyMCPClient", side_effect=client_for):
+        at = _app(PAGES / "7_Brain.py", lab_client)
+        _button(at, "Build my brain from Swiggy + Instamart").click().run()
+    assert not at.exception and any(m.label == "Evidence (time-decayed)" for m in at.metric)

@@ -82,5 +82,11 @@ class LabClient:
     def groceries_import(self) -> dict:
         return self._call("POST", "/api/lab/history/groceries")
 
+    def brain_build(self, user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None) -> dict:
+        return self._call("POST", "/api/lab/brain/build", json={"user_id": user_id, "slot": slot, "daytype": daytype})
+
+    def brain(self, user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None) -> dict:
+        return self._call("POST", "/api/lab/brain", json={"user_id": user_id, "slot": slot, "daytype": daytype})
+
     def evals(self) -> dict:
         return self._call("POST", "/api/lab/evals")

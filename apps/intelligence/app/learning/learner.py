@@ -163,6 +163,9 @@ def _handle_order(user_id: str, signal_id: int, payload: dict, context: dict) ->
     when = {"time_of_day": payload["meal_slot"], "day_of_week": payload.get("weekday")} if payload.get("meal_slot") else {}
     patterns.record_context(user_id, {**context, **when}, archetype)
     entropy.record_pick(user_id, signal_id, payload.get("dish_id"), "order")
+    from app.brain import orders as brain_orders
+
+    brain_orders.record(user_id, signal_id, payload, context)
 
 
 GROCERY_ORDERS_KEPT = 400

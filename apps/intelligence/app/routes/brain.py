@@ -23,3 +23,15 @@ async def groceries(user_id: str) -> dict:
         return compute(orders, store.get_usage(user_id, "grocery_go_to", []) or [])
 
     return {"success": True, "user_id": user_id, "groceries": await run_in_threadpool(run)}
+
+
+@router.get("/{user_id}", dependencies=[Depends(require_sync_key)])
+async def brain(user_id: str, slot: str | None = None, daytype: str | None = None) -> dict:
+    """Facts (food + groceries), context relations and the prediction for now (or a given slot/daytype)."""
+    from app.brain import summary
+    from app.learning import replay
+
+    await replay.ensure_user(user_id)
+    data = await run_in_threadpool(summary.build, user_id, slot, daytype)
+    data.pop("orders", None)
+    return {"success": True, **data}

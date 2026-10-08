@@ -364,11 +364,16 @@ def build_scored_shortlist(
         # Absolute last resort: diet-only filter on full catalog.
         pool = [d for d in DISHES if diet.allows(d, _restrictions(ctx))]
     pulls = sensory.target_pulls(ctx)
+    from app.brain.scoring import dish_scores
+
+    brain = dish_scores(user_id, ctx, pool)  # {} without order history
     scored: list[ScoredDish] = []
     for d in pool:
         parts = score_breakdown(d, ctx, pulls)
         if retrieval.get(d.id):
             parts["taste"] = round(12.0 * retrieval[d.id], 3)
+        if brain.get(d.id):
+            parts["brain"] = brain[d.id]
         scored.append(ScoredDish(d, sum(parts.values()), parts))
     scored.sort(key=lambda s: s.total, reverse=True)
     # Prefer enough candidates for live matching + ranking.
