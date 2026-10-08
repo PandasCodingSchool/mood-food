@@ -88,5 +88,10 @@ class LabClient:
     def brain(self, user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None, refresh: bool = False) -> dict:
         return self._call("POST", "/api/lab/brain", json={"user_id": user_id, "slot": slot, "daytype": daytype, "refresh": refresh})
 
+    def suggest(self, user_id: str, *, slot: Optional[str] = None, daytype: Optional[str] = None, weather: Optional[str] = None,
+                count: int = 3, swiggy_address_id: Optional[str] = None, refresh: bool = False) -> dict:
+        return self._call("POST", "/api/lab/suggest", json={"user_id": user_id, "slot": slot, "daytype": daytype, "weather": weather,
+                                                           "count": count, "swiggy_address_id": swiggy_address_id, "refresh": refresh})
+
     def evals(self) -> dict:
         return self._call("POST", "/api/lab/evals")

@@ -165,3 +165,9 @@ def test_stale_client_from_an_old_code_version_is_replaced(lab_client):
     at.session_state["lab_client"] = OldLabClient()
     at.run()
     assert isinstance(at.session_state["lab_client"], LabClient)
+
+
+def test_suggested_page(lab_client):
+    at = _app(PAGES / "8_Suggested.py", lab_client)
+    _button(at, "✨ Suggest").click().run()
+    assert not at.exception and any(m.label == "Suggestions logged" for m in at.metric)

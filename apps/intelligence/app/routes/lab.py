@@ -358,3 +358,27 @@ async def lab_brain(body: LabBrainRequest) -> dict:
     with trace.collect() as events:
         data = await summary.view(body.user_id, body.slot, body.daytype, refresh=body.refresh)
     return _traced(data, events, t0)
+
+
+
+class LabSuggestRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=100)
+    slot: Optional[str] = None
+    daytype: Optional[str] = None
+    weather: Optional[str] = None
+    count: int = 3
+    swiggy_address_id: Optional[str] = None
+    refresh: bool = False
+
+
+@router.post("/suggest")
+async def lab_suggest(body: LabSuggestRequest) -> dict:
+    from app.brain import success as metrics
+    from app.brain import suggest as sos
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        result = await sos.suggest(body.user_id, slot=body.slot, daytype=body.daytype, weather=body.weather, count=body.count,
+                                   address_id=body.swiggy_address_id, refresh=body.refresh)
+    result["success_metrics"] = await run_in_threadpool(metrics.compute, body.user_id)
+    return _traced(result, events, t0)

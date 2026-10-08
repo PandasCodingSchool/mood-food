@@ -114,7 +114,11 @@ def explain(
     elif parts.get("mood"):
         mood_match = f"A go-to when you're feeling {ctx.mood.primary.lower()}."
     else:
-        mood_match = f"A dependable {d.cuisine.title()} pick for right now."
+        mood_match = _pick([
+            f"A dependable {d.cuisine.title()} pick for right now.",
+            f"{d.cuisine.title()} done right, an easy yes for now.",
+            f"A solid {d.cuisine.title()} choice for this moment.",
+        ], key, used)
 
     # context_fit — practical facts
     meal = (ctx.situational.time_of_day or "").replace("_", " ") if ctx.situational else ""
