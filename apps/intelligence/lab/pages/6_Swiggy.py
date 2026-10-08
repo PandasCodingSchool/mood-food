@@ -35,5 +35,5 @@ really is that dish: exact names first, then a JEV check for borderline matches.
 enough live cards. The *Swiggy matching* tab on the decision shows every search, call and verdict.
 
 **Read-only.** While the lab is on, the service refuses every Swiggy tool except `get_addresses`,
-`search_restaurants`, `search_menu` and `get_restaurant_menu`. Nothing can touch your cart or place an order.
+`search_restaurants`, `search_menu`, `get_restaurant_menu`, and the order-history reads `get_food_orders` and `get_food_order_details`. Nothing can touch your cart or place an order.
 """)

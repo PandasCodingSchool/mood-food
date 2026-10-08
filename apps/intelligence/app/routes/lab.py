@@ -262,3 +262,45 @@ async def swiggy_addresses() -> dict:
         except SwiggyMCPError as exc:
             raise HTTPException(status_code=502, detail=f"Swiggy error: {exc}") from exc
     return _traced({"addresses": addresses, "read_only": read_only()}, events, t0)
+
+
+# --- order history (read-only) -------------------------------------------------------
+
+class LabHistoryRequest(BaseModel):
+    known_order_ids: list[str] = Field(default_factory=list)
+
+
+@router.post("/history/import")
+async def lab_history_import(body: LabHistoryRequest) -> dict:
+    """The service token's recent Swiggy orders: parsed, mapped and profiled (nothing is stored per user here)."""
+    from app.history.ingest import import_orders
+    from app.services.swiggy_mcp import SwiggyAuthError, SwiggyMCPClient
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        try:
+            result = await import_orders(SwiggyMCPClient(), frozenset(body.known_order_ids))
+        except SwiggyAuthError as exc:
+            raise HTTPException(status_code=401, detail=f"Swiggy token missing or rejected: {exc}") from exc
+    return _traced({"stats": result.stats(), "orders": [o.to_dict() for o in result.orders]}, events, t0)
+
+
+@router.post("/history/groceries")
+async def lab_groceries_import() -> dict:
+    """The service token's Instamart orders + go-to items, profiled, with grocery facts (nothing stored per user)."""
+    from dataclasses import asdict
+
+    from app.history.grocery import import_groceries
+    from app.history.grocery_facts import compute
+    from app.services.swiggy_mcp import SwiggyAuthError, SwiggyMCPClient
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        try:
+            result = await import_groceries(SwiggyMCPClient(mcp_url=settings.swiggy_instamart_mcp_url))
+        except SwiggyAuthError as exc:
+            raise HTTPException(status_code=401, detail=f"Swiggy token missing or rejected: {exc}") from exc
+        orders = [o.to_dict() for o in result.orders]
+        go_to = [asdict(i) for i in result.go_to]
+        facts = compute(orders, go_to)
+    return _traced({"stats": result.stats(), "orders": orders, "go_to": go_to, "facts": facts}, events, t0)

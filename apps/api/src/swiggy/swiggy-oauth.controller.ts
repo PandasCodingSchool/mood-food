@@ -101,8 +101,8 @@ export class SwiggyOAuthController {
       if (!res.ok) throw new Error(`Swiggy token exchange failed: ${res.status} ${await res.text()}`);
       const token = (await res.json()) as { access_token: string; user_id?: string; expires_in?: number };
       await this.tokens.save(userId, token);
-      // Warm start from past Swiggy orders; runs in the background, never blocks linking.
-      void this.history.importFor(userId, token.access_token);
+      // Warm start from past Swiggy + Instamart orders; runs in the background, never blocks linking.
+      void this.history.importAll(userId, token.access_token);
       return page('success');
     } catch (err) {
       this.log.error(`callback failed: ${(err as Error).message}`);
@@ -116,13 +116,24 @@ export class SwiggyOAuthController {
   async importHistory(@CurrentUser() user: AuthUser) {
     const token = await this.tokens.activeToken(user.id);
     if (!token) fail(400, 'Swiggy is not linked');
-    return { success: true, ...(await this.history.importFor(user.id, token as string)) };
+    return { success: true, ...(await this.history.importAll(user.id, token as string)) };
+  }
+
+  /** Throttled re-import (app open): Swiggy only shows the latest orders, so check often. */
+  @Post('history/refresh')
+  @HttpCode(200)
+  async refreshHistory(@CurrentUser() user: AuthUser) {
+    const token = await this.tokens.activeToken(user.id);
+    if (!token) return { success: true, orders: 0, dishes: 0, groceries: 0, skipped: true };
+    return { success: true, ...(await this.history.refresh(user.id, token)) };
   }
 
   @Post('unlink')
   @HttpCode(200)
   async unlink(@CurrentUser() user: AuthUser) {
     await this.tokens.unlink(user.id);
+    // Swiggy history was used under the link's consent: remove it and what was learned from it.
+    await this.history.purge(user.id);
     return { success: true };
   }
 

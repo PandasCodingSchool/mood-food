@@ -34,6 +34,8 @@ Never put AI logic in the API.
 | `learning/` | Store (SQLite or Postgres), learner (signal folds), user model, embeddings, orchestrator, persona, … |
 | `llm.py` | Shared async OpenAI client (`JsonChat`, `parse_structured`) — models from config |
 | `security.py` / `observability.py` | Service auth, sync key; request ids, JSON logs, call timing |
+| `history/` | Swiggy food history (`ingest`, `normalise`, `profile` — JEV item profiles for off-catalog items) and the separate Instamart grocery stream (`grocery`, `grocery_profile`, `grocery_facts`: top items, cooking index, restock, pantry, co-purchase). Swiggy shows only a recent window, so history is accumulated (`known_order_ids`) |
+| `routes/history.py` / `routes/brain.py` | `POST /api/history/import`, `/api/history/groceries/import` (the API calls these and stores orders); `GET /api/brain/{user}/groceries` |
 | `lab/trace.py` + `routes/lab.py` | Decision tracing: `trace.emit()` at each decision point (no-op unless a lab request is collecting); `/api/lab/*` returns results with their trace — dev only (`LAB_ENABLED`, never in production) |
 | `../lab/` | Intelligence Lab UI (Streamlit): games control centre, pipeline, food graph, JEV playground, evals |
 
@@ -46,7 +48,9 @@ Other endpoints: `/api/games/*`, `/api/food-graph/*`, `/api/learn/*`,
 - JEV (docs.typesafe.ai): keep numbers/time math in code, pass named buckets;
   shuffle Choice options (`jev.shuffled_choice`); every JEV call site needs a
   non-JEV path.
-- Swiggy MCP: verify tools/params against mcp.swiggy.com/builders before use.
+- Swiggy MCP: verify tools/params against mcp.swiggy.com/builders before use — and against the live
+  server's own tool schema (`list_tools`), which can be ahead of the docs (e.g. `orderCount` on
+  `get_food_orders`). History payloads: never keep delivery address, phone or payment fields.
 - New decision logic should `trace.emit(...)` what it decided and why (JSON-safe, never secrets), so the
   lab can show it; guard costly diagnostics with `trace.enabled()`.
 - Store SQL must be portable (SQLite + Postgres): `?` placeholders,

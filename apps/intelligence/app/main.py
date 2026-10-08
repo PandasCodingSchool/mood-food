@@ -31,6 +31,8 @@ from app.routes.instamart import router as instamart_router
 from app.routes.moderation import router as moderation_router
 from app.routes.food_graph import router as food_graph_router
 from app.routes.games import router as games_router
+from app.routes.history import router as history_router
+from app.routes.brain import router as brain_router
 from app.routes.lab import lab_available, router as lab_router
 from app.security import require_service_key
 from app.services.swiggy_mcp import track_user_token
@@ -106,6 +108,8 @@ for _router in (
     moderation_router,
     food_graph_router,
     games_router,
+    history_router,
+    brain_router,
 ):
     app.include_router(_router, dependencies=_auth)
 

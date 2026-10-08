@@ -123,6 +123,14 @@ CREATE TABLE IF NOT EXISTS menu_item_map (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS item_profiles (
+    item_key TEXT PRIMARY KEY,
+    item_name TEXT NOT NULL,
+    profile_json TEXT NOT NULL,
+    method TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS game_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT,

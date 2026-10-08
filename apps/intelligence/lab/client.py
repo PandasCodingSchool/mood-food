@@ -76,5 +76,11 @@ class LabClient:
     def swiggy_addresses(self) -> dict:
         return self._call("GET", "/api/lab/swiggy/addresses")
 
+    def history_import(self, known_order_ids: Optional[list[str]] = None) -> dict:
+        return self._call("POST", "/api/lab/history/import", json={"known_order_ids": known_order_ids or []})
+
+    def groceries_import(self) -> dict:
+        return self._call("POST", "/api/lab/history/groceries")
+
     def evals(self) -> dict:
         return self._call("POST", "/api/lab/evals")

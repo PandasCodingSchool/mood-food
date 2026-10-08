@@ -92,7 +92,7 @@ async def test_get_orders_sends_only_documented_params():
     client = MagicMock()
     client.call_tool = AsyncMock(return_value={"success": True, "data": {"orders": []}})
     await SwiggyOrderService(client=client).get_orders("addr_1", 5)
-    client.call_tool.assert_awaited_once_with("get_food_orders", {"addressId": "addr_1"})
+    client.call_tool.assert_awaited_once_with("get_food_orders", {"addressId": "addr_1", "orderCount": 5})
 
 
 def test_swiggy_history_endpoint_maps_items(client, monkeypatch):
@@ -109,7 +109,7 @@ def test_swiggy_history_endpoint_maps_items(client, monkeypatch):
     async def fake_call(name, args):
         if name == "get_addresses":
             return {"success": True, "data": {"addresses": [{"id": "addr_recent"}]}}
-        assert name == "get_food_orders" and args == {"addressId": "addr_recent"}
+        assert name == "get_food_orders" and args == {"addressId": "addr_recent", "orderCount": 15}
         return orders_payload
 
     class FakeService:

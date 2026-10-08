@@ -256,6 +256,22 @@ def bar_list(values: dict[str, float], title: str, height: int = 160, fmt: str =
     st.altair_chart(_style(chart, max(height, 24 * len(df))), width="stretch", theme=None)
 
 
+def pair_heatmap(pairs: list[dict], height_per_row: int = 24) -> None:
+    """Co-purchase graph as a symmetric item × item matrix (how often bought together)."""
+    c = colors()
+    rows = [{"a": p["a"], "b": p["b"], "orders": p["orders"]} for p in pairs] + [{"a": p["b"], "b": p["a"], "orders": p["orders"]} for p in pairs]
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    names = sorted(set(df["a"]))
+    chart = alt.Chart(df).mark_rect(cornerRadius=2).encode(
+        x=alt.X("a:N", sort=names, title=None, axis=alt.Axis(labelAngle=-35, labelLimit=140)),
+        y=alt.Y("b:N", sort=names, title=None, axis=alt.Axis(labelLimit=160)),
+        color=alt.Color("orders:Q", scale=alt.Scale(range=[c["mid"], c["blue"]]), legend=alt.Legend(title="orders together")),
+        tooltip=[alt.Tooltip("a:N", title="Item"), alt.Tooltip("b:N", title="With"), alt.Tooltip("orders:Q", title="Orders together")])
+    st.altair_chart(_style(chart, max(160, height_per_row * len(names))), width="stretch", theme=None)
+
+
 # --- cards and trace viewers -------------------------------------------------------------
 
 def status_badge(status: Optional[str]) -> None:

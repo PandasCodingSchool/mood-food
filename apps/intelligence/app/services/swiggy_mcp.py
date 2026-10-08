@@ -174,7 +174,11 @@ def _looks_retryable(text: str) -> bool:
 # Verified read-only against mcp.swiggy.com/builders/docs/reference/food (Oct 2026); every
 # other tool — cart, coupon, order, payment, address create/delete — is refused, and so is
 # any tool not listed here.
-READ_ONLY_TOOLS = frozenset({"get_addresses", "search_restaurants", "search_menu", "get_restaurant_menu"})
+READ_ONLY_TOOLS = frozenset({
+    "get_addresses", "search_restaurants", "search_menu", "get_restaurant_menu",
+    "get_food_orders", "get_food_order_details",  # order history for the preference brain
+    "get_orders", "your_go_to_items",             # Instamart (grocery) history — separate MCP server
+})
 
 
 class SwiggyWriteBlockedError(SwiggyMCPError):

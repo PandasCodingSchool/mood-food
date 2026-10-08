@@ -143,9 +143,56 @@ export const swiggyUserTokens = pgTable(
     accessTokenEncrypted: text('access_token_encrypted').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     isActive: boolean('is_active').notNull().default(true),
+    /** Last order-history check (throttles re-imports; Swiggy only shows the latest few orders). */
+    historySyncedAt: timestamp('history_synced_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [unique().on(t.userId, t.swiggyUserId), index('idx_swiggy_tokens_user').on(t.userId, t.isActive)],
+);
+
+/**
+ * Swiggy orders seen for a user, accumulated across imports (Swiggy exposes only
+ * the most recent few). Items carry dish mapping + item profile; no delivery
+ * address, phone or payment details are ever stored.
+ */
+export const swiggyOrders = pgTable(
+  'swiggy_orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    swiggyOrderId: varchar('swiggy_order_id', { length: 64 }).notNull(),
+    orderedAt: timestamp('ordered_at', { withTimezone: true }),
+    mealSlot: varchar('meal_slot', { length: 20 }),
+    weekday: varchar('weekday', { length: 12 }),
+    restaurantId: varchar('restaurant_id', { length: 64 }),
+    restaurantName: varchar('restaurant_name', { length: 255 }),
+    restaurantArea: varchar('restaurant_area', { length: 255 }),
+    totalInr: integer('total_inr'),
+    items: jsonb('items').notNull(),
+    importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.swiggyOrderId), index('idx_swiggy_orders_user').on(t.userId, t.orderedAt)],
+);
+
+/**
+ * Instamart (grocery) orders, a separate stream from food delivery: what the
+ * household buys and how it cooks. Items carry a grocery profile; no address,
+ * phone or payment details are stored.
+ */
+export const instamartOrders = pgTable(
+  'instamart_orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    swiggyOrderId: varchar('swiggy_order_id', { length: 64 }).notNull(),
+    orderedAt: timestamp('ordered_at', { withTimezone: true }),
+    orderType: varchar('order_type', { length: 32 }),
+    storeName: varchar('store_name', { length: 255 }),
+    totalInr: integer('total_inr'),
+    items: jsonb('items').notNull(),
+    importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.swiggyOrderId), index('idx_instamart_orders_user').on(t.userId, t.orderedAt)],
 );
 
 // ── Personalization ───────────────────────────────────────────────────────

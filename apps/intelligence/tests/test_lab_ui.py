@@ -117,3 +117,25 @@ def test_sidebar_address_picker(lab_client):
     assert picker.options[1].startswith("Home · 12 MG Road")
     picker.select(picker.options[1]).run()
     assert not at.exception and any("addr_home" in m.value for m in at.markdown)
+
+
+def test_brain_page_imports_history(lab_client):
+    from unittest.mock import patch
+
+    from tests.test_history import FakeSwiggy
+
+    with patch("app.services.swiggy_mcp.SwiggyMCPClient", return_value=FakeSwiggy()):
+        at = _app(PAGES / "7_Brain.py", lab_client)
+        _button(at, "Import my Swiggy history").click().run()
+    assert not at.exception and any(m.label == "Mapped to catalog" for m in at.metric) and at.dataframe
+
+
+def test_brain_page_groceries_tab(lab_client):
+    from unittest.mock import patch
+
+    from tests.test_groceries import FakeIM
+
+    with patch("app.services.swiggy_mcp.SwiggyMCPClient", return_value=FakeIM()):
+        at = _app(PAGES / "7_Brain.py", lab_client)
+        _button(at, "Import my Instamart groceries").click().run()
+    assert not at.exception and any(m.label == "Kitchen" for m in at.metric)

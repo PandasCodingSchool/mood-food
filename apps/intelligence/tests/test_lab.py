@@ -208,7 +208,7 @@ def test_jev_switch_is_per_request(lab_client):
 
 # --- Swiggy read-only guard ----------------------------------------------------------------
 
-WRITE_TOOLS = ["update_food_cart", "flush_food_cart", "apply_food_coupon", "place_food_order", "confirm_order",
+WRITE_TOOLS = ["update_food_cart", "get_food_cart", "track_food_order", "flush_food_cart", "apply_food_coupon", "place_food_order", "confirm_order",
                "create_address", "delete_address", "update_cart", "clear_cart", "some_new_tool"]
 
 

@@ -159,8 +159,30 @@ def _handle_order(user_id: str, signal_id: int, payload: dict, context: dict) ->
     if vec is not None:
         user_model.update(user_id, vec, 1.0, user_model.ORDER_WEIGHT)
     archetype = mood_map.archetype_of_dish_id(payload.get("dish_id"))
-    patterns.record_context(user_id, context, archetype)
+    # Imported Swiggy history carries the order's own time; the signal context says when it was imported.
+    when = {"time_of_day": payload["meal_slot"], "day_of_week": payload.get("weekday")} if payload.get("meal_slot") else {}
+    patterns.record_context(user_id, {**context, **when}, archetype)
     entropy.record_pick(user_id, signal_id, payload.get("dish_id"), "order")
+
+
+GROCERY_ORDERS_KEPT = 400
+
+
+def _handle_grocery_order(user_id: str, signal_id: int, payload: dict, context: dict) -> None:
+    """Instamart order: kept per user (newest GROCERY_ORDERS_KEPT) for grocery facts."""
+    if not payload.get("order_id"):
+        return
+    orders = store.get_usage(user_id, "grocery_orders", {}) or {}
+    orders[str(payload["order_id"])] = {k: payload.get(k) for k in ("order_id", "ordered_at", "meal_slot", "weekday", "order_type", "total", "items")}
+    if len(orders) > GROCERY_ORDERS_KEPT:
+        keep = sorted(orders.values(), key=lambda o: o.get("ordered_at") or "", reverse=True)[:GROCERY_ORDERS_KEPT]
+        orders = {str(o["order_id"]): o for o in keep}
+    store.set_usage(user_id, "grocery_orders", orders)
+
+
+def _handle_grocery_go_to(user_id: str, signal_id: int, payload: dict, context: dict) -> None:
+    """Swiggy's frequently-bought list: the latest snapshot replaces the previous one."""
+    store.set_usage(user_id, "grocery_go_to", payload.get("items") or [])
 
 
 def _handle_mind_reader(user_id: str, signal_id: int, payload: dict, context: dict) -> None:
@@ -251,6 +273,8 @@ _HANDLERS: dict[str, Callable[[str, int, dict, dict], None]] = {
     "craving": _handle_craving,
     "occasion": _handle_occasion,
     "order": _handle_order,
+    "grocery_order": _handle_grocery_order,
+    "grocery_go_to": _handle_grocery_go_to,
     "mind_reader_verdict": _handle_mind_reader,
     "wildcard_verdict": _handle_wildcard,
     "sos": _handle_sos,

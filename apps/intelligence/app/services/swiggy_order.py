@@ -228,8 +228,8 @@ class SwiggyOrderService:
         await self.client.call_tool("flush_food_cart", {})
 
     async def get_orders(self, address_id: str, order_count: int = 5) -> OrdersResponse:
-        # Documented params are addressId and activeOnly only; trim client-side.
-        raw = await self.client.call_tool("get_food_orders", {"addressId": address_id})
+        # Server schema: addressId (coordinates only), activeOnly, orderCount (default 5, max 15).
+        raw = await self.client.call_tool("get_food_orders", {"addressId": address_id, "orderCount": min(15, max(1, order_count))})
         rows = _as_list(raw, "orders", "data")
         orders = [o for o in (_normalize_order_summary(r) for r in rows) if o is not None]
         return OrdersResponse(success=True, orders=orders[: max(1, order_count)])
