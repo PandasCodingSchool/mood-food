@@ -26,12 +26,12 @@ async def groceries(user_id: str) -> dict:
 
 
 @router.get("/{user_id}", dependencies=[Depends(require_sync_key)])
-async def brain(user_id: str, slot: str | None = None, daytype: str | None = None) -> dict:
+async def brain(user_id: str, slot: str | None = None, daytype: str | None = None, refresh: bool = False) -> dict:
     """Facts (food + groceries), context relations and the prediction for now (or a given slot/daytype)."""
     from app.brain import summary
     from app.learning import replay
 
     await replay.ensure_user(user_id)
-    data = await summary.view(user_id, slot, daytype)
+    data = await summary.view(user_id, slot, daytype, refresh=refresh)
     data.pop("orders", None)
     return {"success": True, **data}

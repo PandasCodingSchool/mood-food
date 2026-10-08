@@ -33,16 +33,22 @@ def build(user_id: str, slot: Optional[str] = None, daytype: Optional[str] = Non
     }
 
 
-async def view(user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None, use_jev: bool = True) -> dict[str, Any]:
-    """The full brain: label new orders' occasions, recompute the house, write insights, then summarise."""
+async def view(user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None, use_jev: bool = True,
+               refresh: bool = False) -> dict[str, Any]:
+    """The full brain: label new orders' occasions, recompute the house, write insights, then summarise.
+
+    Cheap when nothing changed: occasions are cached per order, the house's JEV
+    judgement per evidence fingerprint and insight cards per facts — only new
+    evidence (or ``refresh``) triggers JEV / LLM calls.
+    """
     from starlette.concurrency import run_in_threadpool
 
     from app.brain import houses, insights, occasions
 
     if use_jev:
         await occasions.annotate(user_id)
-    house = await houses.recompute(user_id, use_jev=use_jev)
+    house = await houses.recompute(user_id, use_jev=use_jev, refresh=refresh)
     data = await run_in_threadpool(build, user_id, slot, daytype)
     data["house"] = house
-    data["insights"] = await insights.generate(data["facts"], house, data["relations"])
+    data["insights"] = await insights.generate(data["facts"], house, data["relations"], user_id=user_id, refresh=refresh)
     return data

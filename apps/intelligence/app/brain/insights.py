@@ -8,6 +8,7 @@ the fallback (and the only path without an OpenAI key).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -51,7 +52,37 @@ def templates(facts: list[dict], house: Optional[dict]) -> list[dict]:
     return cards[:MAX_CARDS]
 
 
-async def generate(facts: list[dict], house: Optional[dict], relations: list[dict]) -> dict[str, Any]:
+CACHE_KEY = "insights_cache"
+
+
+def _cache_key(facts: list[dict], house: Optional[dict], relations: list[dict]) -> str:
+    basis = {"facts": [f["text"] for f in facts], "house": (house or {}).get("house") if (house or {}).get("status") == "sorted" else None,
+             "patterns": [r["text"] for r in relations[:4]]}
+    return hashlib.sha1(json.dumps(basis, sort_keys=True).encode()).hexdigest()[:16]
+
+
+async def generate(facts: list[dict], house: Optional[dict], relations: list[dict], user_id: Optional[str] = None,
+                   refresh: bool = False) -> dict[str, Any]:
+    """Cards for these facts. With ``user_id`` the result is cached per (facts, house, patterns):
+    the LLM runs again only when those change (or ``refresh``)."""
+    key = _cache_key(facts, house, relations)
+    if user_id and not refresh:
+        from app.learning import store
+
+        cached = store.get_usage(user_id, CACHE_KEY, {}) or {}
+        if cached.get("key") == key:
+            return {**cached["result"], "cached": True}
+    result = await _generate(facts, house, relations)
+    # Cache LLM cards, and template cards when there is no key (deterministic). A template
+    # fallback after an LLM failure is not cached, so the next view retries the LLM.
+    if user_id and (result["method"] == "llm" or not settings.openai_api_key):
+        from app.learning import store
+
+        store.set_usage(user_id, CACHE_KEY, {"key": key, "result": result})
+    return {**result, "cached": False}
+
+
+async def _generate(facts: list[dict], house: Optional[dict], relations: list[dict]) -> dict[str, Any]:
     fallback = templates(facts, house)
     if not settings.openai_api_key or not facts:
         return {"cards": fallback, "method": "templates", "rejected": []}

@@ -127,7 +127,13 @@ def _drivers(house: str, food: dict, groceries: dict) -> list[str]:
     return [facts[k] for k in keys if k in facts]
 
 
-async def recompute(user_id: str, use_jev: bool = True, now: Optional[datetime] = None) -> dict[str, Any]:
+async def recompute(user_id: str, use_jev: bool = True, now: Optional[datetime] = None, refresh: bool = False) -> dict[str, Any]:
+    """Recompute membership and apply sorting/shift rules.
+
+    JEV's trait judgement is cached with the evidence fingerprint it was made on
+    (food orders, grocery orders, finished games): views with unchanged evidence
+    reuse it and make no JEV call. ``refresh`` forces a new judgement.
+    """
     now = now or datetime.now(IST)
     orders = brain_orders.load(user_id)
     food = brain_facts.compute(orders, now)
@@ -135,7 +141,16 @@ async def recompute(user_id: str, use_jev: bool = True, now: Optional[datetime] 
                                       store.get_usage(user_id, "grocery_go_to", []) or [], now)
     games = int(store.get_usage(user_id, "games_finished", 0) or 0)
     det = traits(food, groceries)
-    judged = await jev_traits(food, groceries) if use_jev else None
+    state = store.get_usage(user_id, STATE, {}) or {}
+    fingerprint = [food.get("orders", 0), groceries.get("orders", 0), games]
+    judged, jev_cached = None, False
+    if use_jev:
+        if not refresh and state.get("jev_fingerprint") == fingerprint and state.get("jev_traits"):
+            judged, jev_cached = state["jev_traits"], True
+        else:
+            judged = await jev_traits(food, groceries)
+            if judged is not None:
+                state.update(jev_traits=judged, jev_fingerprint=fingerprint)
     blended = {h: round((1 - JEV_BLEND) * det[h] + JEV_BLEND * judged[h], 3) if judged and h in judged else det[h] for h in HOUSES}
     member = membership(blended)
     ranked = list(member)
@@ -143,9 +158,7 @@ async def recompute(user_id: str, use_jev: bool = True, now: Optional[datetime] 
     margin = member[lead] - member[second]
     g = gate(food, groceries, games)
 
-    state = store.get_usage(user_id, STATE, {}) or {}
     events = store.get_usage(user_id, EVENTS, []) or []
-    fingerprint = [food.get("orders", 0), groceries.get("orders", 0), games]
     new_evidence = state.get("fingerprint") != fingerprint
     current = state.get("house")
     event = None
@@ -174,7 +187,7 @@ async def recompute(user_id: str, use_jev: bool = True, now: Optional[datetime] 
     out = {
         "status": "sorted" if current else "unsorted", "house": current, "house_info": HOUSES.get(current or ""),
         "since": state.get("since"), "membership": member, "leaning": lead, "margin": round(margin, 3),
-        "traits": {"deterministic": det, "jev": judged, "blended": blended}, "gate": g,
+        "traits": {"deterministic": det, "jev": judged, "blended": blended, "jev_cached": jev_cached}, "gate": g,
         "challenger": state.get("challenger"), "journey": events[-10:], "event": event,
     }
     trace.emit("brain.houses", **{k: out[k] for k in ("status", "house", "membership", "leaning", "margin", "gate", "challenger", "event")},

@@ -190,3 +190,59 @@ def test_rates_from_few_orders_are_shrunk():
     few = {"orders": 5, "exploration_rate": 0.75, "cuisine_mix": {"a": 0.5, "b": 0.5}}
     many = {**few, "orders": 40}
     assert houses.traits(few, {})["wayfarers"] < houses.traits(many, {})["wayfarers"]
+
+
+# --- caching: only new evidence triggers JEV / LLM calls -----------------------------------------
+
+class CountingJev:
+    def __init__(self):
+        self.calls = []
+
+    async def decide(self, kind, state, questions, timeout_s=None):
+        self.calls.append(kind)
+        if kind == "house_traits":
+            return jev.Decision(model="m", nouls={}, choices={}, scores={h: (2.0, {}, 0.9) for h in questions}, input_tokens=1, latency_ms=1)
+        return jev.Decision(model="m", nouls={}, choices={k: ("work_lunch", {}, 0.9) for k in questions}, scores={}, input_tokens=1, latency_ms=1)
+
+
+async def test_brain_view_makes_no_jev_calls_without_new_evidence():
+    from app.brain import summary
+
+    _feed("c1", _history()[:6])
+    fake = CountingJev()
+    with patch.object(jev, "get_client", return_value=fake):
+        first = await summary.view("c1")
+        assert fake.calls.count("house_traits") == 1 and fake.calls.count("occasion") == 1
+        assert first["house"]["traits"]["jev_cached"] is False
+        for _ in range(3):
+            again = await summary.view("c1", "dinner", "weekend")  # different slot, same evidence
+        assert fake.calls.count("house_traits") == 1 and fake.calls.count("occasion") == 1
+        assert again["house"]["traits"]["jev_cached"] is True and again["house"]["traits"]["jev"] == first["house"]["traits"]["jev"]
+        _feed("c1", [_order("new", 0, "lunch", "monday", [BOWL])])  # new evidence
+        await summary.view("c1")
+        assert fake.calls.count("house_traits") == 2 and fake.calls.count("occasion") == 2  # only the new order labelled
+        await summary.view("c1", refresh=True)
+        assert fake.calls.count("house_traits") == 3
+
+
+async def test_insight_cards_cached_per_facts(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "openai_api_key", "k")
+    reply = {"cards": [{"title": "Lunch o'clock", "body": "Lunch is your moment, 57% of the time.", "fact_ids": ["food.usual_slot"]}]}
+    llm = AsyncMock(return_value=SimpleNamespace(content=json.dumps(reply)))
+    with patch("app.llm.JsonChat.ainvoke", new=llm):
+        a = await insights.generate(FACTS, None, [], user_id="c2")
+        b = await insights.generate(FACTS, None, [], user_id="c2")
+        changed = FACTS + [{"id": "food.spend", "text": "Typical order ₹333 (mid)", "value": 333}]
+        await insights.generate(changed, None, [], user_id="c2")
+    assert llm.await_count == 2 and a["cached"] is False and b["cached"] is True and b["cards"] == a["cards"]
+
+
+async def test_llm_failure_is_not_cached(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "openai_api_key", "k")
+    with patch("app.llm.JsonChat.ainvoke", new=AsyncMock(side_effect=TimeoutError)):
+        out = await insights.generate(FACTS, None, [], user_id="c3")
+    assert out["method"] == "templates" and not store.get_usage("c3", insights.CACHE_KEY, {})

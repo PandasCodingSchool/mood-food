@@ -315,6 +315,7 @@ class LabBrainRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=100)
     slot: Optional[str] = None
     daytype: Optional[str] = None
+    refresh: bool = False
 
 
 @router.post("/brain/build")
@@ -355,5 +356,5 @@ async def lab_brain(body: LabBrainRequest) -> dict:
 
     t0 = time.perf_counter()
     with trace.collect() as events:
-        data = await summary.view(body.user_id, body.slot, body.daytype)
+        data = await summary.view(body.user_id, body.slot, body.daytype, refresh=body.refresh)
     return _traced(data, events, t0)

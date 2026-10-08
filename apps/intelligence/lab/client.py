@@ -85,8 +85,8 @@ class LabClient:
     def brain_build(self, user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None) -> dict:
         return self._call("POST", "/api/lab/brain/build", json={"user_id": user_id, "slot": slot, "daytype": daytype})
 
-    def brain(self, user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None) -> dict:
-        return self._call("POST", "/api/lab/brain", json={"user_id": user_id, "slot": slot, "daytype": daytype})
+    def brain(self, user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None, refresh: bool = False) -> dict:
+        return self._call("POST", "/api/lab/brain", json={"user_id": user_id, "slot": slot, "daytype": daytype, "refresh": refresh})
 
     def evals(self) -> dict:
         return self._call("POST", "/api/lab/evals")

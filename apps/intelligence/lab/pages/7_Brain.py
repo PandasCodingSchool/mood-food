@@ -153,7 +153,10 @@ def _brain(data: dict, ctx_user: str):
                 st.write(c["body"])
                 if c.get("fact_ids"):
                     st.caption(" ".join(f"`{i}`" for i in c["fact_ids"]))
-        st.caption(f"Insight cards: {data['insights']['method']}" + (f" · {len(data['insights']['rejected'])} rejected by the validator" if data["insights"].get("rejected") else ""))
+        cached = [n for n, hit in (("house traits", (data.get("house") or {}).get("traits", {}).get("jev_cached")),
+                                    ("insight cards", data["insights"].get("cached"))) if hit]
+        st.caption(("Cache: reused " + " and ".join(cached) + " (no new evidence) · " if cached else "Cache: fresh judgements · ")
+                   + f"Insight cards: {data['insights']['method']}" + (f" · {len(data['insights']['rejected'])} rejected by the validator" if data["insights"].get("rejected") else ""))
     st.markdown(f"**Brain for `{ctx_user}`** — {food.get('orders', 0)} food orders, {groc.get('orders', 0)} grocery orders, "
                 f"{len(groc.get('top_items', []))} grocery items tracked")
     if data["facts"]:
@@ -201,13 +204,14 @@ with tab_brain:
     user = st.session_state.get("ctx_user") or "lab-user"
     st.caption("Builds the brain for the sidebar's user from the Swiggy + Instamart history (the same fold the API runs), "
                "then shows what it knows. Recommend and Games use it for that user.")
-    b1, b2, b3 = st.columns([2, 1, 1])
+    b1, b2, b3, b4 = st.columns([2, 1, 1, 1])
     slot = b2.selectbox("Slot", ["lunch", "dinner", "breakfast", "late_night"], key="brain_slot")
     daytype = b3.selectbox("Day", ["weekday", "weekend"], key="brain_daytype")
+    refresh = b4.toggle("Bypass cache", False, help="Force new JEV / LLM judgements even if the evidence hasn't changed.")
     if b1.button("Build my brain from Swiggy + Instamart", type="primary"):
         st.session_state.brain = ui.call(ui.client().brain_build, user, slot, daytype)
     elif "brain" in st.session_state and st.session_state.brain:
-        fresh = ui.call(ui.client().brain, user, slot, daytype)
+        fresh = ui.call(ui.client().brain, user, slot, daytype, refresh)
         if fresh:
             st.session_state.brain = {**st.session_state.brain, "result": {**st.session_state.brain["result"], **fresh["result"]}}
     br = st.session_state.get("brain")
