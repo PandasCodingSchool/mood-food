@@ -18,10 +18,14 @@ from app.data.dishes import DISHES_BY_ID, DishRecord
 from app.decisions.engine import dish_similarity
 from app.services import sensory
 
-BETA = 3.0            # how far one answer moves a candidate's logit
-STOP_PROB = 0.55      # posterior mass on the leader that ends a game
-JEV_CHECK_FROM = 0.35  # leader mass at which a JEV commit check is worth a call
-JEV_STOP_CONF = 0.75
+# Tuned with simulated players (Oct 2026): consistent players finish in 3-5 answers,
+# mixed ones play close to max_steps; one strong answer can't end a game on its own
+# (see also GAMES[*]["min_steps"] in sessions).
+BETA = 2.0             # how far one answer moves a candidate's logit
+STOP_PROB = 0.70       # posterior mass on the leader that ends a game
+JEV_CHECK_FROM = 0.50  # leader mass at which a JEV commit check is worth a call
+JEV_STOP_CONF = 0.85   # JEV confidence that ends a game (its pick must be in the top 2)
+SWIPE_SPILLOVER = 0.5  # share of a swipe's effect that reaches similar dishes
 
 
 @dataclass
@@ -43,8 +47,9 @@ def entropy(p: dict[str, float]) -> float:
     return -sum(v * math.log(v) for v in p.values() if v > 0)
 
 
-def apply(logits: dict[str, float], effect: dict[str, float], beta: float = BETA) -> dict[str, float]:
-    return {k: v + beta * effect.get(k, 0.0) for k, v in logits.items()}
+def apply(logits: dict[str, float], effect: dict[str, float], beta: Optional[float] = None) -> dict[str, float]:
+    b = BETA if beta is None else beta
+    return {k: v + b * effect.get(k, 0.0) for k, v in logits.items()}
 
 
 def answer_probs(post: dict[str, float], q: Question) -> dict[str, float]:
@@ -62,10 +67,24 @@ def expected_entropy(logits: dict[str, float], q: Question) -> float:
     return sum(p_a * entropy(softmax(apply(logits, q.effects[a]))) for a, p_a in answer_probs(post, q).items())
 
 
+def score_questions(logits: dict[str, float], questions: list[Question]) -> list[dict[str, Any]]:
+    """Every candidate question with its expected entropy, information gain and
+    answer probabilities, best first (ties by key) — what `best_question` picks from."""
+    post = softmax(logits)
+    h = entropy(post)
+    rows = []
+    for q in questions:
+        p_a = answer_probs(post, q)
+        exp_h = sum(p * entropy(softmax(apply(logits, q.effects[a]))) for a, p in p_a.items())
+        rows.append({"question": q, "key": q.key, "expected_entropy": exp_h, "info_gain": h - exp_h, "answer_probs": p_a})
+    rows.sort(key=lambda r: (r["expected_entropy"], r["key"]))
+    return rows
+
+
 def best_question(logits: dict[str, float], questions: list[Question]) -> Optional[Question]:
     if not questions:
         return None
-    return min(questions, key=lambda q: (expected_entropy(logits, q), q.key))
+    return score_questions(logits, questions)[0]["question"]
 
 
 def initial_logits(totals: dict[str, float]) -> dict[str, float]:
@@ -109,7 +128,9 @@ def swipe_questions(ids: list[str], asked: set[str]) -> list[Question]:
             continue
         sims = {d.id: dish_similarity(d, j) for d in dishes}
         mean = sum(sims.values()) / len(sims)
-        liked = {i: s - mean for i, s in sims.items()}
+        # The swiped dish takes the full effect; similar dishes only half, so a few passes on
+        # neighbours can't outvote a direct like (or rescue a direct pass).
+        liked = {i: 1.0 if i == j.id else SWIPE_SPILLOVER * (s - mean) for i, s in sims.items()}
         out.append(Question(key, "swipe", {"dish": _card(j)}, {"like": liked, "pass": {i: -v for i, v in liked.items()}}))
     return out
 

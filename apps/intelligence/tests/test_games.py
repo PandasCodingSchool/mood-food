@@ -105,8 +105,9 @@ async def test_jev_commit_ends_the_game_early():
 
     s = sessions.start("story", CTX, None)
     state = sessions.load(s["session_id"])
-    # A clear-but-not-decisive leader (~0.47 of the mass): worth a JEV commit check.
-    state["logits"] = {k: (3.0 if i == 0 else 0.0) for i, k in enumerate(state["logits"])}
+    # A clear-but-not-decisive leader (~0.6, between the JEV check and the stop line).
+    state["logits"] = {k: (3.5 if i == 0 else 0.0) for i, k in enumerate(state["logits"])}
+    state["steps"] = state["min_steps"] - 1  # this answer reaches min_steps
     sessions._save(s["session_id"], state)
     with patch.object(jev, "get_client", return_value=ConfidentJev()):
         r = await sessions.answer(s["session_id"], {"option_id": s["question"]["options"][0]["id"]})
@@ -140,3 +141,47 @@ def test_endpoints_round_trip(client):
     assert client.get(f"/api/games/session/{sid}").json()["step"] == 1
     assert client.post("/api/games/session", json={"user_context": CTX.model_dump(mode="json"), "game": "chess"}).status_code == 400
     assert client.get("/api/games/session/missing").status_code == 404
+
+
+async def test_decision_walks_the_ranking_to_live_swiggy_cards():
+    """With an address, the decision's cards are dishes actually on Swiggy nearby (photo, price, restaurant)."""
+    from app.schemas.swiggy import EnrichedMatch, SwiggyMenuItem, SwiggyRestaurant
+
+    probed: list[str] = []
+
+    async def fake_enrich(self, dishes, city=None, address_id=None):
+        probed.extend(d.id for d in dishes)
+        # The posterior's leader isn't available nearby; everything after it is.
+        return "addr_1", [EnrichedMatch(dish_id=d.id, matched=d.id != probed[0],
+                                        item=SwiggyMenuItem(id=f"i_{d.id}", name=d.name, price=249,
+                                                            image_url=f"https://media.swiggy.test/{d.id}.jpg"),
+                                        restaurant=SwiggyRestaurant(id=f"r_{d.id}", name="Near Kitchen", eta_min=22))
+                          for d in dishes]
+
+    s = sessions.start("craving_radar", CTX, None, swiggy_address_id="addr_1")
+    with patch("app.services.swiggy_token.load_token", return_value="tok"), \
+         patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich", new=fake_enrich):
+        sid, r = s["session_id"], None
+        for _ in range(sessions.GAMES["craving_radar"]["max_steps"]):
+            r = await sessions.answer(sid, {"yes": True})
+            if r["done"]:
+                break
+    decision = r["decision"]
+    recs = decision["recommendations"]["recommendations"]
+    assert decision["live_status"] == "live" and len(recs) == 3
+    assert probed[0] not in decision["dish_ids"]  # unavailable leader skipped, not shown offline
+    assert all(x["image_url"].startswith("https://media.swiggy.test/") and x["restaurant"]["name"] == "Near Kitchen"
+               and x["practical_details"]["estimated_price"] == 249 for x in recs)
+    assert set(decision["recommendations"]["swiggy_matches"]) == set(decision["dish_ids"])
+
+
+async def test_decision_without_address_stays_offline():
+    s = sessions.start("story", CTX, None)
+    with patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich", new=AsyncMock(side_effect=AssertionError)):
+        q, r = s["question"], None
+        for _ in range(sessions.GAMES["story"]["max_steps"]):
+            r = await sessions.answer(s["session_id"], {"option_id": q["options"][0]["id"]})
+            if r["done"]:
+                break
+            q = r["question"]
+    assert r["decision"]["live_status"] == "offline" and len(r["decision"]["dish_ids"]) == 3

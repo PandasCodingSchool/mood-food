@@ -170,6 +170,61 @@ def _looks_retryable(text: str) -> bool:
     return any(s in lowered for s in ("timeout", "timed out", "unavailable", "5xx", "try again", "rate limit"))
 
 
+# Read-only mode (always on with the Intelligence Lab): only these discovery tools may run.
+# Verified read-only against mcp.swiggy.com/builders/docs/reference/food (Oct 2026); every
+# other tool — cart, coupon, order, payment, address create/delete — is refused, and so is
+# any tool not listed here.
+READ_ONLY_TOOLS = frozenset({"get_addresses", "search_restaurants", "search_menu", "get_restaurant_menu"})
+
+
+class SwiggyWriteBlockedError(SwiggyMCPError):
+    """A tool outside READ_ONLY_TOOLS was called while read-only mode is on."""
+
+
+def read_only() -> bool:
+    return settings.swiggy_read_only or settings.lab_enabled
+
+
+def _guard(name: str, call: Any) -> None:
+    if read_only() and name not in READ_ONLY_TOOLS:
+        call.close()  # never started — no network call is made
+        raise SwiggyWriteBlockedError(f"Swiggy tool '{name}' is blocked: read-only mode (lab) allows only "
+                                      f"{', '.join(sorted(READ_ONLY_TOOLS))}", retryable=False)
+
+
+_PERSONAL_KEYS = {"phonenumber", "phone", "mobile", "mobilenumber", "email", "nameoncard", "upi", "vpa", "token",
+                  "accesstoken", "authorization"}  # compared lower-case, underscores removed
+
+
+def _redact(data: Any) -> Any:
+    """Copy of a tool payload with personal fields masked (lab traces only)."""
+    if isinstance(data, dict):
+        return {k: "•••" if k.lower().replace("_", "") in _PERSONAL_KEYS else _redact(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_redact(v) for v in data]
+    return data
+
+
+async def _traced(name: str, arguments: dict[str, Any], call: Any, once: bool = False) -> Any:
+    """Await one tool call, recording it for the Lab (tool, args, latency, result size, error)."""
+    from app.lab import trace
+
+    if not trace.enabled():
+        return await call
+    start = time.perf_counter()
+    event: dict[str, Any] = {"tool": name, "args": _redact(json.loads(json.dumps(arguments, default=str))), "retry": not once}
+    try:
+        result = await call
+    except Exception as exc:
+        trace.emit("swiggy.call", **event, ok=False, error=f"{type(exc).__name__}: {exc}"[:300],
+                   latency_ms=round((time.perf_counter() - start) * 1000, 1))
+        raise
+    text = json.dumps(_redact(json.loads(json.dumps(result, default=str))), default=str)
+    trace.emit("swiggy.call", **event, ok=True, latency_ms=round((time.perf_counter() - start) * 1000, 1),
+               result_chars=len(text), result_preview=text[:600])
+    return result
+
+
 class SwiggyMCPClient:
     """Calls Swiggy Food MCP tools using a bearer token."""
 
@@ -190,6 +245,18 @@ class SwiggyMCPClient:
         return bool(self._token and self._url)
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Call a single Food tool with retry + backoff (traced for the Lab; read-only guard)."""
+        call = self._call_tool(name, arguments)
+        _guard(name, call)
+        return await _traced(name, arguments, call)
+
+    async def call_tool_once(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Single attempt, no retry (traced for the Lab; read-only guard) — see `_call_tool_once`."""
+        call = self._call_tool_once(name, arguments)
+        _guard(name, call)
+        return await _traced(name, arguments, call, once=True)
+
+    async def _call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         """Call a single Food tool with retry + exponential backoff.
 
         If a reusable session is open (see `session()`), the call is routed
@@ -238,7 +305,7 @@ class SwiggyMCPClient:
             raise last_error
         raise SwiggyMCPError(f"Swiggy tool '{name}' failed: {last_error}", retryable=True)
 
-    async def call_tool_once(self, name: str, arguments: dict[str, Any]) -> Any:
+    async def _call_tool_once(self, name: str, arguments: dict[str, Any]) -> Any:
         """Call a tool exactly once — no retry loop.
 
         Use for non-idempotent tools (place_food_order): on a transport

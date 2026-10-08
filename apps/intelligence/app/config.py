@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Comma-separated browser origins; the API calls us server-to-server.
     allowed_origins: str = ""
     json_logs: bool = False
+    # Intelligence Lab (/api/lab/*): dev-only routes that return decisions with
+    # their full trace. Never mounted when ENVIRONMENT=production.
+    lab_enabled: bool = False
+    # Refuse every Swiggy MCP tool except discovery reads (always on when lab_enabled).
+    swiggy_read_only: bool = False
 
     # --- Swiggy MCP (Food server) ---
     # Streamable-HTTP MCP endpoint. See https://mcp.swiggy.com/builders

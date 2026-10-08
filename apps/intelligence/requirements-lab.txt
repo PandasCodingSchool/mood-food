@@ -1,0 +1,4 @@
+# Intelligence Lab UI (local dev only; not in the service image)
+streamlit>=1.40,<2
+httpx>=0.27
+pandas>=2.2

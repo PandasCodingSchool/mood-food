@@ -26,6 +26,7 @@ from fastapi import APIRouter, Request
 from app.config import settings
 from app.data.dishes import DISHES_BY_ID
 from app.decisions import engine, ranker as jev_ranker
+from app.lab import trace
 from app.learning import live_state, paging, runs
 from app.schemas.request import RecommendationRequest
 from app.schemas.response import (
@@ -33,11 +34,9 @@ from app.schemas.response import (
     PracticalDetails,
     Recommendation,
     RecommendationResponse,
-    Restaurant,
 )
-from app.schemas.swiggy import EnrichDishInput
-from app.services import recommender
-from app.services.shortlist import ScoredDish, build_scored_shortlist, score_breakdown
+from app.services import live_cards, recommender
+from app.services.shortlist import ScoredDish, build_scored_shortlist, filter_report, score_breakdown
 
 logger = logging.getLogger(__name__)
 
@@ -54,48 +53,6 @@ def _flight_key(request: RecommendationRequest) -> str:
     addr = request.swiggy_address_id or ""
     count = request.recommendation_config.count
     return f"auto:{mood}|{addr}|{count}|{request.recommendation_config.temperature}"
-
-
-def _dish_enrich_input(rec: Recommendation) -> EnrichDishInput:
-    dish = DISHES_BY_ID.get(rec.dish.id)
-    return EnrichDishInput(
-        id=rec.dish.id,
-        name=rec.dish.name,
-        cuisine=rec.dish.cuisine,
-        aliases=list(dish.swiggy_aliases or []) if dish else [],
-        search_category=dish.swiggy_search_category if dish else None,
-    )
-
-
-def _inject_live_data(
-    recs: list[Recommendation],
-    live_facts: dict[str, dict],
-) -> list[Recommendation]:
-    """Return a new list with restaurant/price/image updated from live_facts."""
-    out: list[Recommendation] = []
-    for r in recs:
-        live = live_facts.get(r.dish.id)
-        if live and live.get("restaurant"):
-            rest = live["restaurant"]
-            item = live.get("item") or {}
-            out.append(r.model_copy(update={
-                "image_url": item.get("image_url") or r.image_url,
-                "restaurant": Restaurant(
-                    name=rest.get("name", "Local Kitchen"),
-                    rating=float(rest.get("rating") or 4.0),
-                    distance_km=float(rest.get("distance_km") or 2.0),
-                    delivery_time_min=int(rest.get("eta_min") or 30),
-                    is_open=bool(rest.get("is_open", True)),
-                ),
-                "practical_details": r.practical_details.model_copy(update={
-                    "estimated_price": float(
-                        item.get("price") or r.practical_details.estimated_price
-                    ),
-                }),
-            }))
-        else:
-            out.append(r)
-    return out
 
 
 @router.post("/api/ai-recommendations", response_model=RecommendationResponse)
@@ -252,6 +209,12 @@ async def _run_pipeline(
                 parts = score_breakdown(DISHES_BY_ID[wid], body.user_context)
                 scored.append(ScoredDish(DISHES_BY_ID[wid], sum(parts.values()), parts))
     shortlist = [s.dish for s in scored]
+    if trace.enabled():
+        trace.emit("pipeline.shortlist", context_used=body.user_context.model_dump(mode="json", exclude_none=True),
+                   filters=filter_report(body.user_context), wildcards=wildcard_ids, size=len(scored),
+                   candidates=[{"id": x.dish.id, "name": x.dish.name, "cuisine": x.dish.cuisine, "price": x.dish.price_inr,
+                                "total": trace.r(x.total, 2), "parts": {k: trace.r(v, 2) for k, v in x.parts.items()}}
+                               for x in scored])
     logger.info(
         "ai-recommendations: shortlist=%d mood=%s address=%s",
         len(shortlist), body.user_context.mood.primary, body.swiggy_address_id,
@@ -286,6 +249,10 @@ async def _run_pipeline(
     is_cache_hit = bool(gpt_response.ai_metadata and gpt_response.ai_metadata.cache_hit)
     gpt_pool: list[Recommendation] = list(gpt_response.recommendations)
     t_rank = time.time()
+    trace.emit("pipeline.rank", ranker_requested=settings.ranker_provider, ranker_used=ranker_used,
+               fallback=None if ranker_used == "jev" else ("JEV unavailable → GPT" if ranker_used == "gpt" else "GPT failed → rule order"),
+               pool_size=pool_size, paging_excluded=sorted(excluded), cache_hit=is_cache_hit,
+               pool=[{"id": r.dish.id, "name": r.dish.name, "confidence": r.confidence} for r in gpt_pool])
 
     # Commit confidence + hero copy polish run while Swiggy matching does.
     commit_task = (
@@ -325,6 +292,12 @@ async def _run_pipeline(
         """Record the decision after responding; outcomes join on request_id."""
         meta = gpt_response.ai_metadata
         done = time.time()
+        trace.emit("pipeline.summary", ranker=ranker_used, live_status=final.live_status,
+                   selected=[r.dish.name for r in final.recommendations],
+                   commit_confidence=final.meta.commit_confidence if final.meta else None,
+                   suggested_count=final.meta.suggested_count if final.meta else None,
+                   latency_ms={"shortlist": round((t_shortlist - t0) * 1000, 1), "rank": round((t_rank - t_shortlist) * 1000, 1),
+                               "enrich_and_finish": round((done - t_rank) * 1000, 1), "total": round((done - t0) * 1000, 1)})
         recorded = asyncio.get_running_loop().run_in_executor(None, lambda: runs.record(
             body.request_id,
             user_id=body.user_id,
@@ -365,94 +338,11 @@ async def _run_pipeline(
             wildcard_ids,
         )))
 
-    # Step 2 — Progressive live enrichment of the GPT-ranked pool.
-    live_facts: dict[str, dict] = {}
-    addr: Optional[str] = body.swiggy_address_id
-    live_status = "offline"
-
-    user_token = request.headers.get("x-swiggy-user-token")
-    from app.services.swiggy_token import load_token
-    from app.services.swiggy_mcp import SwiggyAuthError, SwiggyMCPClient
-    from app.services.swiggy_discovery import SwiggyDiscoveryService
-
-    token = user_token or load_token()
-    if not token:
-        logger.warning(
-            "ai-recommendations: no Swiggy token available (no x-swiggy-user-token "
-            "header and no usable SWIGGY_BOOTSTRAP_TOKEN/stored token) — skipping "
-            "live enrichment entirely; live_status will be 'offline' with zero matches"
-        )
-    if token:
-        client = SwiggyMCPClient(token=token)
-        service = SwiggyDiscoveryService(client=client)
-
-        wave_start = 0
-        wave_size = final_count + 1  # First wave: one more than needed
-
-        while wave_start < len(gpt_pool):
-            wave = gpt_pool[wave_start : wave_start + wave_size]
-            to_enrich = [
-                _dish_enrich_input(r)
-                for r in wave
-                if r.dish.id not in live_facts
-            ]
-            if to_enrich:
-                try:
-                    addr, matches = await service.enrich(to_enrich, address_id=addr)
-                    for m in matches:
-                        if m.matched:
-                            live_facts[m.dish_id] = m.model_dump()
-                except SwiggyAuthError as exc:
-                    logger.warning(
-                        "ai-recommendations: Swiggy token REJECTED (%s) — "
-                        "SWIGGY_BOOTSTRAP_TOKEN is likely expired (Swiggy v1 tokens "
-                        "have no refresh token; re-auth with `python -m scripts.swiggy_auth "
-                        "--save`) or the linked user's token expired. Live enrichment "
-                        "aborted for this request.", exc,
-                    )
-                    break
-                except Exception as exc:
-                    logger.warning("ai-recommendations: swiggy enrich failed: %s", exc)
-                    break
-
-            if len(live_facts) >= final_count:
-                break  # Enough live matches — stop probing.
-
-            wave_start += wave_size
-            # Next wave: just enough to fill remaining slots + 1 buffer.
-            wave_size = max(1, final_count - len(live_facts) + 1)
-
-        logger.info(
-            "ai-recommendations: live_matches=%d/%d (pool=%d shortlist=%d)",
-            len(live_facts), len(gpt_pool), pool_size, len(shortlist),
-        )
-
-    # Step 3 — Final selection: GPT order, live-matched first, fill from ranked unmatched.
-    live_recs = [r for r in gpt_pool if r.dish.id in live_facts]
-    unmatched_recs = [r for r in gpt_pool if r.dish.id not in live_facts]
-
-    if len(live_recs) >= final_count:
-        selected = live_recs[:final_count]
-    else:
-        selected = live_recs + unmatched_recs[:final_count - len(live_recs)]
-
-    selected = _inject_live_data(selected, live_facts)
-    selected = [r.model_copy(update={"rank": i + 1}) for i, r in enumerate(selected)]
-
-    matched_for_response = {
-        r.dish.id: live_facts[r.dish.id]
-        for r in selected
-        if r.dish.id in live_facts
-    }
-    # Only include actual swiggy matches from dishes included in the final response.
-    # (live_facts may contain extras from the pool that were not selected.)
-
-    if matched_for_response and len(matched_for_response) == len(selected):
-        live_status = "live"
-    elif matched_for_response:
-        live_status = "partial"
-    elif body.swiggy_address_id:
-        live_status = "offline"
+    # Step 2 — Progressive live enrichment of the ranked pool; live-matched first.
+    cards = await live_cards.build(
+        gpt_pool, final_count, body.swiggy_address_id, request.headers.get("x-swiggy-user-token"),
+    )
+    selected, matched_for_response, addr, live_status = cards.selected, cards.matches, cards.address_id, cards.status
 
     elapsed = round(time.time() - t0, 2)
     logger.info(

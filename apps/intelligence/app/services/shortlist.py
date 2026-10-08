@@ -133,39 +133,52 @@ def _avoid_tokens(ctx: UserContext) -> tuple[set[str], set[str]]:
     return ids, tokens
 
 
+def _drop_reason(d: DishRecord, ctx: UserContext, rules: diet.DietRules, budget: Optional[float],
+                 avoid_ids: set[str], avoid: set[str], unavailable: set[str], meal_time: Optional[str]) -> Optional[str]:
+    """Why `d` breaks a hard constraint, or None when it is allowed."""
+    sit = ctx.situational
+    if d.name.lower() in unavailable or d.id in avoid_ids:
+        return "unavailable_or_avoided"
+    if not diet.allows(d, rules):
+        return "diet_or_allergen"
+    if budget is not None and d.price_inr > budget:
+        return "over_budget"
+    if meal_time and d.meal_time and "any" not in d.meal_time:
+        window = _MEAL_WINDOWS.get(meal_time, {meal_time})
+        # Only hard-exclude clearly wrong meals, and only for delivery.
+        if sit and sit.delivery_preferred and not window & set(d.meal_time):
+            return "wrong_meal"
+    name_tokens = {w.lower() for w in d.name.split() if len(w) > 2}
+    if avoid & name_tokens:
+        return "avoided_word"
+    if sit and sit.delivery_preferred and not d.delivery_friendly:
+        return "not_delivery_friendly"
+    return None
+
+
+def _filter_args(ctx: UserContext) -> tuple:
+    avoid_ids, avoid = _avoid_tokens(ctx)
+    sit = ctx.situational
+    meal_time = _TIME_ALIASES.get(sit.time_of_day, sit.time_of_day) if sit and sit.time_of_day else None
+    return (_restrictions(ctx), _budget_max(ctx), avoid_ids, avoid,
+            {n.lower() for n in ctx.unavailable_dishes}, meal_time)
+
+
 def hard_filter(ctx: UserContext, dishes: Optional[list[DishRecord]] = None) -> list[DishRecord]:
     """Drop dishes that violate hard constraints."""
     pool = list(dishes if dishes is not None else DISHES)
-    rules = _restrictions(ctx)
-    budget = _budget_max(ctx)
-    avoid_ids, avoid = _avoid_tokens(ctx)
-    unavailable = {n.lower() for n in ctx.unavailable_dishes}
+    args = _filter_args(ctx)
+    return [d for d in pool if _drop_reason(d, ctx, *args) is None]
 
-    sit = ctx.situational
-    meal_time = None
-    if sit and sit.time_of_day:
-        meal_time = _TIME_ALIASES.get(sit.time_of_day, sit.time_of_day)
 
-    out: list[DishRecord] = []
-    for d in pool:
-        if d.name.lower() in unavailable or d.id in avoid_ids:
-            continue
-        if not diet.allows(d, rules):
-            continue
-        if budget is not None and d.price_inr > budget:
-            continue
-        if meal_time and d.meal_time and "any" not in d.meal_time:
-            window = _MEAL_WINDOWS.get(meal_time, {meal_time})
-            # Only hard-exclude clearly wrong meals, and only for delivery.
-            if sit and sit.delivery_preferred and not window & set(d.meal_time):
-                continue
-        name_tokens = {w.lower() for w in d.name.split() if len(w) > 2}
-        if avoid & name_tokens:
-            continue
-        if sit and sit.delivery_preferred and not d.delivery_friendly:
-            continue
-        out.append(d)
-    return out
+def filter_report(ctx: UserContext) -> dict[str, int]:
+    """Catalog size, dishes kept, and how many each hard constraint removed (first failing rule)."""
+    args = _filter_args(ctx)
+    report: dict[str, int] = {"catalog": len(DISHES), "kept": 0}
+    for d in DISHES:
+        reason = _drop_reason(d, ctx, *args) or "kept"
+        report[reason] = report.get(reason, 0) + 1
+    return report
 
 
 # Order-history adjustments (history comes from the API's order log + ratings).

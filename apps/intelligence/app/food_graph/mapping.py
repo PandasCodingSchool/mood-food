@@ -22,6 +22,7 @@ from typing import Optional
 from typesafe_sdk import Choice
 
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord
+from app.lab import trace
 from app.learning import store
 
 logger = logging.getLogger("food_graph")
@@ -169,6 +170,7 @@ async def map_items(items: list[tuple[str, Optional[bool]]]) -> dict[str, Mappin
                 pending.append((name, cands))
 
     client = jev.get_client()
+    decision = None
     if pending and client is not None:
         state = {
             f"i{i + 1}": {
@@ -205,6 +207,20 @@ async def map_items(items: list[tuple[str, Optional[bool]]]) -> dict[str, Mappin
                     remember(name, None, p, "jev")
     for name, _ in pending:
         out.setdefault(name, Mapping(name, None, 0.0, "unresolved"))
+    if trace.enabled():
+        jev_probs: dict[str, dict[str, float]] = {}
+        for i, (name, cands) in enumerate(pending):
+            answer = decision.choices.get(f"i{i + 1}") if decision is not None else None
+            if answer:
+                jev_probs[name] = {(cands[int(k[1:]) - 1].name if k != _NONE else "none_of_these"): trace.r(p)
+                                   for k, p in answer[1].items()}
+        cands_of = dict(pending)
+        trace.emit("food_graph.map", threshold=MAP_THRESHOLD, jev_available=client is not None, items=[{
+            "item": name, "normalised": keys.get(name), "method": m.method, "dish_id": m.dish_id,
+            "dish": DISHES_BY_ID[m.dish_id].name if m.dish_id in DISHES_BY_ID else None,
+            "confidence": trace.r(m.confidence), "candidates": [c.name for c in cands_of.get(name, [])],
+            "jev_probabilities": jev_probs.get(name),
+        } for name, m in out.items()])
     logger.info(
         "food_graph: mapped %d/%d item(s) (%d via JEV)",
         sum(1 for m in out.values() if m.dish_id), len(out), sum(1 for m in out.values() if m.method == "jev"),

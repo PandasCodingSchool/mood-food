@@ -21,6 +21,7 @@ from typing import Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
+from app.lab import trace
 from app.llm import JsonChat
 
 logger = logging.getLogger("menu_scout")
@@ -152,6 +153,8 @@ async def _scout_jev(
         p = decision.nouls.get(f"p{i + 1}")
         if p is not None and p >= JEV_SCOUT_THRESHOLD:
             accepted[(d.dish_id, c.item_id)] = ScoutDecision(compatible=True, confidence=p, reason=f"jev:{p:.2f}")
+        trace.emit("scout.verdict", judge="jev", target=d.dish_name, item=c.item_name, restaurant=c.restaurant_name,
+                   probability=p, threshold=JEV_SCOUT_THRESHOLD, accepted=(d.dish_id, c.item_id) in accepted)
     logger.info("menu_scout(jev): accepted %d/%d pair(s) in %.0f ms", len(accepted), len(pairs), decision.latency_ms)
     return accepted
 
@@ -198,6 +201,9 @@ async def _scout_gpt(
             accepted[(dish.dish_id, cand.item_id)] = ScoutDecision(
                 compatible=True, confidence=float(confidence), reason=reason
             )
+        trace.emit("scout.verdict", judge="gpt", target=dish.dish_name, item=cand.item_name,
+                   restaurant=cand.restaurant_name, probability=float(confidence), compatible=compatible,
+                   threshold=_MIN_CONFIDENCE, reason=reason, accepted=(dish.dish_id, cand.item_id) in accepted)
 
     logger.info(
         "menu_scout: accepted %d/%d pair(s) in %.2fs",

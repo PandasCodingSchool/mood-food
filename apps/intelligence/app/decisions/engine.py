@@ -17,6 +17,7 @@ from typing import Any, Optional
 from app.config import settings
 from app.data.dishes import DishRecord
 from app.decisions import jev
+from app.lab import trace
 from app.decisions.questions import candidate_fit_nouls, candidate_key, ranking_state
 from app.schemas.request import UserContext
 from app.services import sensory
@@ -92,9 +93,18 @@ async def rank(
     # Candidates JEV didn't see (beyond the cap) keep a neutral 0.5 fit.
     blended = {i: (1 - w) * det[i] + w * jev_fit.get(i, 0.5) for i in det}
     lam = {"low": 0.0, "medium": 0.25, "high": 0.45}.get(diversity, 0.25)
-    result.ranked = mmr(sorted(candidates, key=lambda s: blended[s.dish.id], reverse=True), blended, lam)
+    by_blend = sorted(candidates, key=lambda s: blended[s.dish.id], reverse=True)
+    result.ranked = mmr(by_blend, blended, lam)
     result.blended = blended
     result.jev_fit = jev_fit
+    if trace.enabled():
+        final_pos = {s.dish.id: i for i, s in enumerate(result.ranked)}
+        trace.emit("engine.rank", provider=result.provider, jev_weight=w, mmr_lambda=lam, excluded=sorted(exclude),
+                   rows=[{"id": s.dish.id, "name": s.dish.name, "cuisine": s.dish.cuisine, "rule_total": trace.r(s.total, 2),
+                          "rule_norm": trace.r(det[s.dish.id]), "jev_fit": trace.r(jev_fit[s.dish.id]) if s.dish.id in jev_fit else None,
+                          "blended": trace.r(blended[s.dish.id]), "blend_rank": i + 1, "final_rank": final_pos[s.dish.id] + 1,
+                          "parts": {k: trace.r(v, 2) for k, v in s.parts.items()}}
+                         for i, s in enumerate(by_blend)])
     return result
 
 
@@ -103,6 +113,7 @@ async def commit(ctx: UserContext, ranked: list[ScoredDish], seed: str) -> Optio
     client = jev.get_client()
     top = ranked[:COMMIT_TOP_K]
     if client is None or len(top) < 2:
+        trace.emit("engine.commit", ran=False, reason="JEV off (no key, or switched off for this run)" if client is None else "fewer than 2 candidates")
         return None
     question = jev.shuffled_choice(
         "Which one of these candidates should `person` order right now?",
@@ -111,14 +122,22 @@ async def commit(ctx: UserContext, ranked: list[ScoredDish], seed: str) -> Optio
     )
     decision = await client.decide("commit", ranking_state(ctx, [s.dish for s in top]), {"commit": question}, timeout_s=1.5)
     if decision is None or "commit" not in decision.choices:
+        trace.emit("engine.commit", ran=False, reason="JEV gave no answer (see jev events)")
         return None
     choice, probs, confidence = decision.choices["commit"]
     by_key = {candidate_key(i): s.dish.id for i, s in enumerate(top)}
-    return {
+    out = {
         "dish_id": by_key.get(choice),
         "confidence": round(confidence, 4),
         "probabilities": {by_key[k]: round(p, 4) for k, p in probs.items() if k in by_key},
     }
+    if trace.enabled():
+        names = {s.dish.id: s.dish.name for s in top}
+        trace.emit("engine.commit", ran=True, option_order=[by_key[k] for k in question.criteria if k in by_key],
+                   pick=out["dish_id"], pick_name=names.get(out["dish_id"]), confidence=out["confidence"],
+                   probabilities={names[i]: p for i, p in out["probabilities"].items()},
+                   suggested_count=suggested_count(out, 3))
+    return out
 
 
 def suggested_count(commit_result: Optional[dict[str, Any]], requested: int) -> int:

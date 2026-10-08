@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -20,6 +20,7 @@ class StartRequest(BaseModel):
     user_id: Optional[str] = None       # omit for anonymous (site teaser)
     count: int = Field(default=3, ge=1, le=5)
     max_steps: Optional[int] = Field(default=None, ge=1, le=10)
+    swiggy_address_id: Optional[str] = None  # set → the decision returns live Swiggy cards
 
 
 class AnswerRequest(BaseModel):
@@ -30,15 +31,17 @@ class AnswerRequest(BaseModel):
 @router.post("/session")
 async def start(body: StartRequest) -> dict:
     try:
-        return await run_in_threadpool(sessions.start, body.game, body.user_context, body.user_id, body.count, body.max_steps)
+        return await run_in_threadpool(sessions.start, body.game, body.user_context, body.user_id, body.count, body.max_steps,
+                                       body.swiggy_address_id)
     except sessions.GameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/session/{session_id}/answer")
-async def answer(session_id: str, body: AnswerRequest) -> dict:
+async def answer(session_id: str, body: AnswerRequest, request: Request) -> dict:
     try:
-        return await sessions.answer(session_id, body.answer, body.reaction_ms)
+        return await sessions.answer(session_id, body.answer, body.reaction_ms,
+                                     request.headers.get("x-swiggy-user-token"))
     except sessions.GameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

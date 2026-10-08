@@ -3,6 +3,10 @@
 Clients only render: the engine picks each next card/question, decides when
 to stop, and returns lossless typed signals (in the learner's formats) for
 the API to log. Anonymous sessions are allowed (site teaser).
+
+When the session has a Swiggy address, the decision's cards are live: the
+posterior ranking is walked (via `services/live_cards`) until `count` dishes
+match real items near the user, with Swiggy's restaurant, price and photo.
 """
 
 from __future__ import annotations
@@ -14,15 +18,18 @@ from typing import Any, Optional
 from app.data.dishes import DISHES_BY_ID, DishRecord
 from app.decisions import engine as decision_engine
 from app.games import engine as g
+from app.lab import trace
 from app.learning import store
 from app.schemas.request import GameData, RecommendationConfig, RecommendationRequest, UserContext
-from app.services.shortlist import ScoredDish, build_scored_shortlist, score_breakdown
+from app.services.shortlist import ScoredDish, build_scored_shortlist, filter_report, score_breakdown
 
+# min_steps: answers collected before the game may stop (leader threshold or JEV commit),
+# so one strong answer can't end a game on its own.
 GAMES: dict[str, dict[str, int]] = {
-    "swipe": {"max_steps": 8},
-    "this_or_that": {"max_steps": 6},
-    "craving_radar": {"max_steps": 5},
-    "story": {"max_steps": 5},
+    "swipe": {"min_steps": 4, "max_steps": 8},
+    "this_or_that": {"min_steps": 3, "max_steps": 6},
+    "craving_radar": {"min_steps": 3, "max_steps": 5},
+    "story": {"min_steps": 3, "max_steps": 5},
 }
 # Orchestrator game names → playable engine games.
 FROM_ORCHESTRATOR = {
@@ -30,6 +37,7 @@ FROM_ORCHESTRATOR = {
     "day_story": "story", "mood_checkin": "story", "budget_vibe": "story",
 }
 CANDIDATES = 24
+LIVE_POOL = 10  # posterior-ranked dishes a decision may probe on Swiggy for live cards
 
 
 class GameError(ValueError):
@@ -69,7 +77,54 @@ def _public(q: g.Question) -> dict[str, Any]:
 
 def _progress(state: dict) -> dict[str, Any]:
     top, p = g.leader(state["logits"])
-    return {"step": state["steps"], "max_steps": state["max_steps"], "leader_probability": round(p, 3)}
+    return {"step": state["steps"], "min_steps": _min_steps(state), "max_steps": state["max_steps"],
+            "leader_probability": round(p, 3)}
+
+
+# --- lab trace views (only built while a trace is being collected) -----------------
+
+def _posterior_view(logits: dict[str, float], before: Optional[dict[str, float]] = None) -> list[dict[str, Any]]:
+    post = g.softmax(logits)
+    prior = g.softmax(before) if before else None
+    rows = []
+    for i in sorted(post, key=post.get, reverse=True):
+        row = {"id": i, "name": DISHES_BY_ID[i].name, "logit": trace.r(logits[i], 3), "p": trace.r(post[i])}
+        if before:
+            row.update(p_before=trace.r(prior[i]), d_logit=trace.r(logits[i] - before[i], 3))
+        rows.append(row)
+    return rows
+
+
+def _question_label(q: g.Question) -> str:
+    if q.kind == "swipe":
+        return f"Swipe: {q.payload['dish']['name']}"
+    if q.kind == "duel":
+        a, b = q.payload["options"]
+        return f"{a['name']} vs {b['name']}"
+    return q.payload.get("prompt", q.key)
+
+
+def _question_scores_view(rows: list[dict[str, Any]], limit: int = 12) -> list[dict[str, Any]]:
+    return [{"key": r["key"], "kind": r["question"].kind, "label": _question_label(r["question"]),
+             "expected_entropy": trace.r(r["expected_entropy"]), "info_gain": trace.r(r["info_gain"]),
+             "answer_probs": {a: trace.r(p, 3) for a, p in r["answer_probs"].items()}} for r in rows[:limit]]
+
+
+def _pick_question(logits: dict[str, float], questions: list[g.Question]) -> tuple[Optional[g.Question], list[dict]]:
+    """`best_question`, plus the scored list it chose from when tracing (same computation)."""
+    if not trace.enabled():
+        return g.best_question(logits, questions), []
+    rows = g.score_questions(logits, questions)
+    return (rows[0]["question"] if rows else None), rows
+
+
+def _thresholds(state: dict) -> dict[str, Any]:
+    return {"stop_prob": g.STOP_PROB, "jev_check_from": g.JEV_CHECK_FROM, "jev_stop_conf": g.JEV_STOP_CONF,
+            "min_steps": _min_steps(state), "beta": g.BETA}
+
+
+def _min_steps(state: dict) -> int:
+    return min(state.get("min_steps", GAMES[state["game"]]["min_steps"]), state["max_steps"])
 
 
 def _save(session_id: str, state: dict) -> None:
@@ -90,7 +145,7 @@ def load(session_id: str) -> dict:
 
 
 def start(game: Optional[str], ctx: UserContext, user_id: Optional[str], count: int = 3,
-          max_steps: Optional[int] = None) -> dict[str, Any]:
+          max_steps: Optional[int] = None, swiggy_address_id: Optional[str] = None) -> dict[str, Any]:
     game = game or pick_game(user_id)
     if game not in GAMES:
         raise GameError(f"unknown game {game!r}")
@@ -108,11 +163,21 @@ def start(game: Optional[str], ctx: UserContext, user_id: Optional[str], count: 
         "asked": [],
         "steps": 0,
         "max_steps": min(max_steps or GAMES[game]["max_steps"], GAMES[game]["max_steps"]),
+        "min_steps": GAMES[game]["min_steps"],
         "answers": [],
+        "swiggy_address_id": swiggy_address_id,
     }
-    q = g.best_question(state["logits"], _questions(state))
+    q, q_rows = _pick_question(state["logits"], _questions(state))
     state["current"] = q.key
     session_id = uuid.uuid4().hex
+    if trace.enabled():
+        trace.emit("game.start", session_id=session_id, game=game, user_id=user_id, max_steps=state["max_steps"],
+                   thresholds=_thresholds(state), filters=filter_report(ctx),
+                   candidates=[{"id": s.dish.id, "name": s.dish.name, "cuisine": s.dish.cuisine, "price": s.dish.price_inr,
+                                "total": trace.r(s.total, 2), "parts": {k: trace.r(v, 2) for k, v in s.parts.items()}}
+                               for s in scored],
+                   posterior=_posterior_view(state["logits"]), entropy=trace.r(g.entropy(g.softmax(state["logits"]))),
+                   question_scores=_question_scores_view(q_rows), chosen=q.key)
     _save(session_id, state)
     return {"session_id": session_id, "game": game, "question": _public(q), "progress": _progress(state)}
 
@@ -206,13 +271,15 @@ def _context_after(state: dict) -> UserContext:
     })})
 
 
-def _decision(state: dict, order: list[str], confidence: Optional[float], request_id: str) -> dict[str, Any]:
-    from app.services import recommender
+async def _decision(state: dict, order: list[str], confidence: Optional[float], request_id: str,
+                    user_token: Optional[str] = None) -> dict[str, Any]:
+    from app.services import live_cards, recommender
 
     ctx = _context_after(state)
     post = g.softmax(state["logits"])
     picks: list[ScoredDish] = []
-    for dish_id in order[: state["count"]]:
+    address_id = state.get("swiggy_address_id")
+    for dish_id in order[: max(state["count"], LIVE_POOL) if address_id else state["count"]]:
         d = DISHES_BY_ID[dish_id]
         parts = score_breakdown(d, ctx)
         picks.append(ScoredDish(d, sum(parts.values()), parts))
@@ -220,16 +287,34 @@ def _decision(state: dict, order: list[str], confidence: Optional[float], reques
     cards = recommender.recommendations_from_ranking(
         request, picks, confidence={i: min(0.95, 0.5 + post[i]) for i in order}, model="game_engine", response_time_s=0.0,
     )
+    live = await live_cards.build(cards.recommendations, state["count"], address_id, user_token) if address_id \
+        else live_cards.LiveCards(selected=cards.recommendations)
+    if trace.enabled():
+        by_id = {p.dish.id: p for p in picks}
+        trace.emit("game.decision", live_status=live.status, address_set=bool(address_id), confidence_source=(
+                       "jev_commit" if confidence is not None else "posterior"),
+                   pool=[{"id": p.dish.id, "name": p.dish.name, "posterior": trace.r(post[p.dish.id]), "total": trace.r(p.total, 2),
+                          "parts": {k: trace.r(v, 2) for k, v in p.parts.items()}, "selected": any(r.dish.id == p.dish.id for r in live.selected),
+                          "live": p.dish.id in live.matches} for p in picks],
+                   picks=[{"id": r.dish.id, "name": r.dish.name, "rank": r.rank, "card_confidence": r.confidence,
+                           "posterior": trace.r(post[r.dish.id]), "parts": {k: trace.r(v, 2) for k, v in by_id[r.dish.id].parts.items()},
+                           "reasoning": r.ai_reasoning.model_dump(mode="json")} for r in live.selected])
+    cards = cards.model_copy(update={
+        "recommendations": live.selected, "swiggy_matches": live.matches or None,
+        "swiggy_address_id": live.address_id, "live_status": live.status,
+    })
     return {
-        "dish_ids": [p.dish.id for p in picks],
-        "confidence": round(confidence if confidence is not None else post[order[0]], 3),
+        "dish_ids": [r.dish.id for r in live.selected],
+        "confidence": round(confidence if confidence is not None else post[live.selected[0].dish.id], 3),
+        "live_status": live.status,
         "recommendations": cards.model_dump(mode="json"),
         # Pass to /api/ai-recommendations for live Swiggy cards built from the same signals.
         "game_data": ctx.game_data.model_dump(mode="json") if ctx.game_data else None,
     }
 
 
-async def answer(session_id: str, answer: dict[str, Any], reaction_ms: Optional[int] = None) -> dict[str, Any]:
+async def answer(session_id: str, answer: dict[str, Any], reaction_ms: Optional[int] = None,
+                 user_token: Optional[str] = None) -> dict[str, Any]:
     state = load(session_id)
     if state["status"] != "active":
         raise GameError("session already finished")
@@ -238,6 +323,7 @@ async def answer(session_id: str, answer: dict[str, Any], reaction_ms: Optional[
         raise GameError("no pending question")
     label = _answer_label(q, answer)
 
+    before = dict(state["logits"])
     state["logits"] = g.apply(state["logits"], q.effects[label])
     state["asked"].append(q.key)
     state["answers"].append({"key": q.key, "label": label})
@@ -246,22 +332,46 @@ async def answer(session_id: str, answer: dict[str, Any], reaction_ms: Optional[
 
     order = g.ranked(state["logits"])
     top, p = g.leader(state["logits"])
-    next_q = g.best_question(state["logits"], _questions(state))
-    done = p >= g.STOP_PROB or state["steps"] >= state["max_steps"] or next_q is None
+    next_q, q_rows = _pick_question(state["logits"], _questions(state))
+    can_stop = state["steps"] >= _min_steps(state)
+    done = state["steps"] >= state["max_steps"] or next_q is None or (can_stop and p >= g.STOP_PROB)
+    stop_reason = ("max_steps" if state["steps"] >= state["max_steps"] else "no_questions_left" if next_q is None
+                   else "leader_threshold" if done else "continue")
+    jev_check: dict[str, Any] = {"ran": False, "reason": (
+        "game already decided" if done else f"collecting {_min_steps(state)} answers first" if not can_stop
+        else f"leader {p:.2f} < {g.JEV_CHECK_FROM}")}
     confidence = None
-    if not done and p >= g.JEV_CHECK_FROM:
+    if not done and can_stop and p >= g.JEV_CHECK_FROM:
         ctx = _context_after(state)
         top4 = [ScoredDish(DISHES_BY_ID[i], 0.0, {}) for i in order[:4]]
         commit = await decision_engine.commit(ctx, top4, seed=f"{session_id}:{state['steps']}")
+        jev_check = {"ran": commit is not None, "candidates": [DISHES_BY_ID[i].name for i in order[:4]], "result": commit}
+        if commit is None:
+            jev_check["reason"] = "JEV unavailable (see jev/engine events)"
         if commit and commit["confidence"] >= g.JEV_STOP_CONF and commit["dish_id"] in order[:2]:
             done, confidence = True, commit["confidence"]
             order = [commit["dish_id"], *[i for i in order if i != commit["dish_id"]]]
+            stop_reason = "jev_commit"
+        elif commit:
+            jev_check["reason"] = (f"confidence {commit['confidence']:.2f} < {g.JEV_STOP_CONF}" if commit["confidence"] < g.JEV_STOP_CONF
+                                   else "JEV's pick is not in the engine's top 2")
 
+    if trace.enabled():
+        post_before, post_after = g.softmax(before), g.softmax(state["logits"])
+        trace.emit("game.step", step=state["steps"], question={"key": q.key, "kind": q.kind, "label": _question_label(q)},
+                   answer=answer, label=label, reaction_ms=reaction_ms, thresholds=_thresholds(state),
+                   posterior=_posterior_view(state["logits"], before),
+                   entropy_before=trace.r(g.entropy(post_before)), entropy_after=trace.r(g.entropy(post_after)),
+                   leader={"id": top, "name": DISHES_BY_ID[top].name, "p": trace.r(p)},
+                   jev_check=jev_check, stop_reason=stop_reason, done=done,
+                   next_question_scores=_question_scores_view(q_rows) if not done else [],
+                   next_question=next_q.key if next_q is not None and not done else None)
     result: dict[str, Any] = {"session_id": session_id, "game": state["game"], "signals": signals}
     if done:
         state["status"] = "done"
-        decision = _decision(state, order, confidence, request_id=session_id)
+        decision = await _decision(state, order, confidence, request_id=session_id, user_token=user_token)
         result["signals"] += _final_signals(state, decision["dish_ids"])
+        trace.emit("game.signals", signals=result["signals"])
         result.update(done=True, decision=decision)
     else:
         state["current"] = next_q.key

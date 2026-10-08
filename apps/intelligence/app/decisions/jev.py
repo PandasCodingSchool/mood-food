@@ -12,12 +12,15 @@ import json
 import logging
 import random
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Iterator, Mapping, Optional
 
 from typesafe_sdk import AsyncTypeSafeClient, Choice, RetryPolicy
 
 from app.config import settings
+from app.lab import trace
 from app.observability import timed_call
 
 logger = logging.getLogger("decisions")
@@ -71,10 +74,12 @@ class JevClient:
     ) -> Optional[Decision]:
         """One request. ``None`` on breaker-open, oversized state, timeout or error."""
         if not questions or not self.breaker.allow():
+            trace.emit("jev.skipped", call=kind, reason="no questions" if not questions else "circuit breaker open")
             return None
         size = len(json.dumps(state, default=str))
         if size > settings.jev_max_state_chars:
             logger.warning("jev %s: state too large (%d chars) — skipped", kind, size)
+            trace.emit("jev.skipped", call=kind, reason=f"state too large ({size} chars)")
             return None
         start = time.perf_counter()
         try:
@@ -89,9 +94,11 @@ class JevClient:
         except Exception as exc:  # noqa: BLE001 — degrade to the deterministic path
             self.breaker.failure()
             logger.warning("jev %s failed: %s", kind, exc)
+            trace.emit("jev.failed", call=kind, error=f"{type(exc).__name__}: {exc}"[:300],
+                       latency_ms=round((time.perf_counter() - start) * 1000, 1), breaker_failures=self.breaker.failures)
             return None
         self.breaker.success()
-        return Decision(
+        decision = Decision(
             model=resp.model,
             nouls={k: float(a.noul) for k, a in resp.nouls.items()},
             choices={k: (a.choice, dict(a.probabilities), float(a.confidence)) for k, a in resp.choices.items()},
@@ -102,15 +109,46 @@ class JevClient:
             input_tokens=resp.usage.input_tokens if resp.usage else 0,
             latency_ms=round((time.perf_counter() - start) * 1000, 1),
         )
+        if trace.enabled():
+            trace.emit("jev.call", call=kind, model=decision.model, latency_ms=decision.latency_ms,
+                       input_tokens=decision.input_tokens, state=json.loads(json.dumps(state, default=str)),
+                       questions={k: _question_view(q) for k, q in questions.items()},
+                       nouls=decision.nouls,
+                       choices={k: {"choice": c, "probabilities": p, "confidence": conf} for k, (c, p, conf) in decision.choices.items()},
+                       scores={k: {"score": sc, "probabilities": p, "confidence": conf} for k, (sc, p, conf) in decision.scores.items()})
+        return decision
+
+
+def _question_view(q: Any) -> dict[str, Any]:
+    """A question as plain JSON for the lab (SDK models or dicts)."""
+    if hasattr(q, "model_dump"):
+        out = q.model_dump(mode="json")
+    elif isinstance(q, dict):
+        out = q
+    else:
+        out = {"instructions": getattr(q, "instructions", str(q)), "criteria": getattr(q, "criteria", None)}
+    return {"type": type(q).__name__.lower(), **json.loads(json.dumps(out, default=str))}
 
 
 _client: Optional[JevClient] = None
+# Lab "JEV off" replays: switched per request (ContextVar), never globally.
+_off: ContextVar[bool] = ContextVar("jev_off", default=False)
+
+
+@contextmanager
+def switched_off() -> Iterator[None]:
+    """Within this context, `get_client()` returns None (every caller takes its non-JEV path)."""
+    token = _off.set(True)
+    try:
+        yield
+    finally:
+        _off.reset(token)
 
 
 def get_client() -> Optional[JevClient]:
-    """Shared client, or ``None`` when no key is configured."""
+    """Shared client, or ``None`` when no key is configured (or switched off for this request)."""
     global _client
-    if not settings.jev_api_key:
+    if not settings.jev_api_key or _off.get():
         return None
     if _client is None:
         sdk = AsyncTypeSafeClient(

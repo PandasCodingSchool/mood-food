@@ -12,6 +12,7 @@ import hashlib
 from typing import Optional
 
 from app.data.dishes import DishRecord
+from app.lab import trace
 from app.schemas.request import UserContext
 from app.schemas.response import AiReasoning
 from app.services import sensory
@@ -145,6 +146,21 @@ def explain(
         hooks.append(f"From {d.cuisine.title()}, one of your favourite cuisines.")
     hook = next((h for h in hooks if h not in used), None) or mood_match
     used.update({mood_match, hook})
+    if trace.enabled():
+        hook_src = {**{h: "history" for h in hooks if "favourite" in h.lower() or "coming back" in h},
+                    **{h: "story_cluster" for h in hooks if "Tonight's Story" in h},
+                    **{h: "craving" for h in hooks if h.startswith("Hits your craving")},
+                    **{h: "taste_model" for h in hooks if h.startswith("Close to dishes")},
+                    **({fact: "dish_fact"} if fact else {}),
+                    **{h: "jev_fit" for h in hooks if h.startswith("Our decision model")},
+                    **{h: "cuisine_preference" for h in hooks if h.startswith("From ")}}
+        trace.emit("explain", dish_id=d.id, dish=d.name, sources={
+            "mood_match": (f"sensory match: {', '.join(words)}" + (f" for {moment}" if moment else "")) if words
+                          else ("mood part" if parts.get("mood") else "cuisine fallback"),
+            "context_fit": ("meal_time part" if parts.get("meal_time") and meal else "dish category") + f"; price band from ₹{round(shown_price)}",
+            "psychological_hook": hook_src.get(hook, "mood_match fallback"),
+            "candidate_hooks": [{"text": h, "source": hook_src.get(h, "?")} for h in hooks],
+        })
 
     nostalgia = None
     anchors = {a.food.lower() for a in ctx.comfort_anchors}
