@@ -17,7 +17,7 @@ from app.brain.facts import item_rows
 from app.history.normalise import IST
 
 ALPHA, BETA = 3.0, 2.0
-CONTEXTS = ("slot", "daytype")
+CONTEXTS = ("slot", "daytype", "occasion")
 FEATURES = ("cuisine", "protein", "form", "spice", "heaviness")
 MIN_LIFT, MIN_P, MIN_N = 1.3, 0.3, 1.0
 
@@ -55,9 +55,10 @@ class Relations:
         n = self.ctx_n.get((context, value or ""), 0.0)
         return round(n / (n + ALPHA), 3)
 
-    def predict(self, slot: Optional[str] = None, daytype: Optional[str] = None) -> dict[str, Any]:
+    def predict(self, slot: Optional[str] = None, daytype: Optional[str] = None, occasion: Optional[str] = None) -> dict[str, Any]:
         """Distributions over each feature for this context (evidence-weighted blend of the matching contexts)."""
-        parts = [((c, v), self.ctx_n[(c, v)]) for c, v in (("slot", slot), ("daytype", daytype)) if v and (c, v) in self.ctx]
+        parts = [((c, v), self.ctx_n[(c, v)]) for c, v in (("slot", slot), ("daytype", daytype), ("occasion", occasion))
+                 if v and (c, v) in self.ctx]
         out: dict[str, dict[str, float]] = {}
         for f in FEATURES:
             if not parts:

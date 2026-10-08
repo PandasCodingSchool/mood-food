@@ -31,3 +31,18 @@ def build(user_id: str, slot: Optional[str] = None, daytype: Optional[str] = Non
         "facts": food.get("facts", []) + groceries.get("facts", []),
         "orders": orders[-50:],
     }
+
+
+async def view(user_id: str, slot: Optional[str] = None, daytype: Optional[str] = None, use_jev: bool = True) -> dict[str, Any]:
+    """The full brain: label new orders' occasions, recompute the house, write insights, then summarise."""
+    from starlette.concurrency import run_in_threadpool
+
+    from app.brain import houses, insights, occasions
+
+    if use_jev:
+        await occasions.annotate(user_id)
+    house = await houses.recompute(user_id, use_jev=use_jev)
+    data = await run_in_threadpool(build, user_id, slot, daytype)
+    data["house"] = house
+    data["insights"] = await insights.generate(data["facts"], house, data["relations"])
+    return data

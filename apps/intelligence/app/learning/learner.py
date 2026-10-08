@@ -255,6 +255,8 @@ def _handle_group_swipe(user_id: str, signal_id: int, payload: dict, context: di
 
 def _handle_game_signals(user_id: str, signal_id: int, payload: dict, context: dict) -> None:
     """A full GameSignals blob from any existing game: mine what's usable."""
+    if payload.get("source") == "game_engine":  # a finished adaptive game (evidence for house sorting)
+        store.set_usage(user_id, "games_finished", (store.get_usage(user_id, "games_finished", 0) or 0) + 1)
     for name in payload.get("liked", []):
         vec = embeddings.get_dish_vector_by_name(str(name))
         if vec is not None:

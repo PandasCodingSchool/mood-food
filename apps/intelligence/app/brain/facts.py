@@ -45,7 +45,7 @@ def item_rows(orders: list[dict], now: datetime) -> list[dict]:
                 "dish_id": it.get("dish_id"), "cuisine": p.get("cuisine"), "protein": p.get("protein"), "form": p.get("form"),
                 "spice": bucket(p.get("spice"), SPICE_BUCKETS), "heaviness": bucket(p.get("heaviness"), HEAVY_BUCKETS),
                 "spice_v": p.get("spice"), "veg": it.get("veg") if it.get("veg") is not None else p.get("veg"),
-                "restaurant": o.get("restaurant"),
+                "restaurant": o.get("restaurant"), "occasion": o.get("occasion"),
             })
     return rows
 
@@ -105,7 +105,7 @@ def compute(orders: list[dict], now: Optional[datetime] = None) -> dict[str, Any
         "orders_per_week": round(len(orders) / span_weeks, 2),
         "slot_mix": _mix(rows, "slot"), "daytype_mix": _mix(rows, "daytype"),
         "cuisine_mix": _mix(rows, "cuisine"), "protein_mix": _mix(rows, "protein"), "form_mix": _mix(rows, "form"),
-        "spice_mix": _mix(rows, "spice"), "heaviness_mix": _mix(rows, "heaviness"),
+        "spice_mix": _mix(rows, "spice"), "heaviness_mix": _mix(rows, "heaviness"), "occasion_mix": _mix(rows, "occasion"),
         "spice_avg": round(sum(v * w for v, w in spice_vals) / sum(w for _, w in spice_vals), 3) if spice_vals else None,
         "veg_share": round(sum(r["w"] for r in veg_rows if r["veg"] is True) / sum(r["w"] for r in veg_rows), 3) if veg_rows else None,
         "favourites": [{"name": f["name"], "orders": f["orders"], "dish_id": f["dish_id"], "last": f["last"]} for f in favourites[:10]],

@@ -60,5 +60,7 @@ def record(user_id: str, signal_id: int, payload: dict, context: dict) -> None:
 
 
 def load(user_id: str) -> list[dict]:
-    """Orders oldest first."""
-    return sorted((store.get_usage(user_id, KEY, {}) or {}).values(), key=lambda x: x.get("ordered_at") or "")
+    """Orders oldest first, with their occasion label when one has been assigned."""
+    occasions = store.get_usage(user_id, "order_occasions", {}) or {}
+    orders = sorted((store.get_usage(user_id, KEY, {}) or {}).values(), key=lambda x: x.get("ordered_at") or "")
+    return [{**o, "occasion": occasions.get(o["order_id"], {}).get("label")} for o in orders]

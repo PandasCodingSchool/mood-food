@@ -149,6 +149,9 @@ def start(game: Optional[str], ctx: UserContext, user_id: Optional[str], count: 
     game = game or pick_game(user_id)
     if game not in GAMES:
         raise GameError(f"unknown game {game!r}")
+    from app.brain.notes import notes
+
+    ctx = ctx.model_copy(update={"habits": notes(user_id)})  # server-side brain lines for JEV (client values dropped)
     scored = build_scored_shortlist(ctx, RecommendationConfig(count=count), size=CANDIDATES, user_id=user_id)
     if len(scored) < 2:
         raise GameError("not enough candidates for a game")

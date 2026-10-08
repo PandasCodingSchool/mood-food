@@ -51,6 +51,7 @@ def person_state(ctx: UserContext) -> dict[str, Any]:
         "cravings": (list(game.craving_tags) + list(game.cravings)) if game else None,
         "dislikes": list(game.disliked) if game and game.disliked else None,
         "favourite_cuisines": list(ctx.preferences.cuisine_types) if ctx.preferences else None,
+        "habits": list(ctx.habits)[:8] or None,
     }
     return {k: v for k, v in person.items() if v not in (None, [], "")}
 

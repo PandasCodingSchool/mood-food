@@ -339,12 +339,12 @@ async def lab_brain_build(body: LabBrainRequest) -> dict:
         sigs = food_signals([o.to_dict() for o in food.orders]) + grocery_signals([o.to_dict() for o in groc.orders],
                                                                                    [asdict(i) for i in groc.go_to])
 
-        def fold() -> dict:
+        def fold() -> None:
             for sgl in sigs:
                 learner.apply_signal(body.user_id, sgl)
-            return summary.build(body.user_id, body.slot, body.daytype)
 
-        data = await run_in_threadpool(fold)
+        await run_in_threadpool(fold)
+        data = await summary.view(body.user_id, body.slot, body.daytype)
     return _traced({**data, "imported": {"food": food.stats(), "groceries": groc.stats(), "signals": len(sigs)}}, events, t0)
 
 
@@ -354,5 +354,6 @@ async def lab_brain(body: LabBrainRequest) -> dict:
     from app.brain import summary
 
     t0 = time.perf_counter()
-    data = await run_in_threadpool(summary.build, body.user_id, body.slot, body.daytype)
-    return {"result": data, "trace": [], "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}
+    with trace.collect() as events:
+        data = await summary.view(body.user_id, body.slot, body.daytype)
+    return _traced(data, events, t0)

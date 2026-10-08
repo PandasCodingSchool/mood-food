@@ -32,6 +32,6 @@ async def brain(user_id: str, slot: str | None = None, daytype: str | None = Non
     from app.learning import replay
 
     await replay.ensure_user(user_id)
-    data = await run_in_threadpool(summary.build, user_id, slot, daytype)
+    data = await summary.view(user_id, slot, daytype)
     data.pop("orders", None)
     return {"success": True, **data}

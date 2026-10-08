@@ -35,6 +35,7 @@ Never put AI logic in the API.
 | `llm.py` | Shared async OpenAI client (`JsonChat`, `parse_structured`) — models from config |
 | `security.py` / `observability.py` | Service auth, sync key; request ids, JSON logs, call timing |
 | `history/` | Swiggy food history (`ingest`, `normalise`, `profile` — JEV item profiles for off-catalog items) and the separate Instamart grocery stream (`grocery`, `grocery_profile`, `grocery_facts`: top items, cooking index, restock, pantry, co-purchase). Swiggy shows only a recent window, so history is accumulated (`known_order_ids`) |
+| `brain/` | Preference brain (rebuildable fold): `orders` (per-user food orders), `facts` (time-decayed habits, fact ids), `relations` (P(choice \| slot/daytype/occasion) with shrinkage, lift), `scoring` (the `brain` shortlist part), `occasions` (JEV order labels), `houses` (6 houses: gated sorting, hysteresis, journey), `insights` (LLM cards validated against facts), `notes` (habits lines for JEV — server-filled `UserContext.habits`) |
 | `routes/history.py` / `routes/brain.py` | `POST /api/history/import`, `/api/history/groceries/import` (the API calls these and stores orders); `GET /api/brain/{user}/groceries` |
 | `lab/trace.py` + `routes/lab.py` | Decision tracing: `trace.emit()` at each decision point (no-op unless a lab request is collecting); `/api/lab/*` returns results with their trace — dev only (`LAB_ENABLED`, never in production) |
 | `../lab/` | Intelligence Lab UI (Streamlit): games control centre, pipeline, food graph, JEV playground, evals |
@@ -63,7 +64,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 uvicorn app.main:app --reload
 pytest                                   # OpenAI/JEV always mocked; keys blanked in conftest
 TEST_DATABASE_URL=postgresql://… pytest  # same suite on Postgres + pgvector
-pytest -m eval                           # golden scenarios; python -m evals.harness --live adds JEV
+pytest -m eval                           # golden scenarios + brain backtest; python -m evals.harness --live adds JEV
+python -m evals.backtest                 # brain vs baselines: predict each order from earlier ones
 python scripts/jev_smoke.py              # live JEV check
 python scripts/openai_smoke.py           # verify configured OpenAI models
 python scripts/build_catalog.py          # rebuild catalog v2; then scripts/export_fallback.py

@@ -194,6 +194,10 @@ async def _run_pipeline(
     # Learning-store reads (SQLite) and embedding lookups are blocking: keep
     # them off the event loop.
     body = await run_in_threadpool(live_state.apply_learned_state, body)
+    from app.brain.notes import notes
+
+    habits = await run_in_threadpool(notes, body.user_id)  # always server-side: client values are dropped
+    body = body.model_copy(update={"user_context": body.user_context.model_copy(update={"habits": habits})})
     final_count = body.recommendation_config.count
     scored = await run_in_threadpool(
         build_scored_shortlist, body.user_context, body.recommendation_config, user_id=body.user_id

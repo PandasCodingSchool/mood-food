@@ -112,8 +112,48 @@ def _groceries(res):
     ui.jev_calls(res["trace"])
 
 
+def _house(h: dict):
+    if not h:
+        return
+    info = h.get("house_info")
+    if h["status"] == "sorted" and info:
+        st.success(f"{info['crest']} **{info['name']}** — {info['motto']} {info['about']}" + (f"  \n_since {h['since'][:10]}_" if h.get("since") else ""))
+    else:
+        g = h["gate"]
+        st.info(f"Not sorted yet — leaning **{h['leaning']}** (lead {h['membership'][h['leaning']]:.0%}, margin {h['margin']:.0%}). "
+                f"Evidence: {g['orders']} orders, {g['games']} games · gate {'met' if g['ok'] else 'not met'} ({g['rule']}); "
+                "sorting also needs a leader ≥ 40% that's 10 points clear.")
+    x, y = st.columns(2)
+    with x:
+        st.markdown("**House membership**")
+        ui.prob_bars(h["membership"], highlight=h.get("house") or h["leaning"], title="P(house)")
+    with y:
+        st.markdown("**Traits** (rules vs JEV → blended)")
+        t = h["traits"]
+        st.dataframe(pd.DataFrame([{"house": k, "rules": t["deterministic"][k], "JEV": (t["jev"] or {}).get(k), "blended": t["blended"][k]}
+                                   for k in t["blended"]]), hide_index=True, width="stretch",
+                     column_config={c: st.column_config.ProgressColumn(c, min_value=0, max_value=1, format="%.2f") for c in ("rules", "JEV", "blended")})
+    if h.get("challenger"):
+        st.caption(f"Challenger: {h['challenger']['house']} leading on {h['challenger']['count']} evidence update(s) — 2 needed to shift.")
+    if h.get("journey"):
+        st.markdown("**House journey**")
+        st.dataframe(pd.DataFrame([{"when": e["at"][:16], "event": e["type"], "house": e["house"], "from": e.get("from"),
+                                    "because": "; ".join(e.get("because", []))} for e in h["journey"]]), hide_index=True, width="stretch")
+
+
 def _brain(data: dict, ctx_user: str):
     food, groc = data["food"], data["groceries"]
+    _house(data.get("house"))
+    cards = (data.get("insights") or {}).get("cards", [])
+    if cards:
+        cols = st.columns(len(cards))
+        for col, c in zip(cols, cards):
+            with col, st.container(border=True):
+                st.markdown(f"**{c['title']}**")
+                st.write(c["body"])
+                if c.get("fact_ids"):
+                    st.caption(" ".join(f"`{i}`" for i in c["fact_ids"]))
+        st.caption(f"Insight cards: {data['insights']['method']}" + (f" · {len(data['insights']['rejected'])} rejected by the validator" if data["insights"].get("rejected") else ""))
     st.markdown(f"**Brain for `{ctx_user}`** — {food.get('orders', 0)} food orders, {groc.get('orders', 0)} grocery orders, "
                 f"{len(groc.get('top_items', []))} grocery items tracked")
     if data["facts"]:
@@ -136,6 +176,9 @@ def _brain(data: dict, ctx_user: str):
     with z:
         st.markdown("**When**")
         ui.bar_list({**food["slot_mix"], **{f"({k})": v for k, v in food["daytype_mix"].items()}}, "share", fmt=".0%")
+    if food.get("occasion_mix"):
+        st.markdown("**Occasions** (why they order — JEV, rules as fallback)")
+        ui.bar_list(food["occasion_mix"], "share", fmt=".0%")
     st.markdown("**Favourites**")
     st.dataframe(pd.DataFrame(food["favourites"]), hide_index=True, width="stretch")
     st.markdown("**Context → choice links** (where a context differs from the user's usual)")
