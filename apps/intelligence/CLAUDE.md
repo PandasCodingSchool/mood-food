@@ -34,6 +34,8 @@ Never put AI logic in the API.
 | `learning/` | Store (SQLite or Postgres), learner (signal folds), user model, embeddings, orchestrator, persona, … |
 | `llm.py` | Shared async OpenAI client (`JsonChat`, `parse_structured`) — models from config |
 | `security.py` / `observability.py` | Service auth, sync key; request ids, JSON logs, call timing |
+| `lab/trace.py` + `routes/lab.py` | Decision tracing: `trace.emit()` at each decision point (no-op unless a lab request is collecting); `/api/lab/*` returns results with their trace — dev only (`LAB_ENABLED`, never in production) |
+| `../lab/` | Intelligence Lab UI (Streamlit): games control centre, pipeline, food graph, JEV playground, evals |
 
 Other endpoints: `/api/games/*`, `/api/food-graph/*`, `/api/learn/*`,
 `/api/profile/{id}`, `/api/swiggy/*`, `/api/instamart/*`, `/api/recipe/*`.
@@ -45,6 +47,8 @@ Other endpoints: `/api/games/*`, `/api/food-graph/*`, `/api/learn/*`,
   shuffle Choice options (`jev.shuffled_choice`); every JEV call site needs a
   non-JEV path.
 - Swiggy MCP: verify tools/params against mcp.swiggy.com/builders before use.
+- New decision logic should `trace.emit(...)` what it decided and why (JSON-safe, never secrets), so the
+  lab can show it; guard costly diagnostics with `trace.enabled()`.
 - Store SQL must be portable (SQLite + Postgres): `?` placeholders,
   `ON CONFLICT … excluded.`; Postgres DDL goes in `app/db/migrations/NNNN_*.sql`.
 
@@ -59,4 +63,6 @@ pytest -m eval                           # golden scenarios; python -m evals.har
 python scripts/jev_smoke.py              # live JEV check
 python scripts/openai_smoke.py           # verify configured OpenAI models
 python scripts/build_catalog.py          # rebuild catalog v2; then scripts/export_fallback.py
+uv pip install --python .venv/bin/python -r requirements-lab.txt   # lab UI deps (local only)
+scripts/lab.sh                           # Intelligence Lab: service :8010 (lab on) + UI http://localhost:8510
 ```
