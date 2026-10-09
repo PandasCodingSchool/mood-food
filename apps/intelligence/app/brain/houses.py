@@ -1,5 +1,7 @@
 """Houses: six evolving food identities, sorted from evidence and shifting as tastes do.
 
+Dal Chawal Gang, Safar Squad, Mirchi Gang, Midnight Maggi, Dawat Club, Taaza Tribe.
+
 membership = softmax(trait / TAU) over six houses, where each trait (0-1) comes
 from brain facts (deterministic) blended with a JEV Score per house when JEV is
 available. A user is sorted only with enough evidence and a clear leader; after
@@ -21,18 +23,20 @@ from app.history.normalise import IST
 from app.lab import trace
 from app.learning import store
 
+# Display names are product copy: ids are stable (stored states and journeys use them), names can change.
 HOUSES: dict[str, dict[str, str]] = {
-    "hearthkeepers": {"name": "The Hearthkeepers", "crest": "🔥", "motto": "Home is a flavour.",
-                      "about": "Comfort loyalists: warm, rich, slow-cooked food and the same well-loved favourites."},
-    "wayfarers": {"name": "The Wayfarers", "crest": "🧭", "motto": "The next plate is the adventure.",
+    "hearthkeepers": {"name": "Dal Chawal Gang", "crest": "🍛", "motto": "Nothing beats ghar ka khana.",
+                      "about": "Comfort loyalists: warm, rich, home-style food and the same well-loved favourites."},
+    "wayfarers": {"name": "Safar Squad", "crest": "🧭", "motto": "Every plate is a new place.",
                   "about": "Explorers: new cuisines, new places, new dishes, seldom the same order twice."},
-    "emberkin": {"name": "The Emberkin", "crest": "🌶️", "motto": "Bring the fire.",
+    "emberkin": {"name": "Mirchi Gang", "crest": "🌶️", "motto": "Bring the heat.",
                  "about": "Spice and fire: chilli-forward, smoky, bold, tangy food."},
-    "moonlit": {"name": "The Moonlit", "crest": "🌙", "motto": "The best meals start after dark.",
-                "about": "Night society: late cravings, snacks and indulgent bites after hours."},
-    "banqueteers": {"name": "The Banqueteers", "crest": "🍽️", "motto": "More is merrier.",
+    # "Maggi" is a Nestlé trademark: confirm with legal/brand before launch (fallback: "Midnight Munchies").
+    "moonlit": {"name": "Midnight Maggi", "crest": "🍜", "motto": "The best meals happen after midnight.",
+                "about": "Night eaters: late cravings, snacks and indulgent bites after hours."},
+    "banqueteers": {"name": "Dawat Club", "crest": "🎉", "motto": "Food tastes better shared.",
                     "about": "Feast-makers: food for the table, celebrations, big generous orders."},
-    "verdant": {"name": "The Verdant", "crest": "🌿", "motto": "Bright, fresh, balanced.",
+    "verdant": {"name": "Taaza Tribe", "crest": "🥗", "motto": "Fresh, light, balanced.",
                 "about": "Fresh and light: clean bowls, salads, balanced and healthy choices."},
 }
 TAU = 0.12

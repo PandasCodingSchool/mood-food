@@ -70,7 +70,7 @@ async def test_unsorted_until_the_evidence_gate():
     _feed("h1", _history()[2:8])
     r = await houses.recompute("h1", use_jev=False)
     assert r["gate"]["ok"] and r["status"] == "sorted" and r["journey"][-1]["type"] == "sorted"
-    assert r["house_info"]["name"].startswith("The ")
+    assert r["house_info"]["name"] in {h["name"] for h in houses.HOUSES.values()} and r["house_info"]["crest"]
 
 
 async def test_mixed_identity_stays_unsorted(monkeypatch):
@@ -246,3 +246,9 @@ async def test_llm_failure_is_not_cached(monkeypatch):
     with patch("app.llm.JsonChat.ainvoke", new=AsyncMock(side_effect=TimeoutError)):
         out = await insights.generate(FACTS, None, [], user_id="c3")
     assert out["method"] == "templates" and not store.get_usage("c3", insights.CACHE_KEY, {})
+
+
+def test_house_ids_are_stable_and_names_are_the_desi_set():
+    assert list(houses.HOUSES) == ["hearthkeepers", "wayfarers", "emberkin", "moonlit", "banqueteers", "verdant"]
+    assert [h["name"] for h in houses.HOUSES.values()] == [
+        "Dal Chawal Gang", "Safar Squad", "Mirchi Gang", "Midnight Maggi", "Dawat Club", "Taaza Tribe"]
