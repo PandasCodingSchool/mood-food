@@ -251,4 +251,4 @@ async def test_llm_failure_is_not_cached(monkeypatch):
 def test_house_ids_are_stable_and_names_are_the_desi_set():
     assert list(houses.HOUSES) == ["hearthkeepers", "wayfarers", "emberkin", "moonlit", "banqueteers", "verdant"]
     assert [h["name"] for h in houses.HOUSES.values()] == [
-        "Dal Chawal Gang", "Safar Squad", "Mirchi Gang", "Midnight Maggi", "Dawat Club", "Taaza Tribe"]
+        "Dal Chawal Gang", "Safar Squad", "Mirchi Gang", "Midnight Munchies", "Dawat Club", "Taaza Tribe"]

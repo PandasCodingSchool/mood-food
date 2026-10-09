@@ -1,6 +1,6 @@
 """Houses: six evolving food identities, sorted from evidence and shifting as tastes do.
 
-Dal Chawal Gang, Safar Squad, Mirchi Gang, Midnight Maggi, Dawat Club, Taaza Tribe.
+Dal Chawal Gang, Safar Squad, Mirchi Gang, Midnight Munchies, Dawat Club, Taaza Tribe.
 
 membership = softmax(trait / TAU) over six houses, where each trait (0-1) comes
 from brain facts (deterministic) blended with a JEV Score per house when JEV is
@@ -31,8 +31,7 @@ HOUSES: dict[str, dict[str, str]] = {
                   "about": "Explorers: new cuisines, new places, new dishes, seldom the same order twice."},
     "emberkin": {"name": "Mirchi Gang", "crest": "🌶️", "motto": "Bring the heat.",
                  "about": "Spice and fire: chilli-forward, smoky, bold, tangy food."},
-    # "Maggi" is a Nestlé trademark: confirm with legal/brand before launch (fallback: "Midnight Munchies").
-    "moonlit": {"name": "Midnight Maggi", "crest": "🍜", "motto": "The best meals happen after midnight.",
+    "moonlit": {"name": "Midnight Munchies", "crest": "🌙", "motto": "The best meals happen after midnight.",
                 "about": "Night eaters: late cravings, snacks and indulgent bites after hours."},
     "banqueteers": {"name": "Dawat Club", "crest": "🎉", "motto": "Food tastes better shared.",
                     "about": "Feast-makers: food for the table, celebrations, big generous orders."},
