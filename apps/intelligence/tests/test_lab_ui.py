@@ -55,7 +55,7 @@ def test_home(lab_client):
     assert any("JEV" == m.label for m in at.metric)
 
 
-@pytest.mark.parametrize("game", ["Swipe", "This or that", "Craving radar", "Story"])
+@pytest.mark.parametrize("game", ["Swipe", "This or that", "Craving radar", "Story", "Bracket", "Meal roulette"])
 def test_games_page_plays_to_a_decision(lab_client, game):
     at = _app(PAGES / "1_Games.py", lab_client)
     game_box = next(s for s in at.selectbox if s.label == "Game")
@@ -65,7 +65,8 @@ def test_games_page_plays_to_a_decision(lab_client, game):
     for _ in range(12):
         if any(h.value == "Decision" for h in at.header):
             break
-        answer = next(b for b in at.button if b.label not in ("▶ Start", "👎 Pass", "No") and not b.label.startswith("Replay"))
+        answer = next(b for b in at.button if b.label not in ("▶ Start", "👎 Pass", "No", "🔄 Spin again", "🙅 None of these")
+                      and not b.label.startswith("Replay"))
         answer.click().run()
         assert not at.exception, at.exception
     assert any(h.value == "Decision" for h in at.header)

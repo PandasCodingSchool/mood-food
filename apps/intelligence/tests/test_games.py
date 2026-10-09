@@ -43,6 +43,8 @@ async def test_every_game_finishes_with_a_decision(game):
         "this_or_that": lambda q: {"winner_id": q["options"][0]["id"]},
         "craving_radar": lambda q: {"yes": q["tag"] == "spicy"},
         "story": lambda q: {"option_id": q["options"][-1]["id"]},
+        "bracket": lambda q: {"winner_id": q["options"][0]["id"]},
+        "roulette": lambda q: {"accept": q["spin"] >= 2},
     }
     result, seen, signals = await _play(game, choosers[game])
     assert len(seen) <= sessions.GAMES[game]["max_steps"]

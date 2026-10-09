@@ -152,11 +152,18 @@ def duel_questions(logits: dict[str, float], asked: set[str], top_n: int = 8) ->
 
 
 CRAVING_TAGS = ("crunchy", "creamy", "spicy", "brothy", "fresh", "cheesy", "sweet", "tangy", "smoky", "melty")
+# Time-aware decks: which cravings make sense to ask about at each meal (breakfast isn't smoky).
+SLOT_CRAVINGS = {
+    "breakfast": ("fresh", "sweet", "crunchy", "creamy", "tangy", "cheesy"),
+    "lunch": ("spicy", "fresh", "tangy", "crunchy", "creamy", "brothy", "cheesy", "smoky"),
+    "dinner": CRAVING_TAGS,
+    "late_night": ("cheesy", "melty", "crunchy", "spicy", "sweet", "smoky", "creamy"),
+}
 
 
-def craving_questions(ids: list[str], asked: set[str]) -> list[Question]:
+def craving_questions(ids: list[str], asked: set[str], slot: Optional[str] = None) -> list[Question]:
     out = []
-    for tag in CRAVING_TAGS:
+    for tag in SLOT_CRAVINGS.get(slot or "", CRAVING_TAGS):
         key = f"tag:{tag}"
         if key in asked:
             continue
@@ -167,58 +174,59 @@ def craving_questions(ids: list[str], asked: set[str]) -> list[Question]:
     return out
 
 
-# Story scenes: each option implies sensory pulls (dimension, target, weight).
-STORY_SCENES: list[dict[str, Any]] = [
-    {"id": "evening", "prompt": "It's 9pm. Where are you?", "options": [
-        {"id": "couch", "label": "Couch, blanket, a show", "pulls": [("warm", 0.8, 1), ("creamy", 0.6, 0.6), ("heavy", 0.6, 0.6)]},
-        {"id": "friends", "label": "Out with friends", "pulls": [("rich", 0.7, 0.8), ("spicy", 0.5, 0.5), ("crunchy", 0.6, 0.5)]},
-        {"id": "desk", "label": "Still at my desk", "pulls": [("heavy", 0.3, 0.8), ("warm", 0.6, 0.4)]},
-    ]},
-    {"id": "sound", "prompt": "Pick tonight's soundtrack", "options": [
-        {"id": "retro", "label": "Old Bollywood classics", "pulls": [("warm", 0.7, 0.6), ("rich", 0.6, 0.5), ("creamy", 0.6, 0.4)]},
-        {"id": "loud", "label": "Loud and fast", "pulls": [("spicy", 0.8, 1), ("crunchy", 0.6, 0.6)]},
-        {"id": "rain", "label": "Rain on the window", "pulls": [("warm", 1.0, 1), ("crunchy", 0.6, 0.4), ("spicy", 0.5, 0.3)]},
-    ]},
-    {"id": "hunger", "prompt": "How hungry, honestly?", "options": [
-        {"id": "peckish", "label": "Just peckish", "pulls": [("heavy", 0.2, 1)]},
-        {"id": "proper", "label": "Proper meal hungry", "pulls": [("heavy", 0.6, 1)]},
-        {"id": "starving", "label": "Could eat the menu", "pulls": [("heavy", 0.9, 1), ("rich", 0.7, 0.5)]},
-    ]},
-    {"id": "vibe", "prompt": "Tonight's vibe?", "options": [
-        {"id": "treat", "label": "Treat myself", "pulls": [("rich", 0.9, 1), ("sweet", 0.5, 0.3)]},
-        {"id": "clean", "label": "Keep it clean", "pulls": [("heavy", 0.1, 1), ("rich", 0.2, 0.8)]},
-        {"id": "surprise", "label": "Surprise me", "pulls": [("spicy", 0.6, 0.5), ("sour", 0.5, 0.5), ("umami", 0.7, 0.5)]},
-    ]},
-    {"id": "temperature", "prompt": "Steaming hot or cool?", "options": [
-        {"id": "hot", "label": "Steaming hot", "pulls": [("warm", 1.0, 1)]},
-        {"id": "cool", "label": "Cool and refreshing", "pulls": [("warm", 0.1, 1), ("sour", 0.5, 0.4)]},
-    ]},
-    {"id": "texture", "prompt": "Which texture is calling?", "options": [
-        {"id": "crunch", "label": "Crunch", "pulls": [("crunchy", 1.0, 1)]},
-        {"id": "melt", "label": "Melt-in-mouth", "pulls": [("creamy", 1.0, 1), ("rich", 0.6, 0.4)]},
-        {"id": "saucy", "label": "Saucy", "pulls": [("creamy", 0.6, 0.6), ("warm", 0.8, 0.6), ("umami", 0.7, 0.5)]},
-    ]},
-]
-_SCENES = {s["id"]: s for s in STORY_SCENES}
+# --- story v2 (see story_beats) ------------------------------------------------------
+
+def story_question(ids: list[str], step: dict, previous_choice: Optional[str], index: int, total: int,
+                   cold_open: Optional[str] = None) -> Question:
+    """One beat of the day's story; each choice's effect = how well a dish fits its taste pulls."""
+    from app.games import story_beats as sb
+
+    beat = sb.BEATS[step["beat"]]
+    text = sb.narrative(step["beat"], step["perspective"], previous_choice)
+    effects = {c["id"]: {i: 2 * ((sensory.fit(DISHES_BY_ID[i], c["pulls"]) or 0.5) - 0.5) for i in ids} for c in beat["choices"]}
+    return Question(f"story:{step['beat']}", "choice", {
+        "scene": step["beat"], "segment": beat["segment"], "prompt": text, "base_prompt": text,
+        "options": [{"id": c["id"], "label": c["label"], "emoji": c["emoji"]} for c in beat["choices"]],
+        "step": index + 1, "of": total, **({"cold_open": cold_open} if cold_open else {}),
+    }, effects)
 
 
-def scene_option(scene_id: str, option_id: str) -> Optional[dict[str, Any]]:
-    scene = _SCENES.get(scene_id)
-    return next((o for o in scene["options"] if o["id"] == option_id), None) if scene else None
+# --- bracket ----------------------------------------------------------------------------
+
+SEED_ORDER = ((0, 7), (3, 4), (1, 6), (2, 5))   # 1v8, 4v5, 2v7, 3v6
 
 
-def story_questions(ids: list[str], asked: set[str]) -> list[Question]:
-    out = []
-    for scene in STORY_SCENES:
-        key = f"scene:{scene['id']}"
-        if key in asked:
-            continue
-        effects = {
-            o["id"]: {i: 2 * ((sensory.fit(DISHES_BY_ID[i], o["pulls"]) or 0.5) - 0.5) for i in ids}
-            for o in scene["options"]
-        }
-        out.append(Question(key, "choice", {
-            "scene": scene["id"], "prompt": scene["prompt"],
-            "options": [{"id": o["id"], "label": o["label"]} for o in scene["options"]],
-        }, effects))
-    return out
+def bracket_seeds(logits: dict[str, float], n: int = 8, lam: float = 0.5) -> list[str]:
+    """The n strongest candidates, spread out (MMR) so the bracket isn't eight versions of one dish."""
+    post = softmax(logits)
+    remaining = ranked(logits)
+    picked: list[str] = []
+    while remaining and len(picked) < n:
+        best = max(remaining[:24], key=lambda i: post[i] - lam * max(
+            (dish_similarity(DISHES_BY_ID[i], DISHES_BY_ID[p]) for p in picked), default=0.0))
+        picked.append(best)
+        remaining.remove(best)
+    return picked
+
+
+def duel_question(key: str, a_id: str, b_id: str, everyone: list[str], extra: Optional[dict] = None) -> Question:
+    a, b = DISHES_BY_ID[a_id], DISHES_BY_ID[b_id]
+    eff = {i: dish_similarity(DISHES_BY_ID[i], a) - dish_similarity(DISHES_BY_ID[i], b) for i in everyone}
+    return Question(key, "duel", {"options": [_card(a), _card(b)], **(extra or {})},
+                    {a.id: eff, b.id: {i: -v for i, v in eff.items()}})
+
+
+# --- meal roulette ----------------------------------------------------------------------
+
+def spin_question(n: int, landed: str, segments: list[str], stretch: set[str], everyone: list[str], spins_left: int) -> Question:
+    """A spin landed on ``landed``: accepting pulls toward it and its neighbours, a re-spin pushes away."""
+    target = DISHES_BY_ID[landed]
+    sims = {i: dish_similarity(DISHES_BY_ID[i], target) for i in everyone}
+    mean = sum(sims.values()) / len(sims)
+    accept = {i: 1.0 if i == landed else 0.5 * (s - mean) for i, s in sims.items()}
+    respin = {i: -1.0 if i == landed else -0.3 * (s - mean) for i, s in sims.items()}
+    return Question(f"roulette:spin{n}", "spin", {
+        "segments": [{**_card(DISHES_BY_ID[i]), "stretch": i in stretch} for i in segments],
+        "landed": {**_card(target), "stretch": landed in stretch}, "spin": n, "spins_left": spins_left,
+        "prompt": "Something new? Give it a go or spin again." if landed in stretch else "Fancy this? Lock it in or spin again.",
+    }, {"accept": accept, "respin": respin})

@@ -16,7 +16,7 @@ ctx = ui.context_sidebar()
 st.title("Games")
 
 GAMES = {"(let the orchestrator pick)": None, "Swipe": "swipe", "This or that": "this_or_that",
-         "Craving radar": "craving_radar", "Story": "story"}
+         "Craving radar": "craving_radar", "Story": "story", "Bracket": "bracket", "Meal roulette": "roulette"}
 S = st.session_state
 
 
@@ -125,7 +125,7 @@ with left:
             x.button("👎 Pass", width="stretch", on_click=answer, args=({"liked": False},))
             y.button("👍 Like", width="stretch", type="primary", on_click=answer, args=({"liked": True},))
         elif kind == "duel":
-            st.markdown("#### Which one tonight?")
+            st.markdown(f"#### {q['round']} · match {q['match']} of {q['matches']}" if q.get("round") else "#### Which one tonight?")
             cols = st.columns(2)
             for col, opt in zip(cols, q["options"]):
                 with col, st.container(border=True):
@@ -139,10 +139,34 @@ with left:
             x, y = st.columns(2)
             x.button("No", width="stretch", on_click=answer, args=({"yes": False},))
             y.button("Yes", width="stretch", type="primary", on_click=answer, args=({"yes": True},))
+        elif kind == "spin":
+            st.markdown(f"#### Spin {q['spin']} · {q['spins_left']} re-spin(s) left")
+            wheel = st.columns(3)
+            for i, seg in enumerate(q["segments"]):
+                with wheel[i % 3]:
+                    mark = "🎯 " if seg["id"] == q["landed"]["id"] else ""
+                    st.caption(f"{mark}{'🧭 ' if seg['stretch'] else ''}{seg['name']}")
+            with st.container(border=True):
+                landed = q["landed"]
+                if landed.get("image_url"):
+                    st.image(landed["image_url"], width="stretch")
+                st.markdown(f"### {landed['name']}" + ("  \n🧭 _something new for you_" if landed.get("stretch") else ""))
+                st.caption(q["prompt"])
+            x, y = st.columns(2)
+            x.button("✅ Yes, that one", width="stretch", type="primary", on_click=answer, args=({"accept": True},))
+            y.button("🔄 Spin again" if q["spins_left"] > 0 else "🙅 None of these", width="stretch", on_click=answer,
+                     args=({"accept": False},))
         else:
+            if q.get("cold_open"):
+                st.markdown(f"_{q['cold_open']}_")
+            if q.get("segment"):
+                st.caption(f"{q['segment']} · {q.get('step', '?')}/{q.get('of', '?')}")
             st.markdown(f"#### {q['prompt']}")
+            if q.get("personalised"):
+                st.caption(f"✍️ personalised from: “{q['base_prompt']}”")
             for opt in q["options"]:
-                st.button(opt["label"], key=f"opt_{opt['id']}", width="stretch", on_click=answer, args=({"option_id": opt["id"]},))
+                st.button(f"{opt.get('emoji', '')} {opt['label']}".strip(), key=f"opt_{opt['id']}", width="stretch",
+                          on_click=answer, args=({"option_id": opt["id"]},))
         st.caption(f"question key `{q['key']}`")
 
     st.markdown("**Progress**")

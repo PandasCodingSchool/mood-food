@@ -79,6 +79,8 @@ async def game_start(body: StartRequest) -> dict:
                                              body.max_steps, body.swiggy_address_id)
         except sessions.GameError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        state = await run_in_threadpool(sessions.load, result["session_id"])
+        result["question"] = await sessions.personalise_question(result["question"], state)
     return _traced(result, events, t0)
 
 

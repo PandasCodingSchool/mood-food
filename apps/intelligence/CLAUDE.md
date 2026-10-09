@@ -30,7 +30,7 @@ Never put AI logic in the API.
 | `services/sensory.py` | Situation → sensory pulls; dish fit; copy words |
 | `decisions/` | `jev.py` client (breaker, timeouts), `questions.py`, `engine.py`, `ranker.py` (shadow) |
 | `food_graph/mapping.py` | Swiggy item → dish (exact, guarded candidates, JEV Choice), cached in `menu_item_map` |
-| `games/` | Adaptive games: info-gain question choice, early stop, signals |
+| `games/` | Six adaptive games: swipe, this-or-that, craving radar (deck by meal slot), story v2 (`story_beats`: v1 day-arc, tense by time of day, reacts to the last choice; `personalise`: LLM rewrite from brain habits, validated, cached, next beat prefetched), bracket (8 MMR seeds, 7 knockout duels) and meal roulette (3 familiar + 3 stretch, accept / re-spin). Info-gain question choice, min-steps + early stop (structured games end with their format), learner-format signals |
 | `learning/` | Store (SQLite or Postgres), learner (signal folds), user model, embeddings, orchestrator, persona, … |
 | `llm.py` | Shared async OpenAI client (`JsonChat`, `parse_structured`) — models from config |
 | `security.py` / `observability.py` | Service auth, sync key; request ids, JSON logs, call timing |

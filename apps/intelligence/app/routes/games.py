@@ -31,10 +31,13 @@ class AnswerRequest(BaseModel):
 @router.post("/session")
 async def start(body: StartRequest) -> dict:
     try:
-        return await run_in_threadpool(sessions.start, body.game, body.user_context, body.user_id, body.count, body.max_steps,
-                                       body.swiggy_address_id)
+        result = await run_in_threadpool(sessions.start, body.game, body.user_context, body.user_id, body.count, body.max_steps,
+                                         body.swiggy_address_id)
     except sessions.GameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    state = await run_in_threadpool(sessions.load, result["session_id"])
+    result["question"] = await sessions.personalise_question(result["question"], state)
+    return result
 
 
 @router.post("/session/{session_id}/answer")

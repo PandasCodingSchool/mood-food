@@ -22,6 +22,8 @@ ANSWERS = {
     "this_or_that": lambda q: {"winner_id": q["options"][0]["id"]},
     "craving_radar": lambda q: {"yes": q["tag"] in ("crunchy", "spicy")},
     "story": lambda q: {"option_id": q["options"][0]["id"]},
+    "bracket": lambda q: {"winner_id": q["options"][0]["id"]},
+    "roulette": lambda q: {"accept": q["spin"] >= 2},
 }
 
 
