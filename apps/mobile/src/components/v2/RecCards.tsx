@@ -46,13 +46,17 @@ export function HeroPick({ v, height, eyebrow, topFor, why, onOpen, actions, top
   );
 }
 
-/** Compact rail card (home "More for your mood"). */
-export function RailCard({ v, onOpen }: { v: RecView; onOpen: () => void }) {
+/** Compact rail card (home "More for your mood" / "Suggested for you"). */
+export function RailCard({ v, onOpen, badge, note }: { v: RecView; onOpen: () => void; badge?: string; note?: string | null }) {
   return (
     <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={v.name}>
       <Surface radius={24} style={{ width: 196 }}>
         <DishImage uri={v.imageUrl} caption={imageCaption(v)} height={146}>
-          {v.match != null ? (
+          {badge ? (
+            <View style={{ position: 'absolute', top: 10, left: 10 }}>
+              <Chip variant="accent" label={badge} />
+            </View>
+          ) : v.match != null ? (
             <View style={{ position: 'absolute', top: 10, left: 10 }}>
               <MatchBadge percent={v.match} suffix="" size="sm" />
             </View>
@@ -61,6 +65,7 @@ export function RailCard({ v, onOpen }: { v: RecView; onOpen: () => void }) {
         <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 }}>
           <Text variant="bodyStrong15" numberOfLines={2} style={{ minHeight: 38 }}>{v.name}</Text>
           <Text variant="caption12" tone="ink2" numberOfLines={1} style={{ marginTop: 6 }}>{metaLine(v, ['restaurant', 'eta']) || v.cuisine}</Text>
+          {note ? <Text variant="caption12" tone="accText" numberOfLines={2} style={{ marginTop: 6 }}>{note}</Text> : null}
           {v.priceTxt ? <Text variant="bodyStrong15" style={{ marginTop: 8 }}>{v.priceTxt}</Text> : null}
         </View>
       </Surface>

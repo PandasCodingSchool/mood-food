@@ -192,6 +192,7 @@ async def recompute(user_id: str, use_jev: bool = True, now: Optional[datetime] 
         "since": state.get("since"), "membership": member, "leaning": lead, "margin": round(margin, 3),
         "traits": {"deterministic": det, "jev": judged, "blended": blended, "jev_cached": jev_cached}, "gate": g,
         "challenger": state.get("challenger"), "journey": events[-10:], "event": event,
+        "houses": HOUSES,   # display info for every house (membership bars, journey labels)
     }
     trace.emit("brain.houses", **{k: out[k] for k in ("status", "house", "membership", "leaning", "margin", "gate", "challenger", "event")},
                traits=out["traits"])

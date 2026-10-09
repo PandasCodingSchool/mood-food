@@ -113,7 +113,12 @@ export async function fetchRecommendations(
     throw new Error(`API error: ${response.status}`);
   }
 
-  const data = (await response.json()) as RecommendationResponse;
+  return normaliseRecommendations((await response.json()) as RecommendationResponse);
+}
+
+/** Ids, dish defaults and each card's live Swiggy match (from `swiggy_matches`). Shared by every
+ * endpoint that returns recommendation cards (recommendations, Suggested for you, game decisions). */
+export function normaliseRecommendations(data: RecommendationResponse): RecommendationResponse {
   return {
     ...data,
     recommendations: (data.recommendations || []).map((rec, i) => ({
@@ -128,7 +133,7 @@ export async function fetchRecommendations(
   };
 }
 
-async function buildRequestContext(
+export async function buildRequestContext(
   quizResults: QuizResults,
   gameData: GameData | null,
   refresh = false,
