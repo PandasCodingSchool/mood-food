@@ -17,3 +17,6 @@ __pycache__/
 *.zip
 *.ipynb
 apps/intelligence/model_store.db
+
+# Internal deep-dive docs on the intelligence (local only)
+intelligence_docs/
