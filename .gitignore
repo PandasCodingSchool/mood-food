@@ -17,3 +17,4 @@ __pycache__/
 *.zip
 *.ipynb
 apps/intelligence/model_store.db
+docs/design/marketing-website

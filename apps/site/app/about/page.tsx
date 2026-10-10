@@ -1,47 +1,111 @@
+import { hueTile } from '@moodfood/tokens';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
-import { PoweredBySwiggy } from '@/components/PoweredBySwiggy';
+import { Icon } from '@/components/Icon';
+import { Nav } from '@/components/Nav';
+import { PartnerLockup } from '@/components/PoweredBySwiggy';
+import { CONTACT_EMAIL, EARLY_ACCESS_SPOTS } from '@/lib/config';
+import { RULES } from '@/lib/content';
 
 export const metadata: Metadata = {
   title: 'About',
-  description: 'Why we built MoodFood: deciding what to eat should take seconds, not half an hour of scrolling.',
+  description: 'Why we built MoodFood: deciding what to eat should take seconds, not forty minutes of scrolling.',
 };
 
 export default function About() {
   return (
-    <article className="container prose">
-      <p className="label">About MoodFood</p>
-      <h1 className="display">What you eat should fit how you feel.</h1>
-      <p>
-        Most food apps ask what you want. Most nights, you don’t know. You scroll, give up, and order the same thing as
-        last week.
-      </p>
-      <p>
-        MoodFood starts from how you feel instead. A quick check-in or a 30-second game, plus the time of day and the
-        weather, is enough to suggest three dishes with a reason for each. Order on Swiggy without leaving the app, or
-        get the recipe and cook it yourself.
-      </p>
-      <h2 className="h3">Powered by Swiggy</h2>
-      <p>
-        Menus, prices, carts, checkout and live order tracking come straight from Swiggy, so what you see in MoodFood is
-        what the restaurant actually has right now.
-      </p>
-      <PoweredBySwiggy />
-      <h2 className="h3">It gets better the more you use it</h2>
-      <p>
-        Every swipe, pick and “how did that feel?” teaches MoodFood your taste. There’s no long setup quiz. It learns
-        as you go.
-      </p>
-      <h2 className="h3">Your mood is yours</h2>
-      <p>
-        Mood data stays on your account and is never sold. Story mode reads what you write on your phone and sends
-        only the moods it detects.
-      </p>
-      <p>
-        <Link className="btn btn-primary" href="/#waitlist">
-          Get early access
-        </Link>
-      </p>
-    </article>
+    <>
+      <header className="hero hero-page">
+        <div className="hero-glow" aria-hidden />
+        <div className="container">
+          <Nav current="about" />
+        </div>
+        <div className="container hero-page-body">
+          <p className="eyebrow">About us</p>
+          <h1 className="display">We got tired of asking &ldquo;what should we eat?&rdquo;</h1>
+          <p className="lede">
+            MoodFood started after one too many forty-minute scrolls that ended in the same order as always. We figured
+            the app should know you were tired, that it was pouring, and that it was already 9 PM.
+          </p>
+        </div>
+      </header>
+
+      <main className="paper">
+        <section className="container story">
+          <div className="story-photos" aria-hidden>
+            <div className="story-photo story-photo-tall">
+              <Image src="/food/biryani.jpg" alt="" fill sizes="(max-width: 900px) 50vw, 300px" />
+            </div>
+            <div className="story-photo">
+              <Image src="/food/masala-dosa.jpg" alt="" fill sizes="(max-width: 900px) 50vw, 300px" />
+            </div>
+            <div className="story-photo">
+              <Image src="/food/banana-leaf.jpg" alt="" fill sizes="(max-width: 900px) 50vw, 300px" />
+            </div>
+          </div>
+          <div>
+            <p className="eyebrow">Our story</p>
+            <h2 className="h2">Food apps know what you ordered. Not how you felt.</h2>
+            <p className="body-lg">
+              Most recommendations look backwards: you liked biryani once, so here&rsquo;s more biryani. But what you
+              want depends on right now. A long day calls for something warm and easy. Good news calls for something
+              loud. A storm calls for whatever reaches you hot.
+            </p>
+            <p className="body-lg">
+              So we built a 20-second mood check-in, taught it to read the weather and the clock, and connected it to
+              Swiggy so the answer is one tap away.
+            </p>
+          </div>
+        </section>
+
+        <section className="container section-tight">
+          <p className="eyebrow">What we believe</p>
+          <h2 className="h2">Four rules we build by.</h2>
+          <ul className="rules">
+            {RULES.map((r) => (
+              <li key={r.title} className="paper-card rule">
+                <span className="tile" style={{ background: hueTile(r.hue) }}>
+                  <Icon name={r.icon} size={26} />
+                </span>
+                <h3 className="h4">{r.title}</h3>
+                <p>{r.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="swiggy-wrap swiggy-wrap-paper">
+          <div className="swiggy-panel swiggy-panel-row">
+            <div className="swiggy-copy">
+              <p className="eyebrow eyebrow-ink">Our partner</p>
+              <h2 className="display-md">We decide. Swiggy delivers.</h2>
+              <p className="swiggy-lede">
+                MoodFood is powered by Swiggy. Every restaurant, rider, payment and live-tracking update runs on the
+                platform you already trust. We just make the choosing easier.
+              </p>
+            </div>
+            <PartnerLockup size={72} />
+          </div>
+        </section>
+
+        <section className="container contact">
+          <div className="contact-card contact-dark">
+            <h2 className="h3">{`Join the first ${EARLY_ACCESS_SPOTS}.`}</h2>
+            <p>The first {EARLY_ACCESS_SPOTS} sign-ups get the app free, before anyone else, and help shape what it becomes.</p>
+            <Link className="btn btn-primary" href="/#early-access">
+              Claim early access <Icon name="arrow_forward" size={19} />
+            </Link>
+          </div>
+          <div className="paper-card contact-card">
+            <h2 className="h3">Say hello.</h2>
+            <p>Press, partnerships, restaurants or just a great idea for a mood we missed.</p>
+            <a className="contact-email" href={`mailto:${CONTACT_EMAIL}`}>
+              {CONTACT_EMAIL}
+            </a>
+          </div>
+        </section>
+      </main>
+    </>
   );
 }
