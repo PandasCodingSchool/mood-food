@@ -1,24 +1,18 @@
 import type { CSSProperties } from 'react';
-import {
-  createTheme,
-  MOOD_SPECS,
-  palette,
-  shadow,
-  TIME_SPECS,
-  type Gradient,
-  type Mood,
-  type ThemeInput,
-  type TimeOfDay,
-} from '@moodfood/tokens';
+import { createTheme, MOOD_SPECS, oklch, palette, shadow, type Gradient, type Mood, type ThemeInput } from '@moodfood/tokens';
 
 // Bridges the app's living theme (@moodfood/tokens) to CSS custom properties,
 // so the site and the app share one palette: time of day sets the backdrop,
 // mood sets the accent.
 
-export const DEFAULT_THEME: ThemeInput = { time: 'evening', weather: 'sunny', mood: 'happy' };
+/** The site wears the app's evening theme with the warm "tired" accent. */
+export const DEFAULT_THEME: ThemeInput = { time: 'evening', weather: 'sunny', mood: 'tired' };
 
-export const MOOD_OPTIONS = (Object.keys(MOOD_SPECS) as Mood[]).map((id) => ({ id, ...MOOD_SPECS[id] }));
-export const TIME_OPTIONS = (Object.keys(TIME_SPECS) as TimeOfDay[]).map((id) => ({ id, ...TIME_SPECS[id] }));
+export const MOOD_OPTIONS = (Object.keys(MOOD_SPECS) as Mood[]).map((id) => ({
+  id,
+  ...MOOD_SPECS[id],
+  dot: oklch(0.76, MOOD_SPECS[id].chroma, MOOD_SPECS[id].hue),
+}));
 
 /** CSS linear-gradient from a token gradient (RN angle convention: 180 = top → bottom). */
 export const cssGradient = (g: Gradient) =>

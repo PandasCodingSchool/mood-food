@@ -1,24 +1,43 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-export function Nav() {
+const HOME_LINKS = [
+  { href: '#how', label: 'How it works' },
+  { href: '#games', label: 'Games' },
+  { href: '#swiggy', label: 'Swiggy' },
+  { href: '/about', label: 'About' },
+];
+
+const PAGE_LINKS = [
+  { href: '/', label: 'Home' },
+  { href: '/about', label: 'About' },
+  { href: '/privacy', label: 'Privacy' },
+];
+
+/** Sits inside each page's dark header. `current` underlines the active page. */
+export function Nav({ current, cta = true }: { current?: 'home' | 'about' | 'privacy'; cta?: boolean }) {
+  const links = current === 'home' ? HOME_LINKS : PAGE_LINKS;
+  const here = current && current !== 'home' ? `/${current}` : null;
   return (
-    <header className="nav">
-      <div className="nav-inner">
-        <Link href="/" className="brand" aria-label="MoodFood home">
-          <Image src="/moodfood-logo.png" alt="" width={36} height={36} priority />
-          <span>MoodFood</span>
-        </Link>
-        <nav aria-label="Main" className="nav-links">
-          <Link href="/#how">How it works</Link>
-          <Link href="/#games">Games</Link>
-          <Link href="/#features">Features</Link>
-          <Link href="/about">About</Link>
-        </nav>
-        <Link className="btn btn-primary btn-sm" href="/#waitlist">
+    <nav className="nav" aria-label="Main">
+      <Link href="/" className="brand" aria-label="MoodFood home">
+        <span className="brand-mark">
+          <Image src="/moodfood-logo.png" alt="" width={40} height={40} loading="eager" />
+        </span>
+        <span>MoodFood</span>
+      </Link>
+      <div className="nav-links">
+        {links.map((l) => (
+          <Link key={l.href} href={l.href} aria-current={l.href === here ? 'page' : undefined}>
+            {l.label}
+          </Link>
+        ))}
+      </div>
+      {cta ? (
+        <Link className="btn btn-light btn-sm" href="/#early-access">
           Get early access
         </Link>
-      </div>
-    </header>
+      ) : null}
+    </nav>
   );
 }
