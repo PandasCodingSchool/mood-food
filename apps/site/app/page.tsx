@@ -1,123 +1,218 @@
 import { hueTile } from '@moodfood/tokens';
+import Image from 'next/image';
+import { EarlyAccessPill, SpotsMeter, SpotsText } from '@/components/EarlyAccess';
+import { HeroDemo } from '@/components/HeroDemo';
 import { Icon } from '@/components/Icon';
-import { PhoneMock } from '@/components/PhoneMock';
-import { ThemeSwitcher } from '@/components/ThemeSwitcher';
+import { Nav } from '@/components/Nav';
+import { PartnerLockup, PoweredBySwiggy } from '@/components/PoweredBySwiggy';
 import { Waitlist } from '@/components/Waitlist';
-import { EarlyAccessPill } from '@/components/EarlyAccess';
-import { PoweredBySwiggy } from '@/components/PoweredBySwiggy';
-import { StoreButtons } from '@/components/StoreButtons';
-import { EARLY_ACCESS_SPOTS } from '@/lib/config';
-import { FAQ, FEATURES, GAMES, STEPS } from '@/lib/content';
+import { FAQ, GAMES, HERO_PHOTOS, PERKS, SIGNALS, STEPS, SWIGGY_POINTS, TICKER } from '@/lib/content';
+
+function Ticker() {
+  const items = (copy: number) =>
+    TICKER.map(([moment, dish]) => (
+      <span key={`${copy}-${dish}`} className="ticker-item">
+        <span className="ticker-moment">{moment}</span>
+        <Icon name="arrow_forward" size={22} className="ticker-arrow" />
+        {dish}
+        <span className="ticker-dot" />
+      </span>
+    ));
+  return (
+    <div className="ticker">
+      <div className="ticker-mask">
+        <div className="ticker-track">
+          {items(0)}
+          <span aria-hidden className="ticker-copy">
+            {items(1)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
     <>
-      <section className="hero container">
-        <div className="hero-copy">
-          <EarlyAccessPill />
-          <p className="label">Mood × time × weather</p>
-          <h1 className="display">Food that matches your mood.</h1>
-          <p className="lede">
-            Tell MoodFood how you feel, play a 30-second game, and get three dishes worth ordering. Then order them on
-            Swiggy without leaving the app.
-          </p>
-          <div className="cta-row">
-            <a className="btn btn-primary" href="#waitlist">
-              Claim free early access <Icon name="arrow_forward" size={18} />
-            </a>
+      <header className="hero hero-home">
+        <div className="hero-wall" aria-hidden>
+          {HERO_PHOTOS.map((p) => (
+            <div key={p} className="hero-wall-cell">
+              <Image src={`/food/${p}.jpg`} alt="" fill sizes="(max-width: 700px) 50vw, 25vw" />
+            </div>
+          ))}
+        </div>
+        <div className="hero-veil" aria-hidden />
+        <div className="container">
+          <Nav current="home" />
+        </div>
+        <div id="top" className="container hero-body">
+          <div className="hero-copy">
+            <EarlyAccessPill />
+            <p className="eyebrow eyebrow-acc hero-kicker">Tired · rainy · 7:48 PM</p>
+            <h1 className="display">Tell us how you feel. We&rsquo;ll handle dinner.</h1>
+            <p className="lede">
+              No more 40-minute scroll. MoodFood picks the dish that fits your mood, your weather and your evening, then
+              Swiggy brings it over.
+            </p>
+            <div className="cta-row">
+              <a className="btn btn-primary btn-lg" href="#early-access">
+                Claim my spot <Icon name="arrow_forward" size={20} />
+              </a>
+              <SpotsText />
+            </div>
+            <PoweredBySwiggy className="hero-powered" />
           </div>
-          <StoreButtons />
-          <PoweredBySwiggy className="hero-powered" />
-          <ThemeSwitcher />
-          <p className="muted small">Tap a mood or a time. The whole page re-themes, just like the app does.</p>
+          <HeroDemo />
         </div>
-        <div className="hero-visual">
-          <PhoneMock />
-        </div>
-      </section>
+        <Ticker />
+      </header>
 
-      <section id="how" className="section container">
-        <p className="label">How it works</p>
-        <h2 className="h2">From “I’m hungry” to dinner in under a minute.</h2>
-        <ol className="steps">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="card glass">
-              <span className="step-n label">{`0${i + 1}`}</span>
-              <span className="tile tile-acc">
-                <Icon name={s.icon} size={24} />
-              </span>
-              <h3 className="h3">{s.title}</h3>
-              <p className="muted">{s.body}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <main>
+        <section className="section container">
+          <p className="eyebrow eyebrow-acc">It reads the room</p>
+          <h2 className="h2 narrow">Not just what you like. What you need right now.</h2>
+          <ul className="signals">
+            {SIGNALS.map((s) => (
+              <li key={s.title} className="card signal">
+                <span className="tile tile-lg" style={{ background: hueTile(s.hue) }}>
+                  <Icon name={s.icon} size={28} />
+                </span>
+                <h3 className="h3">{s.title}</h3>
+                <p className="muted">{s.body}</p>
+                <div className="signal-photo">
+                  <Image src={`/food/${s.photo}.jpg`} alt="" fill sizes="(max-width: 700px) 100vw, 380px" />
+                  <p className="signal-example">
+                    <Icon name="auto_awesome" size={18} />
+                    <span>{s.example}</span>
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-      <section id="games" className="section container">
-        <p className="label">Decision games</p>
-        <h2 className="h2">Can’t decide? Play for it.</h2>
-        <p className="lede">Eight quick games that turn “whatever” into a craving. Each result is already filtered for your mood.</p>
-        <ul className="games">
-          {GAMES.map((g) => (
-            <li key={g.title} className="card glass game">
-              <span className="tile" style={{ background: hueTile(g.hue) }}>
-                <Icon name={g.icon} size={22} />
-              </span>
-              {g.tag ? <span className="tag">{g.tag}</span> : null}
-              <h3 className="h4">{g.title}</h3>
-              <p className="muted small">{g.desc}</p>
-              <p className="label">{g.time}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section id="how" className="section container">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow eyebrow-acc">How it works</p>
+              <h2 className="h2">Twenty seconds to dinner.</h2>
+            </div>
+            <p className="muted section-aside">No endless scrolling. No 40-tab debate. Check in, see your match, eat.</p>
+          </div>
+          <ol className="steps">
+            {STEPS.map((s, i) => (
+              <li key={s.title} className="card step">
+                <span className="step-n">{`0${i + 1}`}</span>
+                <h3 className="h3">{s.title}</h3>
+                <p className="muted">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      <section id="features" className="section container">
-        <p className="label">Built for real dinners</p>
-        <h2 className="h2">Everything after “what should I eat?”</h2>
-        <ul className="features">
-          {FEATURES.map((f) => (
-            <li key={f.title} className="feature">
-              <span className="tile tile-glass">
-                <Icon name={f.icon} size={22} />
-              </span>
-              <div>
-                <h3 className="h4">{f.title}</h3>
-                <p className="muted">{f.body}</p>
+        <section id="games" className="section band">
+          <div className="container">
+            <p className="eyebrow eyebrow-acc">Decision modes</p>
+            <h2 className="h2 narrow">Can&rsquo;t decide? Play it out.</h2>
+            <p className="muted section-lede">
+              Quick games, each already filtered to your mood, so there&rsquo;s no bad outcome. Swipe, spin, battle it
+              out in a bracket, or cook from what&rsquo;s in the fridge.
+            </p>
+            <ul className="games">
+              {GAMES.map((g) => (
+                <li key={g.title} className="card game">
+                  <span className="tile" style={{ background: hueTile(g.hue) }}>
+                    <Icon name={g.icon} size={24} />
+                  </span>
+                  <div>
+                    <h3 className="h4">
+                      {g.title}
+                      {g.soon ? <span className="tag">Coming soon</span> : null}
+                    </h3>
+                    <p className="muted small">{g.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section id="swiggy" className="swiggy-wrap">
+          <div className="swiggy-panel">
+            <div className="swiggy-ring" aria-hidden />
+            <div className="swiggy-copy">
+              <PartnerLockup />
+              <h2 className="display-md">Powered by Swiggy.</h2>
+              <p className="swiggy-lede">
+                MoodFood decides. Swiggy delivers. Same restaurants you already love, same riders, same checkout, now with
+                a brain for what you&rsquo;re in the mood for.
+              </p>
+            </div>
+            <ul className="swiggy-points">
+              {SWIGGY_POINTS.map((p) => (
+                <li key={p.title}>
+                  <span className="swiggy-icon">
+                    <Icon name={p.icon} size={24} />
+                  </span>
+                  <div>
+                    <h3 className="h4">{p.title}</h3>
+                    <p>{p.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section id="early-access" className="section">
+          {/* Old shared links point at /#waitlist. */}
+          <span id="waitlist" className="anchor-alias" aria-hidden />
+          <div className="container">
+            <div className="ea-panel">
+              <div className="ea-glow" aria-hidden />
+              <div className="ea-copy">
+                <p className="eyebrow">Founding members</p>
+                <h2 className="display-md">Claim your early access.</h2>
+                <p className="lede">
+                  MoodFood is coming soon to iPhone and Android. The first 100 people to sign up get free early access
+                  before the public launch.
+                </p>
+                <ul className="perks">
+                  {PERKS.map((p) => (
+                    <li key={p.text}>
+                      <span className="perk-icon">
+                        <Icon name={p.icon} size={19} />
+                      </span>
+                      {p.text}
+                    </li>
+                  ))}
+                </ul>
+                <SpotsMeter />
               </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+              <div className="ea-form">
+                <Waitlist />
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <section id="waitlist" className="section container split">
-        <div>
-          <p className="label">Early access</p>
-          <h2 className="h2">{`The first ${EARLY_ACCESS_SPOTS} get in free.`}</h2>
-          <p className="lede">
-            MoodFood is launching on iPhone and Android soon. The first {EARLY_ACCESS_SPOTS} people to sign up get free
-            early access before the public launch.
-          </p>
-          <StoreButtons />
-        </div>
-        <Waitlist />
-      </section>
-
-      <section id="faq" className="section container">
-        <p className="label">Questions</p>
-        <h2 className="h2">Good to know</h2>
-        <div className="faq">
-          {FAQ.map((f) => (
-            <details key={f.q} className="glass">
-              <summary>
-                {f.q}
-                <Icon name="expand_more" size={22} className="chev" />
-              </summary>
-              <p className="muted">{f.a}</p>
-            </details>
-          ))}
-        </div>
-      </section>
+        <section id="faq" className="section container faq-section">
+          <h2 className="h2">Questions</h2>
+          <div className="faq">
+            {FAQ.map((f, i) => (
+              <details key={f.q} open={i === 0}>
+                <summary>
+                  {f.q}
+                  <Icon name="add" size={24} className="faq-icon" />
+                </summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      </main>
     </>
   );
 }

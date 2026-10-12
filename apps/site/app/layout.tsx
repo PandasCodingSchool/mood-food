@@ -2,7 +2,6 @@ import { Analytics } from '@vercel/analytics/next';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Footer } from '@/components/Footer';
-import { Nav } from '@/components/Nav';
 import { ThemeRoot } from '@/components/ThemeRoot';
 import { SITE_URL } from '@/lib/config';
 import { body, display, iconFilled, iconOutlined, mono } from './fonts';
@@ -12,14 +11,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: 'MoodFood — food that matches your mood', template: '%s · MoodFood' },
   description:
-    'Tell MoodFood how you feel, play a 30-second game, and get three dishes picked for your mood, the time and the weather. Order them on Swiggy without leaving the app.',
+    'MoodFood reads how you feel, the weather outside and the time of day, then picks what you will actually want to eat. Order it on Swiggy in one tap.',
   applicationName: 'MoodFood',
   openGraph: { type: 'website', siteName: 'MoodFood', locale: 'en_IN' },
   twitter: { card: 'summary_large_image' },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#2A1732',
+  themeColor: '#1B1024',
   colorScheme: 'dark light',
 };
 
@@ -31,8 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body>
         <ThemeRoot>
-          <Nav />
-          <main>{children}</main>
+          {children}
           <Footer />
         </ThemeRoot>
         {/* Vercel Web Analytics: cookieless page views, only reports on Vercel deployments. */}

@@ -15,6 +15,8 @@ pnpm --filter @moodfood/site build               # static pages + standalone ser
 | `NEXT_PUBLIC_SITE_URL` | Canonical URL, sitemap, Open Graph |
 | `NEXT_PUBLIC_API_URL` | Early-access form and spots-left counter (`POST /waitlist`, `GET /waitlist/count`) |
 
-Pages: `/` (hero with the live theme switcher, "first 100 get free early access" offer, App Store / Google Play "coming soon" tiles, Powered by Swiggy, how it works, games, features, early-access form, FAQ), `/about`, a 404, plus generated `sitemap.xml`, `robots.txt`, the icon, and the Open Graph image.
+Pages: `/` (food-photo hero with an auto-playing phone mock you can re-theme by mood, "first 100 get free early access" offer, how it reads the room, how it works, games, Powered by Swiggy, early-access form, FAQ), `/about`, `/privacy`, a 404, plus generated `sitemap.xml`, `robots.txt`, the icon, and the Open Graph image.
 
-Not built yet: privacy policy and terms pages. The app's login screen refers to both, so they need real legal text before launch.
+The design source is `docs/design/marketing-website/` (Claude Design handoff). Food photos in `public/food` are from Unsplash.
+
+Not built yet: a terms page. The privacy policy still needs legal review and a named grievance officer before launch.
