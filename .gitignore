@@ -19,5 +19,17 @@ __pycache__/
 apps/intelligence/model_store.db
 docs/design/marketing-website
 
-# Internal deep-dive docs on the intelligence (local only)
+# Internal / business documents (local only)
+business_docs/
 intelligence_docs/
+
+# Mobile native build output and local machine config (Expo / React Native)
+mobile/ios/Pods/
+mobile/ios/build/
+mobile/ios/.xcode.env.local
+mobile/android/app/build/
+mobile/android/app/.cxx/
+mobile/android/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/node_modules/
