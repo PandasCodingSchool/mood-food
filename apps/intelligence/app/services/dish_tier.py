@@ -14,9 +14,9 @@ import re
 from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from app.config import settings
+from app.llm import JsonChat
 
 logger = logging.getLogger("dish_tier")
 
@@ -123,11 +123,7 @@ async def classify_tiers(items: list[TierClassifyInput]) -> dict[str, str]:
         f"{item.id}: {item.name}" + (f" — {item.description}" if item.description else "")
         for item in items
     ]
-    llm = ChatOpenAI(
-        model=settings.openai_mini_model,
-        temperature=0,
-        model_kwargs={"response_format": {"type": "json_object"}},
-    )
+    llm = JsonChat(model=settings.openai_mini_model, kind="dish_tier", temperature=0)
     try:
         result = await llm.ainvoke([
             SystemMessage(content=_SYSTEM_PROMPT),

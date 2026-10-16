@@ -15,7 +15,7 @@ _SWIGGY_HINTS: dict[str, dict] = {
         "search_category": "North Indian",
     },
     "in_027": {  # Paneer Tikka Masala — reject rolls/wraps
-        "aliases": ["Paneer Tikka Masala", "Paneer Butter Masala", "Paneer Makhani"],
+        "aliases": ["Paneer Tikka Masala"],  # Paneer Butter Masala is its own dish now
         "search_category": "North Indian",
     },
     "in_028": {  # Andhra Biryani — compatible chicken/andhra biryani aliases OK
@@ -60,6 +60,12 @@ class DishRecord:
     # Optional Swiggy matching hints (from JSON or _SWIGGY_HINTS overlay).
     swiggy_aliases: list[str] = field(default_factory=list)
     swiggy_search_category: Optional[str] = None
+    # --- food graph (catalog v2; see scripts/build_catalog.py) ---
+    # 0-1 per dimension: sweet salty sour spicy umami rich crunchy creamy warm heavy.
+    sensory: dict[str, float] = field(default_factory=dict)
+    protein: Optional[str] = None          # chicken | mutton | fish | prawn | egg | paneer | legumes | veg | ...
+    cooking_method: Optional[str] = None   # curry | dum | tandoor | fried | steamed | grilled | ...
+    region: Optional[str] = None
 
 
 def _load_dishes() -> list[DishRecord]:
@@ -67,6 +73,8 @@ def _load_dishes() -> list[DishRecord]:
         raw = json.load(f)
     dishes: list[DishRecord] = []
     for record in raw:
+        if record.get("retired"):
+            continue
         hint = _SWIGGY_HINTS.get(record.get("id", ""), {})
         if hint.get("aliases") and not record.get("swiggy_aliases"):
             record = {**record, "swiggy_aliases": list(hint["aliases"])}

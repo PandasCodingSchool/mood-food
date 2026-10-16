@@ -10,7 +10,9 @@ name: moodfood
 
 services:
   postgres:
-    image: postgres:17-alpine
+    # Postgres 17 + pgvector (intelligence embeddings). Same major as the old
+    # postgres:17-alpine image, so existing volumes keep working.
+    image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
       POSTGRES_USER: moodfood
@@ -78,6 +80,7 @@ services:
       DATABASE_URL: postgres://moodfood:moodfood@postgres:5432/moodfood
       REDIS_URL: redis://redis:6379
       AI_SERVICE_URL: http://intelligence:8000
+      AI_SERVICE_KEY: ${AI_SERVICE_KEY:-local-dev-service-key}
       INTELLIGENCE_SYNC_KEY: ${INTELLIGENCE_SYNC_KEY:-local-dev-sync-key}
       SWIGGY_TOKEN_ENCRYPTION_KEY: ${SWIGGY_TOKEN_ENCRYPTION_KEY:-local-dev-only-not-secret}
       SMS_PROVIDER: console
@@ -98,8 +101,14 @@ services:
     environment:
       NODE_BASE_URL: http://api:3001
       SYNC_KEY: ${INTELLIGENCE_SYNC_KEY:-local-dev-sync-key}
+      AI_SERVICE_KEY: ${AI_SERVICE_KEY:-local-dev-service-key}
+      # Learned state + embeddings in the "intelligence" schema (pgvector).
+      DATABASE_URL: postgres://moodfood:moodfood@postgres:5432/moodfood
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres-data:

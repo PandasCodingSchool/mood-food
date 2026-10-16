@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard.js';
 import { AuthModule } from './auth/auth.module.js';
+import { BrainModule } from './brain/brain.module.js';
 import { HttpErrorFilter } from './common/http.js';
 import { RateLimitGuard } from './common/rate-limit.js';
 import { CoreModule } from './core/core.module.js';
@@ -11,6 +12,7 @@ import { MiscModule } from './misc/misc.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfileModule } from './profile/profile.module.js';
 import { RecommendationsModule } from './recommendations/recommendations.module.js';
+import { GamesModule } from './games/games.module.js';
 import { SignalsModule } from './signals/signals.module.js';
 import { SocialModule } from './social/social.module.js';
 import { SwiggyModule } from './swiggy/swiggy.module.js';
@@ -24,6 +26,8 @@ import { SwiggyModule } from './swiggy/swiggy.module.js';
     NotificationsModule,
     SignalsModule,
     RecommendationsModule,
+    GamesModule,
+    BrainModule,
     SwiggyModule,
     SocialModule,
     DiyModule,

@@ -15,7 +15,7 @@ export interface GameEntry {
 
 export const GAMES: GameEntry[] = [
   { id: 'swipe-vibe', route: '/games/swipe-vibe', title: 'Snack Match', desc: 'Swipe food cards until your cravings click.', time: '1 min', tag: 'Popular', icon: 'swipe', hue: 40 },
-  { id: 'wheel', route: '/games/wheel', title: 'Meal Roulette', desc: 'Spin for a meal vibe. Accept or roll again.', time: '30 sec', tag: 'Quick', icon: 'casino', hue: 350 },
+  { id: 'wheel', route: '/games/wheel', title: 'Meal Roulette', desc: 'Spin for something new. Three you love, three to try.', time: '30 sec', tag: 'Quick', icon: 'casino', hue: 350 },
   { id: 'character', route: '/games/character', title: "Tonight's Story", desc: "Three choices about how you're feeling.", time: '30 sec', icon: 'history', hue: 200 },
   { id: 'quiz', route: '/games/quiz', title: 'Mood Scoop', desc: 'Three questions, one perfect bowl.', time: '30 sec', icon: 'icecream', hue: 220 },
   { id: 'this-or-that', route: '/games/this-or-that', title: 'This or That', desc: 'Rapid-fire pairs until one wins.', time: '45 sec', tag: 'Quick', icon: 'compare_arrows', hue: 140 },

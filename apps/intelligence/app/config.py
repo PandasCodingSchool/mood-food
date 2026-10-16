@@ -5,10 +5,29 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-6-luna"
     # Lightweight model for fast mid-game assists (option copy, flavor text).
-    openai_mini_model: str = "gpt-4o-mini"
+    openai_mini_model: str = "gpt-6-luna"
+    # Vision + structured output (food-photo moderation, recipes).
+    openai_vision_model: str = "gpt-6-luna"
+    # Some current models reject `temperature`; scripts/openai_smoke.py tells you.
+    openai_supports_temperature: bool = True
+    llm_timeout_s: float = 30.0
     unsplash_access_key: str = ""
+
+    # --- Service security / runtime ---
+    # "production" makes missing secrets fail closed instead of open.
+    environment: str = "development"
+    # Bearer token the API sends (AI_SERVICE_KEY). Empty = auth off (dev only).
+    ai_service_key: str = ""
+    # Comma-separated browser origins; the API calls us server-to-server.
+    allowed_origins: str = ""
+    json_logs: bool = False
+    # Intelligence Lab (/api/lab/*): dev-only routes that return decisions with
+    # their full trace. Never mounted when ENVIRONMENT=production.
+    lab_enabled: bool = False
+    # Refuse every Swiggy MCP tool except discovery reads (always on when lab_enabled).
+    swiggy_read_only: bool = False
 
     # --- Swiggy MCP (Food server) ---
     # Streamable-HTTP MCP endpoint. See https://mcp.swiggy.com/builders
@@ -56,15 +75,42 @@ class Settings(BaseSettings):
     # maps, trade-off weights, calibration). Treated as a rebuildable cache over
     # the Node backend's durable signals log — losable, always replayable.
     model_store_path: str = "model_store.db"
+    # Postgres for the model store (overrides model_store_path when set). Local:
+    # postgresql://moodfood:moodfood@localhost:5432/moodfood (pgvector image).
+    database_url: str = ""
+    database_schema: str = "intelligence"
+    database_pool_max: int = 5
     # OpenAI embedding model for the dish "item tower" and craving/mood anchors.
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 256
-    # Cached dish-embedding matrix (rebuilt when dishes.json changes).
-    dish_embeddings_path: str = "app/data/dish_embeddings.npz"
     # Shared secret for the Node replay feed (x-sync-key header, both tiers).
     sync_key: str = ""
     # Node backend base URL for pulling the signals replay feed.
     node_base_url: str = "http://localhost:3001"
+
+    # --- JEV (TypeSafe System One) decision model ---
+    # Fast typed decisions (noul / choice / score) with calibrated confidence.
+    # See https://docs.typesafe.ai/api. Pin a version: thresholds are tuned per model.
+    jev_api_key: str = ""
+    jev_base_url: str = "https://api.typesafe.ai"  # API root; SDK posts to /v1/systemone
+    jev_model: str = "jev-1.13.0"
+    jev_timeout_s: float = 2.0
+    # Guard against oversized state (Jev: 32k tokens for state + longest question).
+    jev_max_state_chars: int = 40_000
+    # Circuit breaker: after N consecutive failures, skip JEV for the cooldown.
+    jev_breaker_failures: int = 3
+    jev_breaker_cooldown_s: float = 60.0
+    # Per-decision-site rollout: off | shadow (log only, user sees no change) | jev.
+    ranker_provider: str = "jev"
+    # Blend: final = (1-w)*deterministic + w*JEV fit.
+    jev_weight: float = 0.65
+    # Commit confidence thresholds for meta.suggested_count (1 card / 2-card duel).
+    commit_one_threshold: float = 0.75
+    commit_two_threshold: float = 0.45
+    # Polish the hero card's copy with the LLM while Swiggy matching runs.
+    polish_hero_copy: bool = True
+    polish_timeout_s: float = 1.5
+    scout_provider: str = "jev"  # jev | gpt
 
     model_config = {
         "env_file": ".env",

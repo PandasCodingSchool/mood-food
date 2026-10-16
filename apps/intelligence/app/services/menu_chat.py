@@ -16,9 +16,9 @@ import logging
 from typing import Optional
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from app.config import settings
+from app.llm import JsonChat
 from app.schemas.swiggy import MenuChatRequest, MenuChatResponse, SwiggyMenuItem
 
 logger = logging.getLogger("menu_chat")
@@ -132,22 +132,17 @@ def _to_langchain_messages(request: MenuChatRequest, system_prompt: str) -> list
     return messages
 
 
-def get_menu_chat_reply(
+async def get_menu_chat_reply(
     request: MenuChatRequest,
     restaurant_name: str,
     categories: list[dict],
-    llm: Optional[ChatOpenAI] = None,
+    llm: Optional[JsonChat] = None,
 ) -> MenuChatResponse:
     if not request.messages or request.messages[-1].role != "user":
         return MenuChatResponse(success=False, error="Last message must be from the user.")
 
     if llm is None:
-        llm = ChatOpenAI(
-            model=settings.openai_model,
-            temperature=0.5,
-            max_tokens=400,
-            model_kwargs={"response_format": {"type": "json_object"}},
-        )
+        llm = JsonChat(model=settings.openai_model, kind="menu_chat", temperature=0.5, max_tokens=400)
 
     system_prompt = _build_system_prompt(request, restaurant_name, categories)
     valid_ids = {
@@ -158,7 +153,7 @@ def get_menu_chat_reply(
     }
 
     try:
-        result = llm.invoke(_to_langchain_messages(request, system_prompt))
+        result = await llm.ainvoke(_to_langchain_messages(request, system_prompt))
         data = json.loads(result.content)
     except Exception as exc:  # noqa: BLE001 - never break the chat UX on an LLM/parse hiccup
         logger.warning("menu_chat: LLM call failed: %s", exc)

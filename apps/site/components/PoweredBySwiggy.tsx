@@ -27,9 +27,8 @@ export function PoweredBySwiggy({ className }: { className?: string }) {
 export function PartnerLockup({ size = 64 }: { size?: number }) {
   return (
     <div className="lockup">
-      <span className="brand-mark" style={{ width: size, height: size, borderRadius: size * 0.28 }}>
-        <Image src="/moodfood-logo.png" alt="MoodFood" width={size - 4} height={size - 4} />
-      </span>
+      {/* Sits on the light Swiggy panel, so the original-colour transparent logo. */}
+      <Image src="/moodfood-mark-light.png" alt="MoodFood" width={Math.round(size * 1.3)} height={Math.round(size * 1.3 * (538 / 640))} className="brand-logo" />
       <Icon name="add" size={28} />
       <SwiggyMark size="lg" inverse />
     </div>

@@ -72,11 +72,12 @@ def _write_blurb(user_id: str, archetype: str, previous: Optional[str]) -> tuple
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=settings.openai_api_key)
+        # Runs on the signal-ingest thread: keep it short and bounded.
+        client = OpenAI(api_key=settings.openai_api_key, timeout=10.0, max_retries=0)
         accuracy = calibration.rolling_accuracy(user_id)
         response = client.chat.completions.create(
             model=settings.openai_mini_model,
-            max_tokens=120,
+            max_completion_tokens=120,
             messages=[
                 {
                     "role": "user",

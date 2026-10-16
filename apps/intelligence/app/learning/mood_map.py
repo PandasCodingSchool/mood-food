@@ -89,8 +89,8 @@ def observe(user_id: str, key: str, archetype: str, actual_score: float) -> None
         """INSERT INTO user_mood_map (user_id, mood_key, food_archetype, score_sum, n_obs, updated_at)
            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
            ON CONFLICT(user_id, mood_key, food_archetype) DO UPDATE SET
-             score_sum = score_sum + excluded.score_sum,
-             n_obs = n_obs + 1,
+             score_sum = user_mood_map.score_sum + excluded.score_sum,
+             n_obs = user_mood_map.n_obs + 1,
              updated_at = CURRENT_TIMESTAMP""",
         (user_id, key, archetype, normalized),
     )

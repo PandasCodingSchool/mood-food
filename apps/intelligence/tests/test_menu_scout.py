@@ -1,6 +1,6 @@
 """Unit tests for the menu_scout semantic matching helper.
 
-All tests mock ChatOpenAI — no network access required.
+All tests mock JsonChat — no network access required.
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def _mock_llm(response_data: dict) -> MagicMock:
 @pytest.mark.asyncio
 async def test_empty_input_skips_model():
     """Empty pairs list must return {} without instantiating the LLM."""
-    with patch("app.services.menu_scout.ChatOpenAI") as mock_cls:
+    with patch("app.services.menu_scout.JsonChat") as mock_cls:
         result = await scout_ambiguous_matches([])
     mock_cls.assert_not_called()
     assert result == {}
@@ -61,7 +61,7 @@ async def test_single_pair_accepted():
     cand = _cand()
     data = {f"{dish.dish_id}:{cand.item_id}": {"compatible": True, "confidence": 0.88, "reason": "close variant"}}
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=_mock_llm(data)):
+    with patch("app.services.menu_scout.JsonChat", return_value=_mock_llm(data)):
         result = await scout_ambiguous_matches([(dish, cand)])
 
     assert (dish.dish_id, cand.item_id) in result
@@ -78,7 +78,7 @@ async def test_confidence_gate_excludes_low_confidence():
     cand = _cand()
     data = {f"{dish.dish_id}:{cand.item_id}": {"compatible": True, "confidence": 0.60, "reason": "weak"}}
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=_mock_llm(data)):
+    with patch("app.services.menu_scout.JsonChat", return_value=_mock_llm(data)):
         result = await scout_ambiguous_matches([(dish, cand)])
 
     assert result == {}
@@ -91,24 +91,24 @@ async def test_incompatible_pair_excluded():
     cand = _cand()
     data = {f"{dish.dish_id}:{cand.item_id}": {"compatible": False, "confidence": 0.95, "reason": "protein mismatch"}}
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=_mock_llm(data)):
+    with patch("app.services.menu_scout.JsonChat", return_value=_mock_llm(data)):
         result = await scout_ambiguous_matches([(dish, cand)])
 
     assert result == {}
 
 
 @pytest.mark.asyncio
-async def test_malformed_json_returns_empty():
+async def test_malformed_json_returns_none():
     """Non-JSON response returns {} and does not crash."""
     llm = MagicMock()
     bad = MagicMock()
     bad.content = "this is not JSON {{{"
     llm.ainvoke = AsyncMock(return_value=bad)
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=llm):
+    with patch("app.services.menu_scout.JsonChat", return_value=llm):
         result = await scout_ambiguous_matches([(_dish(), _cand())])
 
-    assert result == {}
+    assert result is None
 
 
 @pytest.mark.asyncio
@@ -124,7 +124,7 @@ async def test_malformed_entry_skipped_valid_entry_returned():
         "d2:i2": "not_a_dict",           # malformed — must be skipped
         "d1:i1_extra": {"compatible": True},  # missing confidence — skipped
     }
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=_mock_llm(data)):
+    with patch("app.services.menu_scout.JsonChat", return_value=_mock_llm(data)):
         result = await scout_ambiguous_matches([(dish1, cand1), (dish2, cand2)])
 
     assert ("d1", "i1") in result
@@ -132,7 +132,7 @@ async def test_malformed_entry_skipped_valid_entry_returned():
 
 
 @pytest.mark.asyncio
-async def test_timeout_returns_empty():
+async def test_timeout_returns_none():
     """LLM call that exceeds timeout returns {} without crashing."""
     llm = MagicMock()
 
@@ -145,24 +145,24 @@ async def test_timeout_returns_empty():
     original = _scout_mod._TIMEOUT_S
     _scout_mod._TIMEOUT_S = 0.02
     try:
-        with patch("app.services.menu_scout.ChatOpenAI", return_value=llm):
+        with patch("app.services.menu_scout.JsonChat", return_value=llm):
             result = await scout_ambiguous_matches([(_dish(), _cand())])
     finally:
         _scout_mod._TIMEOUT_S = original
 
-    assert result == {}
+    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_llm_error_returns_empty():
+async def test_llm_error_returns_none():
     """LLM exception returns {} without crashing."""
     llm = MagicMock()
     llm.ainvoke = AsyncMock(side_effect=RuntimeError("network error"))
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=llm):
+    with patch("app.services.menu_scout.JsonChat", return_value=llm):
         result = await scout_ambiguous_matches([(_dish(), _cand())])
 
-    assert result == {}
+    assert result is None
 
 
 @pytest.mark.asyncio
@@ -175,7 +175,7 @@ async def test_pairs_capped_at_max_pairs_one_llm_call():
     llm = MagicMock()
     llm.ainvoke = AsyncMock(return_value=_llm_response({}))
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=llm):
+    with patch("app.services.menu_scout.JsonChat", return_value=llm):
         await scout_ambiguous_matches(pairs)
 
     llm.ainvoke.assert_called_once()
@@ -193,7 +193,39 @@ async def test_exact_confidence_boundary_accepted():
     cand = _cand()
     data = {f"{dish.dish_id}:{cand.item_id}": {"compatible": True, "confidence": _MIN_CONFIDENCE, "reason": "boundary"}}
 
-    with patch("app.services.menu_scout.ChatOpenAI", return_value=_mock_llm(data)):
+    with patch("app.services.menu_scout.JsonChat", return_value=_mock_llm(data)):
         result = await scout_ambiguous_matches([(dish, cand)])
 
     assert (dish.dish_id, cand.item_id) in result
+
+
+async def test_jev_judges_first_with_strict_threshold():
+    from app.decisions import jev
+
+    dish = ScoutDishInput(dish_id="in_002", dish_name="Dal Makhani")
+    good = ScoutCandidateInput(item_id="i1", item_name="Dal Makhani (Serves 1)", is_veg=True)
+    bad = ScoutCandidateInput(item_id="i2", item_name="Dal Tadka", is_veg=True)
+    client = MagicMock()
+    client.decide = AsyncMock(return_value=jev.Decision(
+        model="jev-1.13.0", nouls={"p1": 0.98, "p2": 0.31}, choices={}, scores={}, input_tokens=300, latency_ms=9,
+    ))
+    with patch.object(jev, "get_client", return_value=client), \
+         patch("app.services.menu_scout.JsonChat") as gpt:
+        out = await scout_ambiguous_matches([(dish, good), (dish, bad)])
+    gpt.assert_not_called()
+    assert set(out) == {("in_002", "i1")}
+    assert out[("in_002", "i1")].reason == "jev:0.98"
+    state = client.decide.call_args.args[1]
+    assert state["p1"]["menu_item"]["diet"] == "vegetarian"
+
+
+async def test_jev_unavailable_falls_back_to_gpt():
+    from app.decisions import jev
+
+    client = MagicMock()
+    client.decide = AsyncMock(return_value=None)
+    data = {"in_002:i1": {"compatible": True, "confidence": 0.9, "reason": "same"}}
+    with patch.object(jev, "get_client", return_value=client), \
+         patch("app.services.menu_scout.JsonChat", return_value=_mock_llm(data)):
+        out = await scout_ambiguous_matches([(ScoutDishInput("in_002", "Dal Makhani"), ScoutCandidateInput("i1", "Dal Makhani"))])
+    assert ("in_002", "i1") in out

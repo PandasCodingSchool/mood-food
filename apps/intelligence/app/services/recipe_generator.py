@@ -14,11 +14,10 @@ import time
 from typing import Optional
 
 from app.config import settings
+from app.llm import parse_structured
 from app.schemas.recipe import Recipe
 
 logger = logging.getLogger("recipe_generator")
-
-_RECIPE_MODEL = "gpt-4o-2024-08-06"  # any model that supports structured outputs
 
 _SYSTEM_PROMPT = (
     "You are an expert chef. Given a dish name, produce a clear, authentic recipe.\n"
@@ -55,28 +54,23 @@ def _cache_put(key: str, recipe: Recipe) -> None:
     _CACHE[key] = (time.time() + _CACHE_TTL_S, recipe)
 
 
-def get_recipe(dish: str, servings: int = 2) -> Recipe:
+async def get_recipe(dish: str, servings: int = 2) -> Recipe:
     """Return a structured Recipe for the given dish. Raises on failure."""
     key = _cache_key(dish, servings)
     if (cached := _cache_get(key)) is not None:
         return cached
 
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.openai_api_key)
     start = time.time()
-    completion = client.beta.chat.completions.parse(
-        model=_RECIPE_MODEL,
-        messages=[
+    recipe = await parse_structured(
+        "recipe",
+        settings.openai_model,
+        [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"Give me a recipe for {dish} that serves {servings}."},
         ],
-        response_format=Recipe,
+        Recipe,
         temperature=0.4,
     )
-    recipe = completion.choices[0].message.parsed
-    if recipe is None:
-        raise ValueError("Model refused or returned no parsed recipe")
 
     elapsed = round(time.time() - start, 2)
     logger.info("get_recipe(%r, servings=%d) -> %d ingredients, %d steps in %.2fs",

@@ -9,6 +9,7 @@ import { space } from '@moodfood/tokens';
 import { Button, IconButton, ListRow, ProgressBar, Screen, Surface, Text, useTheme } from '@moodfood/ui';
 import { AppTabBar } from '../src/components/v2';
 import { fetchCurrentUser, logout, type AuthUser } from '../src/services/auth';
+import { fetchBrain } from '../src/services/brain';
 import { fetchHistory } from '../src/services/history';
 import { fetchNotifications } from '../src/services/notifications';
 import { fetchQuests } from '../src/services/quests';
@@ -25,6 +26,7 @@ export default function ProfileScreen() {
   const [streak, setStreak] = useState(0);
   const [questsDone, setQuestsDone] = useState(0);
   const [unread, setUnread] = useState(0);
+  const [houseName, setHouseName] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,6 +39,10 @@ export default function ProfileScreen() {
         setQuestsDone(q.filter((x) => x.status === 'completed').length);
       });
       fetchNotifications().then((n) => setUnread(n.unreadCount || 0)).catch(() => {});
+      fetchBrain().then((b) => {
+        const info = b?.house?.status === 'sorted' ? b.house.house_info : null;
+        setHouseName(info ? `${info.crest} ${info.name}` : null);
+      });
     }, []),
   );
 
@@ -108,6 +114,7 @@ export default function ProfileScreen() {
 
         <Surface style={{ marginHorizontal: space.gutter, marginTop: 12, paddingHorizontal: 6, paddingVertical: 4 }}>
           <ListRow icon="military_tech" title="Quests & badges" meta={`${questsDone} done`} onPress={() => router.push('/quests')} />
+          <ListRow icon="auto_awesome" title="Your food house" meta={houseName ?? 'Getting to know you'} onPress={() => router.push('/house')} />
           <ListRow icon="receipt_long" title="Order history" meta={orders != null ? String(orders) : undefined} onPress={() => router.push({ pathname: '/history', params: { tab: 'ordered' } })} />
           <ListRow icon="bookmark" title="Saved dishes" meta={saved != null ? String(saved) : undefined} onPress={() => router.push({ pathname: '/history', params: { tab: 'saved' } })} />
           <ListRow icon="notifications" title="Notifications" meta={unread ? `${unread} new` : 'All read'} onPress={() => router.push('/notifications')} />

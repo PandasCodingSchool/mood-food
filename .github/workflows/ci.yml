@@ -27,6 +27,16 @@ jobs:
   intelligence:
     name: Intelligence (pytest)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: moodfood
+          POSTGRES_PASSWORD: moodfood
+          POSTGRES_DB: moodfood
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U moodfood" --health-interval 5s --health-timeout 3s --health-retries 10
     defaults:
       run:
         working-directory: apps/intelligence
@@ -39,3 +49,7 @@ jobs:
           cache-dependency-path: apps/intelligence/requirements.txt
       - run: pip install -r requirements.txt
       - run: python -m pytest -q
+      - name: pytest on Postgres + pgvector (fresh schema per test)
+        run: python -m pytest -q
+        env:
+          TEST_DATABASE_URL: postgresql://moodfood:moodfood@localhost:5432/moodfood

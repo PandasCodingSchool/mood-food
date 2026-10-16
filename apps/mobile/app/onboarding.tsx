@@ -72,7 +72,7 @@ export default function OnboardingScreen() {
 }
 
 function MoodVisual() {
-  const pos = [{ top: 30, left: 14 }, { top: 92, right: 6 }, { bottom: 70, left: 24 }, { bottom: 16, right: 30 }];
+  const pos = [{ top: 22, left: 14 }, { top: 74, right: 4 }, { top: 150, left: 0 }, { bottom: 64, right: 18 }, { bottom: 10, left: 36 }];
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <MoodOrb size={190} />

@@ -1,5 +1,6 @@
-// 2.0 Home: live context header, tonight's top pick (real recommendations),
-// more picks, decision games, mood streak, and the v1 learning prompts.
+// 2.0 Home: live context header, "Suggested for you" (the preference brain's picks
+// for right now, one stretch) with the mood-based picks as the fallback, house badge
+// and reveal, decision games, mood streak, and the v1 learning prompts.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -16,8 +17,9 @@ import { MOOD_COPY, TIME_COPY, WEATHER_COPY } from '../src/constants/copy';
 import { useLiveMood } from '../src/context/LiveMood';
 import { getActiveOrder, isTerminal, type ActiveOrder } from '../src/services/activeOrder';
 import { fetchCurrentUser } from '../src/services/auth';
+import { fetchBrain, fetchSuggestions, refreshHistory, unseenHouseEvent, type Brain, type Suggestions } from '../src/services/brain';
 import { hasCheckedInToday } from '../src/services/moodState';
-import { getMoodRecommendations } from '../src/services/moodRecs';
+import { getMoodRecommendations, resolveAddressId } from '../src/services/moodRecs';
 import { fetchNotifications } from '../src/services/notifications';
 import { markNostalgiaPromptShown, shouldShowNostalgiaPrompt } from '../src/services/nostalgiaGate';
 import { openMeal, useStartOrder } from '../src/services/orderFlow';
@@ -46,11 +48,18 @@ export default function HomeScreen() {
   const [recsError, setRecsError] = useState<string | null>(null);
   const [allGames, setAllGames] = useState(false);
   const [liveOrder, setLiveOrder] = useState<ActiveOrder | null>(null);
+  const [brain, setBrain] = useState<Brain | null>(null);
+  const [suggested, setSuggested] = useState<Suggestions | null>(null);
   const loadedFor = useRef<string | null>(null);
 
   useEffect(() => {
     trackEvent('landing_page_viewed');
-    fetchCurrentUser().then((u) => setName(u?.name?.split(' ')[0] ?? null)).catch(() => {});
+    fetchCurrentUser()
+      .then((u) => {
+        setName(u?.name?.split(' ')[0] ?? null);
+        if (u?.swiggyLinked) void refreshHistory(); // new orders before they leave Swiggy's short window
+      })
+      .catch(() => {});
   }, []);
 
   useFocusEffect(
@@ -67,13 +76,23 @@ export default function HomeScreen() {
           router.push({ pathname: '/mood-checkin', params: { next: '/home' } });
           return;
         }
-        const [learned, s, notifs] = await Promise.all([
+        const [learned, s, notifs, b] = await Promise.all([
           fetchLearnedProfile().catch(() => null),
           fetchStreak().catch(() => 0),
           fetchNotifications().catch(() => ({ unreadCount: 0 })),
+          fetchBrain(),
         ]);
         if (cancelled) return;
         setProfile(learned);
+        setBrain(b);
+        void resolveAddressId()
+          .catch(() => undefined)
+          .then((addressId) => fetchSuggestions({ addressId }))
+          .then((sug) => !cancelled && setSuggested(sug && sug.recommendations.length ? sug : null));
+        if (await unseenHouseEvent(b?.house)) {
+          router.push('/house-reveal');
+          return;
+        }
         setStreak(s);
         setUnread(notifs.unreadCount || 0);
         if (await shouldShowNostalgiaPrompt()) setShowNostalgia(true);
@@ -102,9 +121,13 @@ export default function HomeScreen() {
 
   const t = TIME_COPY[time];
   const w = WEATHER_SPECS[weather];
-  const list = recs?.recommendations ?? [];
+  // Suggested for you (brain) when it has picks; otherwise the mood-based recommendations.
+  const list = suggested?.recommendations ?? recs?.recommendations ?? [];
   const top = list[0];
   const topV = top ? recView(top) : null;
+  const reasonFor = (r: (typeof list)[number]) => (suggested && r.dish?.id ? suggested.reasons[r.dish.id] : undefined);
+  const momentLabel = suggested ? `${suggested.daytype} ${suggested.slot.replace('_', ' ')}` : null;
+  const house = brain?.house?.status === 'sorted' ? brain.house.house_info : null;
   const games = allGames ? GAMES : GAMES.slice(0, 4);
   const openGame = (g: (typeof GAMES)[number]) => (g.comingSoon ? toast(`${g.title} is coming soon`) : router.push(g.route as never));
 
@@ -127,6 +150,17 @@ export default function HomeScreen() {
               {temperature != null ? `${Math.round(temperature)}° · ${w.label}` : w.label}
             </Text>
           </Surface>
+          {house ? (
+            <Pressable
+              onPress={() => router.push('/house')}
+              accessibilityRole="button"
+              accessibilityLabel={`Your house: ${house.name}`}
+              style={{ height: 40, paddingHorizontal: 12, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surf, borderWidth: 1, borderColor: colors.line }}
+            >
+              <Text variant="body15">{house.crest}</Text>
+              <Text variant="caption13" numberOfLines={1} style={{ fontFamily: 'Geist_500Medium', maxWidth: 110 }}>{house.name}</Text>
+            </Pressable>
+          ) : null}
           <IconButton icon="notifications" label={unread ? `Notifications, ${unread} unread` : 'Notifications'} size={40} badge={unread > 0} style={{ marginLeft: 'auto' }} onPress={() => router.push('/notifications')} />
           <Pressable
             onPress={() => router.replace('/profile')}
@@ -166,9 +200,9 @@ export default function HomeScreen() {
             <HeroPick
               v={topV}
               height={410}
-              eyebrow={`Your ${t.meal} pick`}
-              topFor={WEATHER_COPY[weather].topFor}
-              why={topV.why}
+              eyebrow={momentLabel ? `Suggested for you · ${momentLabel}` : `Your ${t.meal} pick`}
+              topFor={suggested ? (reasonFor(top)?.kind === 'stretch' ? '🧭 Something new' : undefined) : WEATHER_COPY[weather].topFor}
+              why={reasonFor(top)?.text ?? topV.why}
               onOpen={() => openMeal(router, top, 0)}
               actions={
                 <>
@@ -185,7 +219,9 @@ export default function HomeScreen() {
         </View>
         <View style={{ paddingHorizontal: space.page, paddingTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Icon name="tune" size={15} tone="ink2" />
-          <Text variant="micro12" tone="ink2">Based on your mood, the weather and the time of day</Text>
+          <Text variant="micro12" tone="ink2">
+            {suggested ? 'Based on what you order, when you order it, and today' : 'Based on your mood, the weather and the time of day'}
+          </Text>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: space.gutter, paddingTop: 18, paddingBottom: 2 }}>
@@ -196,10 +232,16 @@ export default function HomeScreen() {
 
         {list.length > 1 ? (
           <>
-            <SectionHeader title="More for your mood" action="See all" onAction={() => router.replace('/recommendations')} />
+            <SectionHeader title={suggested ? 'Also suggested for you' : 'More for your mood'} action="See all" onAction={() => router.replace('/recommendations')} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: space.gutter }}>
               {list.slice(1, 5).map((r, i) => (
-                <RailCard key={r.id} v={recView(r)} onOpen={() => openMeal(router, r, i + 1)} />
+                <RailCard
+                  key={r.id}
+                  v={recView(r)}
+                  badge={reasonFor(r)?.kind === 'stretch' ? '🧭 Something new' : undefined}
+                  note={reasonFor(r)?.text}
+                  onOpen={() => openMeal(router, r, i + 1)}
+                />
               ))}
             </ScrollView>
           </>

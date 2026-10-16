@@ -63,7 +63,8 @@ class Recommendation(BaseModel):
     # True when this pick is an anti-rut wildcard ("shake it up?").
     is_wildcard: bool = False
     dish: DishSummary
-    image_url: str
+    # None until the dish has a catalog photo; clients fall back to the live Swiggy image.
+    image_url: Optional[str] = None
     ai_reasoning: AiReasoning
     practical_details: PracticalDetails
     restaurant: Restaurant
@@ -95,6 +96,10 @@ class LearnedMeta(BaseModel):
     persona: Optional[str] = None
     mode: str = "standard"
     accuracy_meter: Optional[dict] = None
+    # Decision engine (additive; clients may adopt later).
+    ranker: Optional[str] = None             # jev | gpt | deterministic
+    commit_confidence: Optional[float] = None  # JEV's confidence in the #1 pick
+    suggested_count: Optional[int] = None      # 1 = sure, 2 = duel, else as requested
 
 
 class RecommendationResponse(BaseModel):

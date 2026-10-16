@@ -16,6 +16,8 @@ Ordering-specific rules enforced here (see intelligence/SWIGGY_TOOLS.md):
 
 from __future__ import annotations
 
+import re
+
 import logging
 from typing import Any, Optional
 
@@ -51,24 +53,33 @@ def _to_float(v: Any) -> Optional[float]:
 
 
 def _normalize_cart_line(raw: dict) -> Optional[CartLine]:
-    iid = _first(raw, "id", "itemId", "item_id", "menuItemId")
+    iid = _first(raw, "id", "menu_item_id", "itemId", "item_id", "menuItemId")
     name = _first(raw, "name", "itemName", "item_name")
     if iid is None or name is None:
         return None
-    return CartLine(
-        id=str(iid),
-        name=str(name),
-        price=_to_float(_first(raw, "price", "finalPrice", "amount")),
-        quantity=int(_first(raw, "quantity", "qty", default=1) or 1),
-    )
+    quantity = int(_first(raw, "quantity", "qty", default=1) or 1)
+    price = _to_float(_first(raw, "price", "finalPrice", "amount"))
+    if price is None:
+        # Real get_food_cart lines carry per-line totals, not a unit price.
+        line_total = _to_float(_first(raw, "final_price", "total", "subtotal"))
+        price = line_total / quantity if line_total is not None and quantity else None
+    return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity)
 
 
 def _normalize_cart(raw: Any) -> CartResponse:
-    data = _unwrap_envelope(raw) or {}
-    if not isinstance(data, dict):
-        data = {}
+    outer = _unwrap_envelope(raw) or {}
+    if not isinstance(outer, dict):
+        outer = {}
+    # Real get_food_cart nests twice: {success, data: {data: {items, pricing,
+    # offers}, addressId, availablePaymentMethods}}. Older/flat shapes keep
+    # everything on one level — read from the inner dict, fall back to outer.
+    inner = outer.get("data") if isinstance(outer.get("data"), dict) else {}
+    data = {**outer, **inner}
+    pricing = data.get("pricing") if isinstance(data.get("pricing"), dict) else {}
+    items = data.get("items") if isinstance(data.get("items"), list) else data.get("cart")
     lines = [
-        line for line in (_normalize_cart_line(r) for r in _as_list(data, "items", "cart"))
+        line
+        for line in (_normalize_cart_line(r) for r in (items if isinstance(items, list) else []) if isinstance(r, dict))
         if line is not None
     ]
     # Docs show two shapes for this field across examples: a bool alongside a
@@ -88,9 +99,11 @@ def _normalize_cart(raw: Any) -> CartResponse:
     return CartResponse(
         success=True,
         items=lines,
-        subtotal=_to_float(_first(data, "subtotal", "sub_total")),
-        delivery_charges=_to_float(_first(data, "deliveryCharges", "delivery_charges", "deliveryFee")),
-        total=_to_float(_first(data, "total", "grandTotal", "finalTotal")),
+        subtotal=_to_float(_first(pricing, "item_total") or _first(data, "subtotal", "sub_total")),
+        delivery_charges=_to_float(
+            _first(pricing, "delivery_charge") or _first(data, "deliveryCharges", "delivery_charges", "deliveryFee")
+        ),
+        total=_to_float(_first(pricing, "to_pay") or _first(data, "total", "grandTotal", "finalTotal")),
         available_payment_methods=[str(p) for p in payment_methods],
         coupon_applied=coupon_applied or (coupon_discount is not None and coupon_discount > 0),
         coupon_discount=coupon_discount,
@@ -122,6 +135,22 @@ def _is_cod_eligible(coupon: Coupon) -> bool:
     return True
 
 
+_QTY_SUFFIX = re.compile(r"\s*(?:x\s*\d+|\(\s*x?\s*\d+\s*\))\s*$", re.I)
+
+
+def _ordered_item_names(raw: dict) -> list[str]:
+    """Item names from reorderMeta.orderItems, else the `orderedItems` text."""
+    names: list[str] = []
+    for action in raw.get("actions") or []:
+        meta = action.get("reorderMeta") if isinstance(action, dict) else None
+        for item in (meta or {}).get("orderItems") or []:
+            if isinstance(item, dict) and item.get("name"):
+                names.append(str(item["name"]).strip())
+    if not names and isinstance(raw.get("orderedItems"), str):
+        names = [_QTY_SUFFIX.sub("", part).strip() for part in raw["orderedItems"].split(",")]
+    return [n for n in dict.fromkeys(names) if n]
+
+
 def _normalize_order_summary(raw: dict) -> Optional[OrderSummary]:
     oid = _first(raw, "orderId", "order_id", "id")
     if oid is None:
@@ -133,9 +162,14 @@ def _normalize_order_summary(raw: dict) -> Optional[OrderSummary]:
     ]
     return OrderSummary(
         order_id=str(oid),
-        status=_first(raw, "status", "orderStatus"),
-        restaurant_name=_first(restaurant, "name") if restaurant else None,
+        status=_first(raw, "orderStatus", "status"),
+        restaurant_name=_first(raw, "restaurantName") or (_first(restaurant, "name") if restaurant else None),
         items=items,
+        restaurant_id=_first(raw, "restaurantId"),
+        ordered_at=_first(raw, "orderedTime"),
+        order_total=_first(raw, "orderTotal"),
+        is_active=raw.get("isActiveOrder") if isinstance(raw.get("isActiveOrder"), bool) else None,
+        item_names=_ordered_item_names(raw),
     )
 
 
@@ -205,12 +239,17 @@ class SwiggyOrderService:
         await self.client.call_tool("flush_food_cart", {})
 
     async def get_orders(self, address_id: str, order_count: int = 5) -> OrdersResponse:
-        raw = await self.client.call_tool(
-            "get_food_orders", {"addressId": address_id, "orderCount": min(order_count, 20)}
-        )
+        # Server schema: addressId (coordinates only), activeOnly, orderCount (default 5, max 15).
+        raw = await self.client.call_tool("get_food_orders", {"addressId": address_id, "orderCount": min(15, max(1, order_count))})
         rows = _as_list(raw, "orders", "data")
         orders = [o for o in (_normalize_order_summary(r) for r in rows) if o is not None]
-        return OrdersResponse(success=True, orders=orders)
+        return OrdersResponse(success=True, orders=orders[: max(1, order_count)])
+
+    async def most_recent_address_id(self) -> Optional[str]:
+        """The user's own addresses come sorted by last order date (most recent first)."""
+        raw = await self.client.call_tool("get_addresses", {})
+        rows = _as_list(raw, "addresses", "data")
+        return str(_first(rows[0], "id", "addressId", "address_id")) if rows else None
 
     async def get_order_details(self, order_id: str) -> OrderDetailsResponse:
         raw = await self.client.call_tool("get_food_order_details", {"orderId": order_id})

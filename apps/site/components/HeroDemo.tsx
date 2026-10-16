@@ -6,7 +6,7 @@ import { Icon } from '@/components/Icon';
 import { PhoneMock } from '@/components/PhoneMock';
 import { MOOD_OPTIONS } from '@/lib/theme';
 
-const ORDER: Mood[] = ['tired', 'happy', 'stressed', 'adventurous'];
+const ORDER: Mood[] = ['tired', 'hungry', 'happy', 'stressed', 'adventurous'];
 
 /** Hero phone that cycles through moods until the visitor picks one. */
 export function HeroDemo() {
