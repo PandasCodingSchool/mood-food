@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { EarlyAccessPill, SpotsMeter, SpotsText } from '@/components/EarlyAccess';
 import { HeroDemo } from '@/components/HeroDemo';
 import { Icon } from '@/components/Icon';
+import { LiveClock } from '@/components/LiveClock';
 import { Nav } from '@/components/Nav';
 import { PartnerLockup, PoweredBySwiggy } from '@/components/PoweredBySwiggy';
 import { Waitlist } from '@/components/Waitlist';
@@ -50,7 +51,9 @@ export default function Home() {
         <div id="top" className="container hero-body">
           <div className="hero-copy">
             <EarlyAccessPill />
-            <p className="eyebrow eyebrow-acc hero-kicker">Tired · rainy · 7:48 PM</p>
+            <p className="eyebrow eyebrow-acc hero-kicker">
+              Tired · rainy · <LiveClock />
+            </p>
             <h1 className="display">Tell us how you feel. We&rsquo;ll handle dinner.</h1>
             <p className="lede">
               No more 40-minute scroll. MoodFood picks the dish that fits your mood, your weather and your evening, then

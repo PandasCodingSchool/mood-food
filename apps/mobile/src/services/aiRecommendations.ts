@@ -167,6 +167,7 @@ export async function buildRequestContext(
 
   const energyMap: Record<string, number> = {
     happy: 7,
+    hungry: 6,
     tired: 2,
     stressed: 3,
     celebrating: 8,

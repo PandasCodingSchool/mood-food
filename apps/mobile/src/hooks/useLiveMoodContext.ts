@@ -36,8 +36,9 @@ export function toThemeWeather(apiWeather: string | undefined): Weather {
 }
 
 /** Today's check-in (1-10 scales) → theme mood. Mirrors derive() in the 2.0 design. */
-export function moodFromCheckin(c: Pick<MoodCheckin, 'energy' | 'stress' | 'social' | 'occasion'>): Mood {
+export function moodFromCheckin(c: Pick<MoodCheckin, 'energy' | 'stress' | 'hunger' | 'social' | 'occasion'>): Mood {
   if (c.stress >= 7) return 'stressed';
+  if (c.hunger >= 8) return 'hungry';
   if (c.energy <= 4) return 'tired';
   if (c.energy >= 7 && (c.social >= 7 || c.occasion === 'treat')) return 'adventurous';
   return 'happy';

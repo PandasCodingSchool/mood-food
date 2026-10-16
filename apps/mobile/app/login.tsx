@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { fontFamily, palette, space } from '@moodfood/tokens';
 import { Button, Icon, Screen, Surface, Text, useTheme } from '@moodfood/ui';
-import { CODE_LENGTH, CodeInput, LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
+import { CODE_LENGTH, CodeInput, LogoMark, PoweredBySwiggy, TopBar } from '../src/components/v2';
 import {
   continueAsGuest,
   fetchAuthMethods,
@@ -234,7 +234,7 @@ export default function LoginScreen() {
       <Screen keyboardShouldPersistTaps="handled">
         <TopBar onBack={back} />
         <View style={{ paddingHorizontal: space.page, paddingTop: 28 }}>
-          <LogoTile size={84} />
+          <LogoMark size={120} />
           <Text variant="display36" style={{ marginTop: 24 }} accessibilityRole="header">{title}</Text>
           <Text variant="body15" tone="ink2" style={{ marginTop: 10 }}>{sub}</Text>
         </View>

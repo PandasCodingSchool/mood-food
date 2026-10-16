@@ -54,6 +54,37 @@ async def test_get_cart_normalizes_totals_and_payment_methods():
     assert cart.items[0].id == "m1"
 
 
+# Documented get_food_cart shape: cart under data.data, payment methods under data.
+CART_LIVE_SHAPE = {
+    "success": True,
+    "data": {
+        "data": {
+            "items": [
+                {"menu_item_id": "m1", "name": "Butter Chicken", "quantity": 2, "final_price": 640, "in_stock": True},
+                {"menu_item_id": "m2", "name": "Garlic Naan", "quantity": 1, "final_price": 60},
+            ],
+            "pricing": {"item_total": 700, "delivery_charge": 30, "taxes_and_charges": 35, "to_pay": 765},
+            "offers": {"coupon_applied": {"coupon_discount": 50}},
+        },
+        "addressId": "addr_1",
+        "availablePaymentMethods": ["COD"],
+    },
+}
+
+
+@pytest.mark.asyncio
+async def test_get_cart_reads_live_nested_shape():
+    client = _client_with({"get_food_cart": CART_LIVE_SHAPE})
+    cart = await SwiggyOrderService(client=client).get_cart("addr_1")
+    assert [(i.id, i.name, i.quantity, i.price) for i in cart.items] == [
+        ("m1", "Butter Chicken", 2, 320),
+        ("m2", "Garlic Naan", 1, 60),
+    ]
+    assert (cart.subtotal, cart.delivery_charges, cart.total) == (700, 30, 765)
+    assert cart.available_payment_methods == ["COD"]
+    assert cart.coupon_applied is True and cart.coupon_discount == 50
+
+
 @pytest.mark.asyncio
 async def test_fetch_coupons_filters_to_cod_eligible():
     raw = {

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { X, Sparkles } from 'lucide-react-native';
-import { useTheme } from '../context/ThemeContext';
-import { fw, colors } from '../constants/theme';
+import { Pressable, View } from 'react-native';
+import { space } from '@moodfood/tokens';
+import { Icon, IconButton, StepDots, Surface, Text, useTheme } from '@moodfood/ui';
 import { logSignal } from '../services/signals';
 import type { UnderstandMeQuestion } from '../types';
 
@@ -18,7 +17,7 @@ export default function UnderstandMePrompt({
   onStart: () => void;
   onDone: () => void;
 }) {
-  const { theme } = useTheme();
+  const { colors } = useTheme();
   const [index, setIndex] = useState(0);
   const [answeredId, setAnsweredId] = useState<string | null>(null);
 
@@ -41,42 +40,47 @@ export default function UnderstandMePrompt({
   };
 
   return (
-    <View style={{ marginHorizontal: 24, marginTop: 16, padding: 16, borderRadius: 16, backgroundColor: theme.card, borderWidth: 2, borderColor: colors.orange + '25' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-          <Sparkles size={16} color={colors.orange} />
-          <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>{question.prompt}</Text>
+    <Surface kind="solid" elevated radius={26} padding={18} style={{ marginHorizontal: space.gutter, marginTop: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Icon name="auto_awesome" size={18} tone="accText" />
+        <Text variant="label" tone="ink2" style={{ flex: 1 }}>Help us understand you</Text>
+        <IconButton icon="close" label="Skip questions" size={32} onPress={onDone} />
+      </View>
+      <Text variant="title19" style={{ marginTop: 6 }}>{question.prompt}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+        {question.options.map((option) => {
+          const on = answeredId === option.id;
+          return (
+            <Pressable
+              key={option.id}
+              onPress={() => handleAnswer(option.id, option.payload)}
+              disabled={answeredId != null}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={{
+                height: 40,
+                paddingHorizontal: 14,
+                borderRadius: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                borderWidth: 1,
+                borderColor: on ? 'transparent' : colors.line,
+                backgroundColor: on ? colors.acc : colors.surf,
+                opacity: answeredId != null && !on ? 0.5 : 1,
+              }}
+            >
+              {option.emoji ? <Text variant="caption13">{option.emoji}</Text> : null}
+              <Text variant="caption13" style={{ fontFamily: 'Geist_500Medium' }} color={on ? colors.onAcc : colors.ink}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {questions.length > 1 ? (
+        <View style={{ alignItems: 'center', marginTop: 14 }}>
+          <StepDots count={questions.length} index={index} />
         </View>
-        <TouchableOpacity onPress={onDone} style={{ padding: 4 }}>
-          <X size={16} color={theme.subtext} />
-        </TouchableOpacity>
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-        {question.options.map((option) => (
-          <TouchableOpacity
-            key={option.id}
-            onPress={() => handleAnswer(option.id, option.payload)}
-            disabled={answeredId != null}
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16,
-              backgroundColor: answeredId === option.id ? colors.orange : theme.card,
-              borderWidth: 2, borderColor: answeredId === option.id ? colors.orange : theme.border,
-              opacity: answeredId != null && answeredId !== option.id ? 0.5 : 1,
-            }}
-          >
-            {option.emoji && <Text style={{ fontSize: 13 }}>{option.emoji}</Text>}
-            <Text style={[fw(700), { fontSize: 12, color: answeredId === option.id ? '#fff' : theme.text }]}>{option.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', gap: 4, marginTop: 12, justifyContent: 'center' }}>
-        {questions.map((_, i) => (
-          <View
-            key={i}
-            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i === index ? colors.orange : theme.border }}
-          />
-        ))}
-      </View>
-    </View>
+      ) : null}
+    </Surface>
   );
 }

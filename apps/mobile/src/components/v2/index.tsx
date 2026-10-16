@@ -9,22 +9,27 @@ import { Button, IconButton, TabBar, Text, useTheme } from '@moodfood/ui';
 
 const LOGO = require('../../../assets/moodfood-logo.png');
 
-/** White pill with the cropped wordmark (home / onboarding header). */
-export function LogoPill() {
+/** White pill with the wordmark's animated eyes (home / onboarding header). */
+export { MoodEyes as LogoPill } from './MoodEyes';
+
+const LOGO_LIGHT = require('../../../assets/moodfood-logo-light.png');
+const LOGO_DARK = require('../../../assets/moodfood-logo-dark.png');
+
+/** Transparent wordmark that sits on the living backdrop; ink turns cream in dark themes. */
+export function LogoMark({ size }: { size: number }) {
+  const { dark } = useTheme();
   return (
-    <View
+    <Image
+      source={dark ? LOGO_DARK : LOGO_LIGHT}
+      style={{ width: size, height: size * (626 / 640) }}
+      resizeMode="contain"
       accessibilityRole="image"
       accessibilityLabel="MoodFood"
-      style={{ width: 70, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', boxShadow: '0px 8px 18px -10px rgba(0,0,0,0.4)' }}
-    >
-      <View style={{ width: 56, height: 32, overflow: 'hidden' }}>
-        <Image source={LOGO} style={{ position: 'absolute', width: 160, height: 160, left: -56, top: -34 }} />
-      </View>
-    </View>
+    />
   );
 }
 
-/** Square white logo tile (launch, login, Swiggy connect). */
+/** Square white logo tile (launch, Swiggy connect). */
 export function LogoTile({ size }: { size: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0px 20px 40px -20px rgba(0,0,0,0.5)' }}>
