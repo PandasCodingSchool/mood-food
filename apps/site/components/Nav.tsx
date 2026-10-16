@@ -21,10 +21,8 @@ export function Nav({ current, cta = true }: { current?: 'home' | 'about' | 'pri
   return (
     <nav className="nav" aria-label="Main">
       <Link href="/" className="brand" aria-label="MoodFood home">
-        <span className="brand-mark">
-          <Image src="/moodfood-logo.png" alt="" width={40} height={40} loading="eager" />
-        </span>
-        <span>MoodFood</span>
+        {/* Transparent wordmark (cream ink for the dark header); it already reads "MoodFood". */}
+        <Image src="/moodfood-mark-dark.png" alt="" width={66} height={56} loading="eager" className="brand-logo" />
       </Link>
       <div className="nav-links">
         {links.map((l) => (

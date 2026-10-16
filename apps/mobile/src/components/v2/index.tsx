@@ -12,7 +12,24 @@ const LOGO = require('../../../assets/moodfood-logo.png');
 /** White pill with the wordmark's animated eyes (home / onboarding header). */
 export { MoodEyes as LogoPill } from './MoodEyes';
 
-/** Square white logo tile (launch, login, Swiggy connect). */
+const LOGO_LIGHT = require('../../../assets/moodfood-logo-light.png');
+const LOGO_DARK = require('../../../assets/moodfood-logo-dark.png');
+
+/** Transparent wordmark that sits on the living backdrop; ink turns cream in dark themes. */
+export function LogoMark({ size }: { size: number }) {
+  const { dark } = useTheme();
+  return (
+    <Image
+      source={dark ? LOGO_DARK : LOGO_LIGHT}
+      style={{ width: size, height: size * (626 / 640) }}
+      resizeMode="contain"
+      accessibilityRole="image"
+      accessibilityLabel="MoodFood"
+    />
+  );
+}
+
+/** Square white logo tile (launch, Swiggy connect). */
 export function LogoTile({ size }: { size: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0px 20px 40px -20px rgba(0,0,0,0.5)' }}>

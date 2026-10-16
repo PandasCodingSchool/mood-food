@@ -28,6 +28,7 @@ export const TICKER: Array<[string, string]> = [
 // Illustrative picks for the hero phone, one per mood. Not live data.
 export const PHONE_PICKS: Record<Mood, { dish: string; meta: string; why: string; match: number; photo: string }> = {
   tired: { dish: 'Masala Khichdi', meta: 'Comfort · 30 min · ₹180', why: 'Warm, soft and no effort. Bed by ten.', match: 96, photo: 'khichdi' },
+  hungry: { dish: 'Butter Chicken Meal', meta: 'North Indian · 30 min · ₹290', why: 'Rich, filling and on its way fast.', match: 94, photo: 'butter-chicken' },
   happy: { dish: 'Hyderabadi Biryani', meta: 'Mughlai · 35 min · ₹320', why: 'Loud, layered and made for good news.', match: 92, photo: 'biryani' },
   stressed: { dish: 'Curd Rice Meal', meta: 'South Indian · 20 min · ₹160', why: 'Cool, calm and gentle on a long day.', match: 89, photo: 'banana-leaf' },
   adventurous: { dish: 'Chettinad Thali', meta: 'Regional · 40 min · ₹360', why: 'Ten bowls, ten flavours. Something new.', match: 87, photo: 'thali' },
