@@ -6,11 +6,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.config import settings
 from app.data.dishes import DISHES_BY_ID
+from app.security import require_sync_key
 from app.learning import (
     ann,
     calibration,
@@ -29,11 +30,6 @@ from app.learning import (
 logger = logging.getLogger("learning")
 
 router = APIRouter()
-
-
-def _check_sync_key(x_sync_key: Optional[str]) -> None:
-    if settings.sync_key and x_sync_key != settings.sync_key:
-        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 class SignalIn(BaseModel):
@@ -59,16 +55,14 @@ class GroupConsensusRequest(BaseModel):
     count: int = 3
 
 
-@router.post("/api/learn/signals")
-async def learn_signals(batch: LearnBatch, x_sync_key: Optional[str] = Header(default=None)) -> dict:
-    _check_sync_key(x_sync_key)
+@router.post("/api/learn/signals", dependencies=[Depends(require_sync_key)])
+async def learn_signals(batch: LearnBatch) -> dict:
     await replay.ensure_user(batch.user_id)
-    return learner.apply_batch(batch.user_id, [s.model_dump() for s in batch.signals])
+    return await run_in_threadpool(learner.apply_batch, batch.user_id, [s.model_dump() for s in batch.signals])
 
 
-@router.post("/api/learn/replay")
-async def learn_replay(request: ReplayRequest, x_sync_key: Optional[str] = Header(default=None)) -> dict:
-    _check_sync_key(x_sync_key)
+@router.post("/api/learn/replay", dependencies=[Depends(require_sync_key)])
+async def learn_replay(request: ReplayRequest) -> dict:
     if request.from_scratch:
         # Only this user's rows are wiped implicitly by refolding from id 0 —
         # cursor reset makes the fold idempotent from the start of the log.
@@ -85,9 +79,13 @@ async def learn_replay(request: ReplayRequest, x_sync_key: Optional[str] = Heade
     return {"success": True, "applied": applied}
 
 
-@router.get("/api/profile/{user_id}")
+@router.get("/api/profile/{user_id}", dependencies=[Depends(require_sync_key)])
 async def learned_profile(user_id: str) -> dict:
     await replay.ensure_user(user_id)
+    return await run_in_threadpool(_learned_profile, user_id)
+
+
+def _learned_profile(user_id: str) -> dict:
     plan = orchestrator.game_plan(user_id)
     accuracy = calibration.rolling_accuracy(user_id)
     persona_info = persona.get(user_id)
@@ -127,17 +125,17 @@ async def learned_profile(user_id: str) -> dict:
     }
 
 
-@router.post("/api/group/consensus")
+@router.post("/api/group/consensus", dependencies=[Depends(require_sync_key)])
 async def group_consensus(request: GroupConsensusRequest) -> dict:
     from app.learning import group
 
     for member_id in request.member_ids:
         await replay.ensure_user(member_id)
-    options = group.consensus(request.member_ids, request.guest_swipes, request.count)
+    options = await run_in_threadpool(group.consensus, request.member_ids, request.guest_swipes, request.count)
     return {"success": bool(options), "options": options}
 
 
-@router.get("/api/twin-taste/{user_id}")
+@router.get("/api/twin-taste/{user_id}", dependencies=[Depends(require_sync_key)])
 async def twin_taste(user_id: str, count: int = 6) -> dict:
     """Dishes loved by taste neighbours but unseen by this user. Aggregates only."""
     await replay.ensure_user(user_id)

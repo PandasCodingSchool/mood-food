@@ -6,9 +6,12 @@ hard constraints (allergens, diet, budget, meal-time, explicit avoids).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.data.dishes import DISHES, DISHES_BY_ID, DishRecord
+from app.services import diet, sensory
 from app.services.mood_clusters import dish_ids_for_cluster
 from app.schemas.request import RecommendationConfig, UserContext
 
@@ -29,6 +32,59 @@ _TIME_ALIASES = {
     "late_night": "late_night",
 }
 
+# Meal slots a dish may come from when delivery is preferred. Neighbouring
+# slots stay eligible (a 9pm dinner can be a late-night dish and vice versa);
+# the exact slot still earns the meal-time score bonus.
+_MEAL_WINDOWS = {
+    "breakfast": {"breakfast"},
+    "lunch": {"lunch", "dinner"},
+    "dinner": {"dinner", "lunch", "late_night"},
+    "late_night": {"late_night", "dinner"},
+}
+
+# Client mood labels that don't exist verbatim in dish.mood_tags → the catalog
+# tags that express them. Unknown moods match themselves.
+MOOD_ALIASES: dict[str, set[str]] = {
+    "celebrating": {"celebratory"},
+    "celebration": {"celebratory"},
+    "tired": {"comfort", "relaxed"},
+    "exhausted": {"comfort", "relaxed"},
+    "sleepy": {"comfort", "relaxed"},
+    "anxious": {"stressed", "comfort"},
+    "overwhelmed": {"stressed", "comfort"},
+    "chill": {"relaxed"},
+    "calm": {"relaxed"},
+    "excited": {"energetic", "celebratory"},
+    "lonely": {"comfort", "nostalgic"},
+    "unwell": {"sick"},
+    "ill": {"sick"},
+    "down": {"sad", "comfort"},
+    "hungry": {"comfort", "happy"},
+    "starving": {"comfort", "happy"},
+}
+
+
+# Mobile stores cuisine preferences as short ids (preferences.tsx CUISINES).
+CUISINE_ALIASES = {
+    "ital": "italian", "mex": "mexican", "jpn": "japanese", "ind": "indian", "kor": "korean",
+    "med": "mediterranean", "usa": "american", "us": "american", "chn": "chinese",
+    "indo_chinese": "chinese", "indo-chinese": "chinese",
+}
+
+
+def cuisine_prefs(ctx: UserContext) -> set[str]:
+    prefs = ctx.preferences
+    if not prefs:
+        return set()
+    return {CUISINE_ALIASES.get(c.strip().lower(), c.strip().lower()) for c in prefs.cuisine_types if c.strip()}
+
+
+def mood_tags_for(primary: Optional[str]) -> set[str]:
+    if not primary:
+        return set()
+    key = primary.strip().lower()
+    return MOOD_ALIASES.get(key, {key})
+
 
 def _budget_max(ctx: UserContext) -> Optional[float]:
     sit = ctx.situational
@@ -40,140 +96,213 @@ def _budget_max(ctx: UserContext) -> Optional[float]:
     return None
 
 
-def _restrictions(ctx: UserContext) -> list[str]:
-    prefs = ctx.preferences
-    if prefs and prefs.dietary_restrictions:
-        return list(prefs.dietary_restrictions)
-    game = ctx.game_data
-    if game and game.diet_preference == "veg":
-        return ["vegetarian"]
-    if game and game.diet_preference == "non-veg":
-        return ["non_veg"]
-    return []
+def _restrictions(ctx: UserContext) -> diet.DietRules:
+    return diet.rules_for(ctx)
 
 
-def _diet_allows(dish: DishRecord, restrictions: list[str]) -> bool:
-    r = {x.lower() for x in (restrictions or [])}
-    tags = {t.lower() for t in dish.dietary_tags}
-    if r & {"vegetarian", "vegan"} and "non_veg" in tags:
-        return False
-    if "non_veg" in r and "non_veg" not in tags:
-        return False
-    return True
+_diet_allows = diet.allows
 
 
-def _avoid_tokens(ctx: UserContext) -> set[str]:
-    tokens: set[str] = set()
-    hist = ctx.history
-    if hist:
-        for a in hist.avoid_these:
-            tokens.update(w.lower() for w in a.split() if len(w) > 2)
+_DISH_NAMES = {d.name.lower(): d.id for d in DISHES}
+
+
+def _avoid_entries(ctx: UserContext) -> list[str]:
+    entries: list[str] = []
+    if ctx.history:
+        entries.extend(ctx.history.avoid_these)
     game = ctx.game_data
     if game:
-        for a in game.disliked:
-            tokens.update(w.lower() for w in a.split() if len(w) > 2)
-        for s in game.swipes:
-            if not s.liked:
-                tokens.update(w.lower() for w in s.item.split() if len(w) > 2)
-    for name in ctx.unavailable_dishes:
-        tokens.update(w.lower() for w in name.split() if len(w) > 2)
-    return tokens
+        entries.extend(game.disliked)
+        entries.extend(s.item for s in game.swipes if not s.liked)
+    entries.extend(ctx.unavailable_dishes)
+    return [e.strip().lower() for e in entries if e and e.strip()]
+
+
+def _avoid_tokens(ctx: UserContext) -> tuple[set[str], set[str]]:
+    """(dish ids to exclude, keyword tokens to exclude).
+
+    An avoid entry naming a catalog dish excludes only that dish — disliking
+    "Chicken Burger" must not ban every chicken dish. Free keywords ("chicken",
+    "mushroom") still exclude any dish whose name contains them.
+    """
+    ids: set[str] = set()
+    tokens: set[str] = set()
+    for entry in _avoid_entries(ctx):
+        if entry in _DISH_NAMES:
+            ids.add(_DISH_NAMES[entry])
+        else:
+            tokens.update(w for w in entry.split() if len(w) > 2)
+    return ids, tokens
+
+
+def _drop_reason(d: DishRecord, ctx: UserContext, rules: diet.DietRules, budget: Optional[float],
+                 avoid_ids: set[str], avoid: set[str], unavailable: set[str], meal_time: Optional[str]) -> Optional[str]:
+    """Why `d` breaks a hard constraint, or None when it is allowed."""
+    sit = ctx.situational
+    if d.name.lower() in unavailable or d.id in avoid_ids:
+        return "unavailable_or_avoided"
+    if not diet.allows(d, rules):
+        return "diet_or_allergen"
+    if budget is not None and d.price_inr > budget:
+        return "over_budget"
+    if meal_time and d.meal_time and "any" not in d.meal_time:
+        window = _MEAL_WINDOWS.get(meal_time, {meal_time})
+        # Only hard-exclude clearly wrong meals, and only for delivery.
+        if sit and sit.delivery_preferred and not window & set(d.meal_time):
+            return "wrong_meal"
+    name_tokens = {w.lower() for w in d.name.split() if len(w) > 2}
+    if avoid & name_tokens:
+        return "avoided_word"
+    if sit and sit.delivery_preferred and not d.delivery_friendly:
+        return "not_delivery_friendly"
+    return None
+
+
+def _filter_args(ctx: UserContext) -> tuple:
+    avoid_ids, avoid = _avoid_tokens(ctx)
+    sit = ctx.situational
+    meal_time = _TIME_ALIASES.get(sit.time_of_day, sit.time_of_day) if sit and sit.time_of_day else None
+    return (_restrictions(ctx), _budget_max(ctx), avoid_ids, avoid,
+            {n.lower() for n in ctx.unavailable_dishes}, meal_time)
 
 
 def hard_filter(ctx: UserContext, dishes: Optional[list[DishRecord]] = None) -> list[DishRecord]:
     """Drop dishes that violate hard constraints."""
     pool = list(dishes if dishes is not None else DISHES)
-    restrictions = _restrictions(ctx)
-    allergies = {a.lower() for a in (ctx.preferences.allergies if ctx.preferences else [])}
-    budget = _budget_max(ctx)
-    avoid = _avoid_tokens(ctx)
-    unavailable = {n.lower() for n in ctx.unavailable_dishes}
-
-    sit = ctx.situational
-    meal_time = None
-    if sit and sit.time_of_day:
-        meal_time = _TIME_ALIASES.get(sit.time_of_day, sit.time_of_day)
-
-    out: list[DishRecord] = []
-    for d in pool:
-        if d.name.lower() in unavailable:
-            continue
-        if allergies & {a.lower() for a in d.allergens}:
-            continue
-        if not _diet_allows(d, restrictions):
-            continue
-        if budget is not None and d.price_inr > budget:
-            continue
-        if meal_time and d.meal_time and meal_time not in d.meal_time and "any" not in d.meal_time:
-            # Soft: only hard-exclude when delivery preferred and dish is clearly wrong meal.
-            if sit and sit.delivery_preferred:
-                continue
-        name_tokens = {w.lower() for w in d.name.split() if len(w) > 2}
-        if avoid & name_tokens:
-            continue
-        if sit and sit.delivery_preferred and not d.delivery_friendly:
-            continue
-        out.append(d)
-    return out
+    args = _filter_args(ctx)
+    return [d for d in pool if _drop_reason(d, ctx, *args) is None]
 
 
-def score_dish(dish: DishRecord, ctx: UserContext) -> float:
-    """Higher is better. Soft signals only — hard filters already applied."""
-    score = 0.0
+def filter_report(ctx: UserContext) -> dict[str, int]:
+    """Catalog size, dishes kept, and how many each hard constraint removed (first failing rule)."""
+    args = _filter_args(ctx)
+    report: dict[str, int] = {"catalog": len(DISHES), "kept": 0}
+    for d in DISHES:
+        reason = _drop_reason(d, ctx, *args) or "kept"
+        report[reason] = report.get(reason, 0) + 1
+    return report
+
+
+# Order-history adjustments (history comes from the API's order log + ratings).
+RECENT_HOURS = 24
+RECENT_PENALTY = 6.0      # just had it — don't suggest it again tonight
+ROUTINE_BOOST = 3.0       # ordered 2+ times and never rated badly: a known favourite
+LOW_RATING_PENALTY = 4.0  # rated it 2/5 or worse
+
+
+def _hours_ago(iso: Optional[str], now: datetime) -> Optional[float]:
+    if not iso:
+        return None
+    try:
+        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return (now - when).total_seconds() / 3600
+
+
+def history_adjustment(dish: DishRecord, ctx: UserContext, now: Optional[datetime] = None) -> float:
+    """Score delta from the user's own order history; 0 with no history."""
+    hist = ctx.history
+    if not hist or not hist.recent_orders:
+        return 0.0
+    names = {dish.name.lower(), *(a.lower() for a in dish.swiggy_aliases)}
+    mine = [o for o in hist.recent_orders if o.dish.strip().lower() in names]
+    if not mine:
+        return 0.0
+    now = now or datetime.now(timezone.utc)
+    delta = 0.0
+    if any((h := _hours_ago(o.date, now)) is not None and h < RECENT_HOURS for o in mine):
+        delta -= RECENT_PENALTY
+    ratings = [o.rating for o in mine if o.rating is not None]
+    if ratings and min(ratings) <= 2:
+        delta -= LOW_RATING_PENALTY
+    elif len(mine) >= 2:
+        delta += ROUTINE_BOOST
+    return delta
+
+
+# Weight of sensory fit (catalog v2): a perfect fit adds +6, a clash -6.
+SENSORY_WEIGHT = 6.0
+
+
+def score_breakdown(dish: DishRecord, ctx: UserContext, pulls: Optional[list] = None) -> dict[str, float]:
+    """Named contributions to a dish's score (soft signals; hard filters already applied).
+
+    The parts drive both ranking (their sum) and the "why this?" copy, so the
+    explanation always names the signals that actually ranked the dish.
+    """
+    parts: dict[str, float] = {}
     mood = ctx.mood
     prefs = ctx.preferences
     sit = ctx.situational
     game = ctx.game_data
 
-    if mood.primary and mood.primary.lower() in {t.lower() for t in dish.mood_tags}:
-        score += 8.0
+    if mood_tags_for(mood.primary) & {t.lower() for t in dish.mood_tags}:
+        parts["mood"] = 8.0
     # Energy proximity (closer = better)
-    score += max(0.0, 4.0 - abs(dish.energy_requirement - mood.energy_level) * 0.6)
+    parts["energy"] = max(0.0, 4.0 - abs(dish.energy_requirement - mood.energy_level) * 0.6)
     if mood.social_context and mood.social_context in dish.social_context_tags:
-        score += 2.0
+        parts["company"] = 2.0
 
     if sit and sit.weather and (sit.weather in dish.weather_tags or "any" in dish.weather_tags):
-        score += 1.5
+        parts["weather"] = 1.5
     if sit and sit.time_of_day:
         mt = _TIME_ALIASES.get(sit.time_of_day, sit.time_of_day)
         if mt in dish.meal_time:
-            score += 1.5
+            parts["meal_time"] = 1.5
 
     if prefs:
-        cuisines = {c.lower() for c in prefs.cuisine_types}
-        if dish.cuisine.lower() in cuisines or any(c in dish.name.lower() for c in cuisines):
-            score += 5.0
+        cuisines = cuisine_prefs(ctx)
+        # Free-text entries ("biryani") may match dish names; short codes may not.
+        if dish.cuisine.lower() in cuisines or any(len(c) >= 5 and c in dish.name.lower() for c in cuisines):
+            parts["cuisine"] = 5.0
         if prefs.spice_tolerance:
             want = _SPICE_RANK.get(prefs.spice_tolerance, 2)
             have = _SPICE_RANK.get(dish.spice_level, 2)
-            score += max(0.0, 3.0 - abs(want - have))
+            parts["spice"] = max(0.0, 3.0 - abs(want - have))
 
     if game:
         positives = [*(game.liked or []), *(game.cravings or []), *(game.cuisines or [])]
         name_l = dish.name.lower()
+        craving = 0.0
         for i, p in enumerate(positives):
             pl = p.lower()
             if pl in name_l or pl == dish.cuisine.lower() or pl in dish.category.lower():
                 # Earlier cravings weigh more.
-                score += max(1.0, 4.0 - i * 0.4)
+                craving += max(1.0, 4.0 - i * 0.4)
+        if craving:
+            parts["game_signals"] = craving
         if game.slider_values:
             if game.slider_values.adventurous is not None:
-                score += max(0.0, 3.0 - abs(dish.adventurousness_score - game.slider_values.adventurous) * 0.4)
+                parts["adventure"] = max(0.0, 3.0 - abs(dish.adventurousness_score - game.slider_values.adventurous) * 0.4)
             if game.slider_values.health_conscious is not None:
                 target = game.slider_values.health_conscious
-                score += max(0.0, 3.0 - abs(dish.health_score - target) * 0.35)
+                parts["health"] = max(0.0, 3.0 - abs(dish.health_score - target) * 0.35)
         if game.cluster:
-            preferred = set(dish_ids_for_cluster(game.cluster.id))
-            if dish.id in preferred:
-                score += 10.0
+            if dish.id in set(dish_ids_for_cluster(game.cluster.id)):
+                parts["cluster"] = 10.0
+
+    sensory_fit = sensory.fit(dish, sensory.target_pulls(ctx) if pulls is None else pulls)
+    if sensory_fit is not None:
+        parts["sensory"] = round(SENSORY_WEIGHT * (2 * sensory_fit - 1), 3)
+
+    history = history_adjustment(dish, ctx)
+    if history:
+        parts["history"] = history
 
     # Mild diversity bias toward mains over complimentary leftovers.
     if dish.tier == "main":
-        score += 0.5
+        parts["tier"] = 0.5
     elif dish.tier == "complimentary":
-        score -= 5.0
+        parts["tier"] = -5.0
+    return parts
 
-    return score
+
+def score_dish(dish: DishRecord, ctx: UserContext) -> float:
+    """Higher is better: the sum of ``score_breakdown``."""
+    return sum(score_breakdown(dish, ctx).values())
 
 
 def diversify(scored: list[tuple[float, DishRecord]], limit: int, diversity: str = "medium") -> list[DishRecord]:
@@ -206,17 +335,26 @@ def diversify(scored: list[tuple[float, DishRecord]], limit: int, diversity: str
     return picked
 
 
-def build_shortlist(
+@dataclass
+class ScoredDish:
+    """A shortlist candidate with its total and the named parts behind it."""
+
+    dish: DishRecord
+    total: float
+    parts: dict[str, float]
+
+
+def build_scored_shortlist(
     ctx: UserContext,
     config: Optional[RecommendationConfig] = None,
     size: int = DEFAULT_SHORTLIST_SIZE,
     user_id: Optional[str] = None,
-) -> list[DishRecord]:
-    """Embedding retrieval → hard-filter → score → diversify → top N.
+) -> list[ScoredDish]:
+    """Embedding retrieval → hard-filter → score → diversify → top N, with breakdowns.
 
     The retrieval stage blends the learned taste/craving/mood session vector
-    into scoring (weight 12, matching the strongest heuristic signals). With
-    no learned state it contributes nothing and behavior is unchanged.
+    into scoring (weight 12, matching the strongest heuristic signals) as the
+    ``taste`` part. With no learned state it contributes nothing.
     """
     config = config or RecommendationConfig()
     from app.learning.retrieval import retrieval_scores
@@ -226,15 +364,35 @@ def build_shortlist(
     pool = hard_filter(ctx)
     if not pool:
         # Absolute last resort: diet-only filter on full catalog.
-        pool = [d for d in DISHES if _diet_allows(d, _restrictions(ctx))]
-    scored = sorted(
-        ((score_dish(d, ctx) + 12.0 * retrieval.get(d.id, 0.0), d) for d in pool),
-        key=lambda x: x[0],
-        reverse=True,
-    )
+        pool = [d for d in DISHES if diet.allows(d, _restrictions(ctx))]
+    pulls = sensory.target_pulls(ctx)
+    from app.brain.scoring import dish_scores
+
+    brain = dish_scores(user_id, ctx, pool)  # {} without order history
+    scored: list[ScoredDish] = []
+    for d in pool:
+        parts = score_breakdown(d, ctx, pulls)
+        if retrieval.get(d.id):
+            parts["taste"] = round(12.0 * retrieval[d.id], 3)
+        if brain.get(d.id):
+            parts["brain"] = brain[d.id]
+        scored.append(ScoredDish(d, sum(parts.values()), parts))
+    scored.sort(key=lambda s: s.total, reverse=True)
     # Prefer enough candidates for live matching + ranking.
     target = max(size, config.count * 4)
-    return diversify(scored, min(target, len(scored)), diversity=config.diversity or "medium")
+    by_id = {s.dish.id: s for s in scored}
+    picked = diversify([(s.total, s.dish) for s in scored], min(target, len(scored)), diversity=config.diversity or "medium")
+    return [by_id[d.id] for d in picked]
+
+
+def build_shortlist(
+    ctx: UserContext,
+    config: Optional[RecommendationConfig] = None,
+    size: int = DEFAULT_SHORTLIST_SIZE,
+    user_id: Optional[str] = None,
+) -> list[DishRecord]:
+    """Shortlist dishes only (see ``build_scored_shortlist``)."""
+    return [s.dish for s in build_scored_shortlist(ctx, config, size, user_id)]
 
 
 def dishes_for_prompt(dishes: list[DishRecord]) -> str:

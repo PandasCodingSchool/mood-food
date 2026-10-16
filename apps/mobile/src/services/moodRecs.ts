@@ -26,7 +26,7 @@ export function moodQuery(mood: Mood): QuizResults {
   return { mood, craving: 'comfort', budget: 'medium', preference: 'both' };
 }
 
-async function resolveAddressId(): Promise<string | undefined> {
+export async function resolveAddressId(): Promise<string | undefined> {
   let addressId = await getSavedAddressId();
   if (isSwiggyLive() && !addressId) {
     const addresses = await fetchAddresses();

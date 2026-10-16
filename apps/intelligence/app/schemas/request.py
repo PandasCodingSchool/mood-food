@@ -131,6 +131,9 @@ class UserContext(BaseModel):
     # Nostalgia prompts (1.3): emotional anchor foods.
     comfort_anchors: list[ComfortAnchor] = Field(default_factory=list)
     automation_pref: Optional[Literal["hands_on", "balanced", "hands_off"]] = None
+    # What the preference brain knows, in words (e.g. "Orders mostly at lunch"). Server-filled from
+    # the user's history for JEV; whatever a client sends is overwritten.
+    habits: list[str] = Field(default_factory=list, max_length=12)
 
 
 class RecommendationConfig(BaseModel):

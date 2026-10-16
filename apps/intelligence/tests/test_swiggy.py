@@ -579,9 +579,14 @@ async def test_enrich_both_dishes_matched_stable_top_ordering():
 # --- Scout integration tests ---
 
 @pytest.mark.asyncio
-async def test_closest_fill_accepts_borderline_without_scout():
-    """Borderline search_menu hits populate live cards immediately (main-style closest)."""
+async def test_borderline_hits_are_verified_by_scout():
+    """Borderline search_menu hits are judged by the scout, not accepted unchecked.
+
+    "Dal Fry" is not "Dal Tadka": with a judge available, the scout's verdict
+    decides; a rejected candidate leaves the card unmatched.
+    """
     from app.schemas.swiggy import EnrichDishInput
+    from app.services.menu_scout import ScoutDecision
 
     client = SwiggyMCPClient(token="test-token")
 
@@ -595,7 +600,7 @@ async def test_closest_fill_accepts_borderline_without_scout():
                 }]}
             if "Shahi" in query or "Paneer" in query:
                 return {"items": [{
-                    "id": "i2", "name": "Paneer Tikka", "price": 320, "isVeg": True,
+                    "id": "i2", "name": "Shahi Paneer Special", "price": 320, "isVeg": True,
                     "restaurantId": "r2", "restaurantName": "Paneer Place",
                 }]}
             return {"items": []}
@@ -603,30 +608,26 @@ async def test_closest_fill_accepts_borderline_without_scout():
 
     client.call_tool = AsyncMock(side_effect=fake_call)
     svc = SwiggyDiscoveryService(client=client)
+    seen_pairs = []
 
-    scout_call_count = 0
+    async def judge(pairs):
+        seen_pairs.extend((d.dish_id, c.item_id) for d, c in pairs)
+        return {(d.dish_id, c.item_id): ScoutDecision(True, 0.95, "jev:0.95") for d, c in pairs if d.dish_id == "d2"}
 
-    async def mock_scout(pairs):
-        nonlocal scout_call_count
-        scout_call_count += 1
-        return {}
-
-    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", mock_scout):
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", judge):
         dishes = [
             EnrichDishInput(id="d1", name="Dal Tadka", cuisine="indian"),
             EnrichDishInput(id="d2", name="Shahi Paneer", cuisine="indian"),
         ]
         _, matches = await svc.enrich(dishes, address_id="a1")
 
-    assert scout_call_count == 0, "Closest fill should not need scout for borderline hits"
-    matched = [m for m in matches if m.matched]
-    assert len(matched) == 2, f"Both dishes should be matched via closest fill, got {len(matched)}"
-    matched_item_ids = {m.item.id for m in matched}
-    assert "i1" in matched_item_ids
-    assert "i2" in matched_item_ids
+    by_id = {m.dish_id: m for m in matches}
+    assert ("d1", "i1") in seen_pairs
+    assert by_id["d1"].matched is False  # judge said Dal Fry != Dal Tadka
+    if ("d2", "i2") in seen_pairs:  # only if it was borderline rather than confident
+        assert by_id["d2"].matched is True and by_id["d2"].item.id == "i2"
 
 
-@pytest.mark.asyncio
 async def test_scout_hard_rejects_not_accepted():
     """Even if scout were called, hard-reject borderline candidates must not appear.
 
@@ -669,8 +670,8 @@ async def test_scout_hard_rejects_not_accepted():
 
 
 @pytest.mark.asyncio
-async def test_closest_fill_from_search_menu_when_not_exact():
-    """A word-overlap search_menu hit must populate the card without waiting on scout."""
+async def test_closest_fill_still_used_when_no_judge_available():
+    """Scout unavailable (None) → old closest-fill keeps live cards populated."""
     from app.schemas.swiggy import EnrichDishInput
 
     client = SwiggyMCPClient(token="test-token")
@@ -688,13 +689,15 @@ async def test_closest_fill_from_search_menu_when_not_exact():
     client.call_tool = AsyncMock(side_effect=fake_call)
     svc = SwiggyDiscoveryService(client=client)
 
-    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", AsyncMock(return_value={})):
+    with patch("app.services.swiggy_discovery.scout_ambiguous_matches", AsyncMock(return_value=None)):
         dishes = [EnrichDishInput(id="d1", name="Dal Tadka", cuisine="indian")]
         _, matches = await svc.enrich(dishes, address_id="a1")
 
     assert matches[0].matched is True
     assert matches[0].item.id == "i1"
     assert matches[0].restaurant.name == "Dal House"
+    # menu search found a candidate, so no restaurant drill-down happened
+    assert all(c.args[0] != "search_restaurants" for c in client.call_tool.call_args_list)
 
 
 # ---------------------------------------------------------------------------

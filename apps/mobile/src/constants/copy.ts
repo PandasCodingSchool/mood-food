@@ -66,6 +66,7 @@ export const WEATHER_COPY: Record<Weather, { lead: string; insight: string; topF
 
 export const MOOD_COPY: Record<Mood, { lower: string; lean: string; lead: string; chip: string }> = {
   happy: { lower: 'happy', lean: 'bright, zesty and a little celebratory', lead: "You're in a good mood", chip: 'Mood booster' },
+  hungry: { lower: 'hungry', lean: 'hearty, filling and fast', lead: "You're properly hungry", chip: 'Hearty pick' },
   tired: { lower: 'tired', lean: 'slow-cooked, warm and zero-effort', lead: "Your energy's low", chip: 'Low effort' },
   stressed: { lower: 'stressed', lean: 'grounding, light and familiar', lead: "It's been a heavy day", chip: 'Good for stress relief' },
   adventurous: { lower: 'adventurous', lean: "bold flavours you haven't tried", lead: "You're up for something new", chip: 'New for you' },

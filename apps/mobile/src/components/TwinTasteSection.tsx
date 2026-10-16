@@ -1,47 +1,31 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
-import { Users } from 'lucide-react-native';
-import { useTheme } from '../context/ThemeContext';
-import { fw } from '../constants/theme';
+import { ScrollView } from 'react-native';
+import { space } from '@moodfood/tokens';
+import { SectionHeader, Surface, Text } from '@moodfood/ui';
 import { fetchTwinTaste } from '../services/signals';
 
 // 3.7 — Twin taste matching: light social proof without a social graph.
 // Surfaces aggregates only ("people like you"), never named individuals.
 export default function TwinTasteSection() {
-  const { theme } = useTheme();
   const [dishes, setDishes] = useState<Array<{ dishId: string; dishName: string; lovedBy: number }>>([]);
 
   useEffect(() => {
-    fetchTwinTaste().then((res) => {
-      console.log('[TwinTasteSection] fetchTwinTaste ->', res);
-      setDishes(res.dishes);
-    });
+    fetchTwinTaste().then((res) => setDishes(res.dishes));
   }, []);
 
-  if (dishes.length === 0) {
-    console.log('[TwinTasteSection] no dishes, rendering null');
-    return null;
-  }
+  if (dishes.length === 0) return null;
 
   return (
-    <View style={{ marginTop: 20, paddingHorizontal: 24 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <Users size={14} color={theme.subtext} />
-        <Text style={[fw(800), { fontSize: 13, color: theme.text }]}>
-          People like you are loving
-        </Text>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+    <>
+      <SectionHeader title="People like you are loving" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: space.gutter }}>
         {dishes.map((d) => (
-          <View
-            key={d.dishId}
-            style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, minWidth: 120 }}
-          >
-            <Text style={[fw(800), { fontSize: 13, color: theme.text }]} numberOfLines={1}>{d.dishName}</Text>
-            <Text style={[fw(600), { fontSize: 11, color: theme.subtext, marginTop: 2 }]}>Loved by {d.lovedBy} similar tastes</Text>
-          </View>
+          <Surface key={d.dishId} radius={20} padding={14} style={{ minWidth: 150, maxWidth: 220 }}>
+            <Text variant="bodyStrong14" numberOfLines={1}>{d.dishName}</Text>
+            <Text variant="caption12" tone="ink2" style={{ marginTop: 3 }}>{`Loved by ${d.lovedBy} similar tastes`}</Text>
+          </Surface>
         ))}
       </ScrollView>
-    </View>
+    </>
   );
 }

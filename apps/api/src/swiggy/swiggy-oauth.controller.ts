@@ -7,6 +7,7 @@ import type { AuthUser } from '../auth/auth.types.js';
 import type { Env } from '../config/env.js';
 import { fail } from '../common/http.js';
 import { ENV, REDIS } from '../core/tokens.js';
+import { SwiggyHistoryService } from './swiggy-history.service.js';
 import { SWIGGY_AUTH_BASE as AUTH_BASE, SwiggyTokensService } from './swiggy-tokens.service.js';
 
 const STATE_TTL_SEC = 10 * 60;
@@ -24,6 +25,7 @@ export class SwiggyOAuthController {
     @Inject(ENV) private readonly env: Env,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly tokens: SwiggyTokensService,
+    private readonly history: SwiggyHistoryService,
   ) {}
 
   /** Dynamic client registration, cached for a day per redirect URI. */
@@ -97,7 +99,10 @@ export class SwiggyOAuthController {
         }),
       });
       if (!res.ok) throw new Error(`Swiggy token exchange failed: ${res.status} ${await res.text()}`);
-      await this.tokens.save(userId, (await res.json()) as { access_token: string; user_id?: string; expires_in?: number });
+      const token = (await res.json()) as { access_token: string; user_id?: string; expires_in?: number };
+      await this.tokens.save(userId, token);
+      // Warm start from past Swiggy + Instamart orders; runs in the background, never blocks linking.
+      void this.history.importAll(userId, token.access_token);
       return page('success');
     } catch (err) {
       this.log.error(`callback failed: ${(err as Error).message}`);
@@ -105,10 +110,30 @@ export class SwiggyOAuthController {
     }
   }
 
+  /** Re-run the Swiggy order-history import (idempotent). */
+  @Post('import-history')
+  @HttpCode(200)
+  async importHistory(@CurrentUser() user: AuthUser) {
+    const token = await this.tokens.activeToken(user.id);
+    if (!token) fail(400, 'Swiggy is not linked');
+    return { success: true, ...(await this.history.importAll(user.id, token as string)) };
+  }
+
+  /** Throttled re-import (app open): Swiggy only shows the latest orders, so check often. */
+  @Post('history/refresh')
+  @HttpCode(200)
+  async refreshHistory(@CurrentUser() user: AuthUser) {
+    const token = await this.tokens.activeToken(user.id);
+    if (!token) return { success: true, orders: 0, dishes: 0, groceries: 0, skipped: true };
+    return { success: true, ...(await this.history.refresh(user.id, token)) };
+  }
+
   @Post('unlink')
   @HttpCode(200)
   async unlink(@CurrentUser() user: AuthUser) {
     await this.tokens.unlink(user.id);
+    // Swiggy history was used under the link's consent: remove it and what was learned from it.
+    await this.history.purge(user.id);
     return { success: true };
   }
 

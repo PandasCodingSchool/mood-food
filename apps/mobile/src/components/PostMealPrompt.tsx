@@ -1,27 +1,24 @@
 import { useEffect, useState } from 'react';
-import type { ComponentType } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Smile, Meh, Frown, Sparkles } from 'lucide-react-native';
-import { useTheme } from '../context/ThemeContext';
-import { fw, colors } from '../constants/theme';
+import { Pressable, View } from 'react-native';
+import { space } from '@moodfood/tokens';
+import { Icon, Surface, Text, useTheme } from '@moodfood/ui';
 import { fetchPendingPredictions, resolvePrediction } from '../services/signals';
 import type { PendingPrediction } from '../types';
 
-type LucideIcon = ComponentType<{ size?: number; color?: string }>;
-
-const OPTIONS: Array<{ score: number; Icon: LucideIcon; label: string }> = [
-  { score: 5, Icon: Smile, label: 'Nailed it' },
-  { score: 3, Icon: Meh, label: 'Meh' },
-  { score: 1, Icon: Frown, label: 'Wrong call' },
+const OPTIONS: Array<{ score: number; emoji: string; label: string }> = [
+  { score: 5, emoji: '😋', label: 'Nailed it' },
+  { score: 3, emoji: '😐', label: 'Meh' },
+  { score: 1, emoji: '😕', label: 'Wrong call' },
 ];
 
 // 4.1 — Post-meal feedback loop ("Did we read your mind?"). This is the
 // calibration backbone: without ground truth, every other learned signal is
 // input with no error signal. One-tap, framed as the AI's accuracy score.
 export default function PostMealPrompt() {
-  const { theme } = useTheme();
+  const { colors } = useTheme();
   const [pending, setPending] = useState<PendingPrediction | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [picked, setPicked] = useState<number | null>(null);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -31,65 +28,65 @@ export default function PostMealPrompt() {
     })();
   }, []);
 
-  if (!pending || done) return null;
+  if (!pending) return null;
 
   const handleAnswer = async (score: number) => {
+    setPicked(score);
     setResolving(true);
     const ok = await resolvePrediction(pending.id, { actualScore: score });
     setResolving(false);
     if (ok) setDone(true);
+    else setPicked(null);
   };
 
+  if (done) {
+    return (
+      <Surface kind="accentSoft" radius={24} padding={16} style={{ marginHorizontal: space.gutter, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Icon name="check_circle" size={20} tone="accText" filled />
+        <Text variant="bodyStrong14" tone="accText">Thanks, that sharpens your next picks</Text>
+      </Surface>
+    );
+  }
+
   return (
-    <View
-      style={{
-        marginHorizontal: 24,
-        marginTop: 16,
-        padding: 16,
-        borderRadius: 16,
-        backgroundColor: theme.card,
-        borderWidth: 1.5,
-        borderColor: colors.orange + '20',
-        shadowColor: theme.shadow,
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-        <Sparkles size={16} color={colors.orange} />
-        <Text style={[fw(800), { fontSize: 14, color: theme.text }]}>
-          Did we read your mind?
-        </Text>
+    <Surface kind="solid" elevated radius={26} padding={18} style={{ marginHorizontal: space.gutter, marginTop: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Icon name="auto_awesome" size={18} tone="accText" />
+        <Text variant="label" tone="ink2">Quick check</Text>
       </View>
-      <Text style={[fw(600), { fontSize: 12, color: theme.subtext, marginTop: 2 }]} numberOfLines={1}>
+      <Text variant="title19" style={{ marginTop: 8 }}>Did we read your mind?</Text>
+      <Text variant="caption13" tone="ink2" numberOfLines={1} style={{ marginTop: 4 }}>
         {pending.dishName ? `How was the ${pending.dishName}?` : 'How was your last pick?'}
       </Text>
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
         {OPTIONS.map((opt) => {
-          const OptionIcon = opt.Icon;
+          const on = picked === opt.score;
           return (
-            <TouchableOpacity
+            <Pressable
               key={opt.score}
-              activeOpacity={0.8}
               disabled={resolving}
               onPress={() => handleAnswer(opt.score)}
-              style={{
+              accessibilityRole="button"
+              accessibilityLabel={opt.label}
+              accessibilityState={{ selected: on, disabled: resolving }}
+              style={({ pressed }) => ({
                 flex: 1,
                 alignItems: 'center',
-                paddingVertical: 10,
-                borderRadius: 12,
-                backgroundColor: theme.surface,
-                opacity: resolving ? 0.5 : 1,
-              }}
+                gap: 6,
+                paddingVertical: 12,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: on ? 'transparent' : colors.line,
+                backgroundColor: on ? colors.acc : colors.tint,
+                opacity: resolving && !on ? 0.5 : pressed ? 0.85 : 1,
+              })}
             >
-              <OptionIcon size={24} color={colors.orange} />
-              <Text style={[fw(700), { fontSize: 10, color: theme.subtext, marginTop: 2 }]}>{opt.label}</Text>
-            </TouchableOpacity>
+              <Text style={{ fontSize: 26, lineHeight: 32 }}>{opt.emoji}</Text>
+              <Text variant="chip12" color={on ? colors.onAcc : colors.ink}>{opt.label}</Text>
+            </Pressable>
           );
         })}
       </View>
-    </View>
+    </Surface>
   );
 }

@@ -151,6 +151,15 @@ export async function updateCartItems(
   return mapCart(data);
 }
 
+/** Empties the server-side Swiggy cart (e.g. the user removed every item). Never throws. */
+export async function flushCart(): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/swiggy/cart`, { method: 'DELETE', headers: await getHeaders() });
+  } catch {
+    // best effort — checkout re-reads the cart anyway
+  }
+}
+
 /** Single-dish convenience wrapper — the "Order now!" fast path. */
 export async function updateCart(
   restaurantId: string,

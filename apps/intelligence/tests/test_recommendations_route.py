@@ -22,6 +22,12 @@ from app.schemas.response import (
     Restaurant,
 )
 from app.schemas.swiggy import EnrichedMatch, SwiggyMenuItem, SwiggyRestaurant
+from app.services.shortlist import ScoredDish
+
+
+def as_scored(dishes):
+    return [ScoredDish(d, 0.0, {}) for d in dishes]
+
 
 client = TestClient(app)
 
@@ -91,7 +97,7 @@ class TestGptFirstPipeline:
             # All 4 match in first wave (wave_size = 4 = final_count+1)
             return "addr_1", [_match(d.id, d.name) for d in dishes]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", side_effect=fake_get_recommendations), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -118,7 +124,7 @@ class TestGptFirstPipeline:
             enrich_call_sizes.append(len(dishes))
             return "addr_1", [_match(d.id, d.name) for d in dishes[:final_count]]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=shortlist), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(shortlist)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -146,7 +152,7 @@ class TestGptFirstPipeline:
             # Wave 1: final_count+1 = 4 dishes; all match → stop
             return "addr_1", [_match(d.id, d.name) for d in dishes]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -175,7 +181,7 @@ class TestGptFirstPipeline:
             # Wave 2: provide remaining matches
             return "addr_1", [_match(d.id, d.name) for d in dishes]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -206,7 +212,7 @@ class TestGptFirstPipeline:
                 for d in dishes
             ]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -236,7 +242,7 @@ class TestGptFirstPipeline:
             # All pool dishes match — response must only include final_count of them
             return "addr_1", [_match(d.id, d.name) for d in dishes]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -254,7 +260,7 @@ class TestGptFirstPipeline:
         gpt_response = _pool_response(sample[:6])
         enrich = AsyncMock()
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich", new=enrich):
             resp = client.post("/api/ai-recommendations", json={
@@ -282,7 +288,7 @@ class TestGptFirstPipeline:
                 EnrichedMatch(dish_id=d.id, matched=False) for d in dishes[1:]
             ]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",
@@ -314,7 +320,7 @@ class TestGptFirstPipeline:
                 )
             ] + [EnrichedMatch(dish_id=d.id, matched=False) for d in dishes[1:]]
 
-        with patch("app.routes.recommendations.build_shortlist", return_value=sample), \
+        with patch("app.routes.recommendations.build_scored_shortlist", return_value=as_scored(sample)), \
              patch("app.services.recommender.get_recommendations", return_value=gpt_response), \
              patch("app.services.swiggy_token.load_token", return_value="fake-token"), \
              patch("app.services.swiggy_discovery.SwiggyDiscoveryService.enrich",

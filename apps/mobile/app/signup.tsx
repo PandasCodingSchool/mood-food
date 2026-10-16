@@ -8,7 +8,6 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, User, Phone, Lock, ArrowRight } from 'lucide-react-native';
@@ -17,6 +16,7 @@ import { fw, colors } from '../src/constants/theme';
 import Screen from '../src/components/Screen';
 import GradientButton from '../src/components/GradientButton';
 import AuthTextField from '../src/components/AuthTextField';
+import { LogoMark } from '../src/components/v2';
 import { fadeUp } from '../src/utils/animations';
 import { trackEvent } from '../src/utils/analytics';
 import { signup } from '../src/services/auth';
@@ -100,12 +100,8 @@ export default function SignupScreen() {
             <ChevronLeft size={22} color={theme.text} />
           </TouchableOpacity>
 
-          <View style={{ width: 100, height: 100, borderRadius: 50, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
-            <Image
-              source={require('../assets/moodfood-logo.png')}
-              style={{ width: 100, height: 100 }}
-              resizeMode="contain"
-            />
+          <View style={{ alignSelf: 'flex-start', marginBottom: 16 }}>
+            <LogoMark size={110} />
           </View>
 
           <Animated.View style={{ opacity, transform: [{ translateY }], alignItems: 'flex-start', marginBottom: 24 }}>

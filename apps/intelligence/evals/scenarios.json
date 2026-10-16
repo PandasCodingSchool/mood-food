@@ -1,0 +1,58 @@
+{
+  "_comment": "Named golden scenarios. `user_context` is the intelligence request contract; `expect` keys are checked by evals/harness.py.",
+  "scenarios": [
+    {
+      "name": "tired vegetarian on a rainy dinner",
+      "user_context": {
+        "mood": {"primary": "tired", "energy_level": 2, "hunger_level": 8},
+        "preferences": {"dietary_restrictions": ["vegetarian"]},
+        "situational": {"time_of_day": "dinner", "weather": "rainy", "delivery_preferred": true}
+      },
+      "expect": {"min_pool": 12, "any_of_top": ["Dal Makhani", "Rajma Chawal", "Palak Paneer", "Paneer Butter Masala"]}
+    },
+    {
+      "name": "vegan with nut allergy, budget lunch",
+      "user_context": {
+        "mood": {"primary": "happy"},
+        "preferences": {"dietary_restrictions": ["vegan"], "allergies": ["nuts"]},
+        "situational": {"time_of_day": "lunch", "budget": {"max": 300}, "delivery_preferred": true}
+      },
+      "expect": {"min_pool": 3}
+    },
+    {
+      "name": "late-night stressed snack, gluten free",
+      "user_context": {
+        "mood": {"primary": "stressed", "stress_level": 9},
+        "preferences": {"dietary_restrictions": ["gluten_free"]},
+        "situational": {"time_of_day": "late_night", "delivery_preferred": true}
+      },
+      "expect": {"min_pool": 5}
+    },
+    {
+      "name": "celebrating with friends, splurge",
+      "user_context": {
+        "mood": {"primary": "celebrating", "energy_level": 8, "social_context": "friends"},
+        "situational": {"time_of_day": "dinner", "occasion": "treat", "budget": {"max": 2000}, "delivery_preferred": true}
+      },
+      "expect": {"min_pool": 12, "min_cuisines_top5": 3}
+    },
+    {
+      "name": "disliked a dish: only that dish disappears",
+      "user_context": {
+        "mood": {"primary": "happy"},
+        "game_data": {"type": "swipe", "disliked": ["Butter Chicken"]},
+        "situational": {"time_of_day": "dinner", "delivery_preferred": true}
+      },
+      "expect": {"min_pool": 12, "excluded": ["Butter Chicken"]}
+    },
+    {
+      "name": "just ordered pav bhaji: not suggested again",
+      "user_context": {
+        "mood": {"primary": "happy"},
+        "situational": {"time_of_day": "dinner", "delivery_preferred": true},
+        "history": {"recent_orders": [{"dish": "Pav Bhaji", "date": "__NOW_MINUS_2H__"}]}
+      },
+      "expect": {"not_in_top": ["Pav Bhaji"]}
+    }
+  ]
+}
