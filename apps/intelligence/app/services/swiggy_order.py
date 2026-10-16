@@ -53,24 +53,33 @@ def _to_float(v: Any) -> Optional[float]:
 
 
 def _normalize_cart_line(raw: dict) -> Optional[CartLine]:
-    iid = _first(raw, "id", "itemId", "item_id", "menuItemId")
+    iid = _first(raw, "id", "menu_item_id", "itemId", "item_id", "menuItemId")
     name = _first(raw, "name", "itemName", "item_name")
     if iid is None or name is None:
         return None
-    return CartLine(
-        id=str(iid),
-        name=str(name),
-        price=_to_float(_first(raw, "price", "finalPrice", "amount")),
-        quantity=int(_first(raw, "quantity", "qty", default=1) or 1),
-    )
+    quantity = int(_first(raw, "quantity", "qty", default=1) or 1)
+    price = _to_float(_first(raw, "price", "finalPrice", "amount"))
+    if price is None:
+        # Real get_food_cart lines carry per-line totals, not a unit price.
+        line_total = _to_float(_first(raw, "final_price", "total", "subtotal"))
+        price = line_total / quantity if line_total is not None and quantity else None
+    return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity)
 
 
 def _normalize_cart(raw: Any) -> CartResponse:
-    data = _unwrap_envelope(raw) or {}
-    if not isinstance(data, dict):
-        data = {}
+    outer = _unwrap_envelope(raw) or {}
+    if not isinstance(outer, dict):
+        outer = {}
+    # Real get_food_cart nests twice: {success, data: {data: {items, pricing,
+    # offers}, addressId, availablePaymentMethods}}. Older/flat shapes keep
+    # everything on one level — read from the inner dict, fall back to outer.
+    inner = outer.get("data") if isinstance(outer.get("data"), dict) else {}
+    data = {**outer, **inner}
+    pricing = data.get("pricing") if isinstance(data.get("pricing"), dict) else {}
+    items = data.get("items") if isinstance(data.get("items"), list) else data.get("cart")
     lines = [
-        line for line in (_normalize_cart_line(r) for r in _as_list(data, "items", "cart"))
+        line
+        for line in (_normalize_cart_line(r) for r in (items if isinstance(items, list) else []) if isinstance(r, dict))
         if line is not None
     ]
     # Docs show two shapes for this field across examples: a bool alongside a
@@ -90,9 +99,11 @@ def _normalize_cart(raw: Any) -> CartResponse:
     return CartResponse(
         success=True,
         items=lines,
-        subtotal=_to_float(_first(data, "subtotal", "sub_total")),
-        delivery_charges=_to_float(_first(data, "deliveryCharges", "delivery_charges", "deliveryFee")),
-        total=_to_float(_first(data, "total", "grandTotal", "finalTotal")),
+        subtotal=_to_float(_first(pricing, "item_total") or _first(data, "subtotal", "sub_total")),
+        delivery_charges=_to_float(
+            _first(pricing, "delivery_charge") or _first(data, "deliveryCharges", "delivery_charges", "deliveryFee")
+        ),
+        total=_to_float(_first(pricing, "to_pay") or _first(data, "total", "grandTotal", "finalTotal")),
         available_payment_methods=[str(p) for p in payment_methods],
         coupon_applied=coupon_applied or (coupon_discount is not None and coupon_discount > 0),
         coupon_discount=coupon_discount,

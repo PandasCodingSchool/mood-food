@@ -9,20 +9,8 @@ import { Button, IconButton, TabBar, Text, useTheme } from '@moodfood/ui';
 
 const LOGO = require('../../../assets/moodfood-logo.png');
 
-/** White pill with the cropped wordmark (home / onboarding header). */
-export function LogoPill() {
-  return (
-    <View
-      accessibilityRole="image"
-      accessibilityLabel="MoodFood"
-      style={{ width: 70, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', boxShadow: '0px 8px 18px -10px rgba(0,0,0,0.4)' }}
-    >
-      <View style={{ width: 56, height: 32, overflow: 'hidden' }}>
-        <Image source={LOGO} style={{ position: 'absolute', width: 160, height: 160, left: -56, top: -34 }} />
-      </View>
-    </View>
-  );
-}
+/** White pill with the wordmark's animated eyes (home / onboarding header). */
+export { MoodEyes as LogoPill } from './MoodEyes';
 
 /** Square white logo tile (launch, login, Swiggy connect). */
 export function LogoTile({ size }: { size: number }) {
