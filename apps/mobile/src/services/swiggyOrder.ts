@@ -5,6 +5,8 @@ export interface CartLine {
   name: string;
   price?: number | null;
   quantity: number;
+  /** Chosen variant/addon names, e.g. "Chapati (3 pcs)". */
+  customizations?: string[];
 }
 
 /** A way to pay the app can complete (from Swiggy's get_payment_options). */
@@ -28,6 +30,13 @@ export interface CartState {
   paymentOptions: PaymentOption[];
   couponApplied: boolean;
   couponDiscount?: number | null;
+  /** The applied code (only when it actually took money off). */
+  couponCode?: string | null;
+  /** Swiggy's best coupon for this cart — suggested, not applied yet. */
+  suggestedCoupon?: string | null;
+  /** Delivery fee Swiggy waived (shown struck out). */
+  deliveryStrikeoff?: number | null;
+  freeDelivery?: boolean;
   error?: string;
   addressRequired?: boolean;
 }
@@ -39,6 +48,13 @@ export interface Coupon {
   applicabilityStatus?: string | null;
   paymentMethod?: string | null;
   termsAndConditions?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  /** Swiggy's badge, e.g. "SAVE ₹75". */
+  ribbonText?: string | null;
+  /** false = listed but not valid for this cart yet (e.g. below the minimum order). */
+  applicable?: boolean | null;
+  terms: string[];
 }
 
 export interface PlaceOrderResult {
@@ -82,6 +98,50 @@ export interface TrackOrderResult {
 export interface CartItemInput {
   menuItemId: string;
   quantity: number;
+  /** Dish name — lets the server fill a dish's required choices (e.g. "Choice of Rice"). */
+  name?: string;
+  /** Picked in the choice sheet; omitted for plain dishes. */
+  choice?: ItemChoice;
+}
+
+/** A dish's picked variants/addons, as update_food_cart takes them. */
+export interface ItemChoice {
+  /** Which cart field the variations go in — the one the dish's menu row uses. */
+  variantFormat: 'variants_v2' | 'variants' | null;
+  variants: { group_id: string; variation_id: string }[];
+  addons: { group_id: string; choice_id: string }[];
+  /** Names shown under the dish, e.g. ["Medium", "Extra Cheese"]. */
+  labels: string[];
+  /** Estimated price of one, with these choices (the cart has the real total). */
+  unitPrice?: number | null;
+}
+
+export interface OptionChoice {
+  id: string;
+  name: string;
+  price?: number | null;
+  isDefault: boolean;
+}
+
+export interface OptionGroup {
+  id: string;
+  name: string;
+  min: number;
+  /** null = no limit. */
+  max: number | null;
+  choices: OptionChoice[];
+  /** Size-specific addon group: shown only with this variation picked. */
+  onlyWithVariation?: string | null;
+  /** Generic addon group replaced by a size-specific one for these variations. */
+  hiddenWithVariations: string[];
+}
+
+export interface ItemOptions {
+  success: boolean;
+  variantFormat: 'variants_v2' | 'variants' | null;
+  variantGroups: OptionGroup[];
+  addonGroups: OptionGroup[];
+  error?: string;
 }
 
 export interface MenuItem {
@@ -92,6 +152,9 @@ export interface MenuItem {
   isVeg?: boolean | null;
   rating?: number | null;
   description?: string | null;
+  /** Has sizes/options or extras: adding it opens the choice sheet. */
+  hasVariants?: boolean | null;
+  hasAddons?: boolean | null;
 }
 
 export interface MenuCategory {
@@ -149,6 +212,10 @@ function mapCart(data: Record<string, unknown>): CartState {
     })),
     couponApplied: !!data.coupon_applied,
     couponDiscount: data.coupon_discount as number | null,
+    couponCode: data.coupon_code as string | null,
+    suggestedCoupon: data.suggested_coupon as string | null,
+    deliveryStrikeoff: data.delivery_strikeoff as number | null,
+    freeDelivery: !!data.free_delivery,
     error: data.error as string | undefined,
     addressRequired: !!data.address_required,
   };
@@ -185,7 +252,13 @@ export async function updateCartItems(
       restaurant_id: restaurantId,
       restaurant_name: restaurantName,
       address_id: addressId,
-      items: items.map((i) => ({ menu_item_id: i.menuItemId, quantity: i.quantity })),
+      items: items.map((i) => ({
+        menu_item_id: i.menuItemId,
+        quantity: i.quantity,
+        name: i.name,
+        ...(i.choice?.variants.length ? { [i.choice.variantFormat === 'variants' ? 'variants' : 'variants_v2']: i.choice.variants } : {}),
+        ...(i.choice?.addons.length ? { addons: i.choice.addons } : {}),
+      })),
     }),
   });
   const data = await res.json();
@@ -210,6 +283,45 @@ export async function updateCart(
   restaurantName?: string,
 ): Promise<CartState> {
   return updateCartItems(restaurantId, addressId, [{ menuItemId, quantity }], restaurantName);
+}
+
+function mapGroup(g: Record<string, unknown>): OptionGroup {
+  return {
+    id: String(g.id),
+    name: String(g.name ?? ''),
+    min: Number(g.min ?? 0),
+    max: g.max == null ? null : Number(g.max),
+    choices: ((g.choices as Record<string, unknown>[]) || []).map((c) => ({
+      id: String(c.id),
+      name: String(c.name ?? ''),
+      price: c.price as number | null,
+      isDefault: !!c.is_default,
+    })),
+    onlyWithVariation: (g.only_with_variation as string | null) ?? null,
+    hiddenWithVariations: (g.hidden_with_variations as string[]) || [],
+  };
+}
+
+/** A dish's sizes, required choices and extras, for the choice sheet. Never throws. */
+export async function getItemOptions(restaurantId: string, itemId: string, addressId: string, name: string): Promise<ItemOptions> {
+  const failed: ItemOptions = { success: false, variantFormat: null, variantGroups: [], addonGroups: [], error: "Couldn't load the options for this dish." };
+  try {
+    const params = new URLSearchParams({ address_id: addressId, name });
+    const res = await fetch(
+      `${API_BASE_URL}/swiggy/restaurant/${encodeURIComponent(restaurantId)}/items/${encodeURIComponent(itemId)}/options?${params.toString()}`,
+      { headers: await getHeaders() },
+    );
+    const data = await res.json();
+    if (!data.success) return { ...failed, error: data.error || failed.error };
+    return {
+      success: true,
+      variantFormat: data.variant_format ?? null,
+      variantGroups: (data.variant_groups || []).map(mapGroup),
+      addonGroups: (data.addon_groups || []).map(mapGroup),
+    };
+  } catch {
+    return failed;
+  }
 }
 
 export async function getRestaurantMenu(restaurantId: string, addressId: string): Promise<RestaurantMenu> {
@@ -244,6 +356,8 @@ export async function getRestaurantMenu(restaurantId: string, addressId: string)
       isVeg: i.is_veg,
       rating: i.rating,
       description: i.description,
+      hasVariants: i.has_variants,
+      hasAddons: i.has_addons,
     })),
   }));
   return {
@@ -335,6 +449,11 @@ export async function fetchCoupons(restaurantId: string, addressId: string): Pro
     applicabilityStatus: c.applicability_status,
     paymentMethod: c.payment_method,
     termsAndConditions: c.terms_and_conditions,
+    title: c.title,
+    subtitle: c.subtitle,
+    ribbonText: c.ribbon_text,
+    applicable: c.applicable,
+    terms: (c.terms as string[]) || [],
   }));
 }
 
@@ -344,9 +463,9 @@ export async function applyCoupon(couponCode: string, addressId: string): Promis
     headers: await getHeaders(),
     body: JSON.stringify({ coupon_code: couponCode, address_id: addressId }),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!data.success) {
-    return { success: false, items: [], availablePaymentMethods: [], paymentOptions: [], couponApplied: false, error: data.error };
+    return { success: false, items: [], availablePaymentMethods: [], paymentOptions: [], couponApplied: false, error: data.error || "Couldn't apply this coupon." };
   }
   return mapCart(data.cart || {});
 }

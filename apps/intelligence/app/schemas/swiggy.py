@@ -35,6 +35,9 @@ class SwiggyMenuItem(BaseModel):
     restaurant_id: Optional[str] = None
     restaurant_name: Optional[str] = None
     eta_min: Optional[int] = None
+    # Customizable dishes: the app opens a choice picker before adding.
+    has_variants: Optional[bool] = None
+    has_addons: Optional[bool] = None
 
 
 # --- Requests ---
@@ -170,8 +173,44 @@ ORDER_VALUE_CAP_INR = 1000
 class CartItemInput(BaseModel):
     menu_item_id: str
     quantity: int = 1
-    variants: Optional[dict] = None
-    addons: list[str] = Field(default_factory=list)
+    # Dish name: lets the server look up required addon groups with search_menu.
+    name: Optional[str] = None
+    # Swiggy takes an item's variants in the format its menu row uses, never both:
+    # legacy `variants` or `variantsV2`, each [{"group_id": ..., "variation_id": ...}].
+    variants: list[dict] = Field(default_factory=list)
+    variants_v2: list[dict] = Field(default_factory=list)
+    # Swiggy addon choices: [{"group_id": ..., "choice_id": ...}].
+    addons: list[dict] = Field(default_factory=list)
+
+
+class OptionChoice(BaseModel):
+    id: str
+    name: str
+    price: Optional[float] = None
+    is_default: bool = False
+
+
+class OptionGroup(BaseModel):
+    id: str
+    name: str
+    min: int = 0
+    # None = no upper limit.
+    max: Optional[int] = None
+    choices: list[OptionChoice] = Field(default_factory=list)
+    # Size-specific addon groups ("Extra Cheese Medium"): shown only with this
+    # variation picked, while the generic sibling is hidden for it.
+    only_with_variation: Optional[str] = None
+    hidden_with_variations: list[str] = Field(default_factory=list)
+
+
+class ItemOptionsResponse(BaseModel):
+    success: bool
+    item_id: Optional[str] = None
+    # "variants_v2" | "variants": which cart field the picked variations go in.
+    variant_format: Optional[str] = None
+    variant_groups: list[OptionGroup] = Field(default_factory=list)
+    addon_groups: list[OptionGroup] = Field(default_factory=list)
+    error: Optional[str] = None
 
 
 class UpdateCartRequest(BaseModel):
@@ -186,6 +225,8 @@ class CartLine(BaseModel):
     name: str
     price: Optional[float] = None
     quantity: int = 1
+    # Chosen variant/addon names, e.g. ["Chapati (3 pcs)", "Punjabi Rajma"].
+    customizations: list[str] = Field(default_factory=list)
 
 
 class PaymentOption(BaseModel):
@@ -211,6 +252,13 @@ class CartResponse(BaseModel):
     payment_options: list[PaymentOption] = Field(default_factory=list)
     coupon_applied: bool = False
     coupon_discount: Optional[float] = None
+    # The applied code (only when coupon_discount > 0).
+    coupon_code: Optional[str] = None
+    # Swiggy's best coupon for this cart, suggested but NOT applied (discount 0).
+    suggested_coupon: Optional[str] = None
+    # Delivery fee before Swiggy's own waiver (e.g. 51 when delivery is free).
+    delivery_strikeoff: Optional[float] = None
+    free_delivery: bool = False
     error: Optional[str] = None
     address_required: bool = False
 
@@ -222,11 +270,21 @@ class Coupon(BaseModel):
     applicability_status: Optional[str] = None
     payment_method: Optional[str] = None
     terms_and_conditions: Optional[str] = None
+    # Live coupon cards (coupon_sections[].coupons[]).
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    ribbon_text: Optional[str] = None
+    # False = shown by Swiggy but not valid for this cart yet (e.g. below min order).
+    applicable: Optional[bool] = None
+    terms: list[str] = Field(default_factory=list)
+    section: Optional[str] = None
 
 
 class CouponsResponse(BaseModel):
     success: bool
     coupons: list[Coupon] = Field(default_factory=list)
+    # Swiggy's own filter on the list — "COD only" for the MCP.
+    filter_applied: Optional[str] = None
     error: Optional[str] = None
     address_required: bool = False
 
