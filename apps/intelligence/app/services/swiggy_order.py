@@ -16,9 +16,9 @@ Ordering-specific rules enforced here (see intelligence/SWIGGY_TOOLS.md):
 
 from __future__ import annotations
 
-import re
-
+import json
 import logging
+import re
 from typing import Any, Optional
 
 from app.schemas.swiggy import (
@@ -79,22 +79,67 @@ def _payment_option_groups(options: Any) -> list[str]:
     return groups
 
 
+def _walk_dicts(node: Any, max_depth: int = 6, into_lists: bool = True) -> list[dict]:
+    """Every dict in a payload, shallowest first (so the outermost match wins)."""
+    found: list[dict] = []
+    level = [node]
+    for _ in range(max_depth):
+        nxt: list[Any] = []
+        for n in level:
+            if isinstance(n, dict):
+                found.append(n)
+                nxt.extend(v for v in n.values() if isinstance(v, (dict, list)))
+            elif isinstance(n, list) and into_lists:
+                nxt.extend(v for v in n if isinstance(v, (dict, list)))
+        level = nxt
+    return found
+
+
+def _find(dicts: list[dict], keys: tuple[str, ...], kind: type) -> Any:
+    for d in dicts:
+        for k in keys:
+            if isinstance(d.get(k), kind):
+                return d[k]
+    return None
+
+
+def _shape(v: Any, depth: int = 0) -> Any:
+    """Keys and types only (no values) — safe to log when a payload doesn't parse."""
+    if depth > 4:
+        return "…"
+    if isinstance(v, dict):
+        return {k: _shape(x, depth + 1) for k, x in list(v.items())[:25]}
+    if isinstance(v, list):
+        return [_shape(v[0], depth + 1), f"len={len(v)}"] if v else []
+    return type(v).__name__
+
+
 def _normalize_cart(raw: Any) -> CartResponse:
-    outer = _unwrap_envelope(raw) or {}
-    if not isinstance(outer, dict):
-        outer = {}
-    # Real get_food_cart nests twice: {success, data: {data: {items, pricing,
-    # offers}, addressId, availablePaymentMethods}}. Older/flat shapes keep
-    # everything on one level — read from the inner dict, fall back to outer.
-    inner = outer.get("data") if isinstance(outer.get("data"), dict) else {}
-    data = {**outer, **inner}
-    pricing = data.get("pricing") if isinstance(data.get("pricing"), dict) else {}
-    items = data.get("items") if isinstance(data.get("items"), list) else data.get("cart")
-    lines = [
-        line
-        for line in (_normalize_cart_line(r) for r in (items if isinstance(items, list) else []) if isinstance(r, dict))
-        if line is not None
-    ]
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    # The cart sits at different depths across shapes (documented
+    # {success, data: {data: {items, pricing, offers}, availablePaymentMethods}},
+    # flat ones, extra wrappers) — find each part wherever it is, shallowest first.
+    dicts = _walk_dicts(raw)
+    lines: list[CartLine] = []
+    for d in dicts:
+        for k in ("items", "cart", "cartItems", "cart_items"):
+            rows = d.get(k)
+            if isinstance(rows, list):
+                lines = [ln for ln in (_normalize_cart_line(r) for r in rows if isinstance(r, dict)) if ln is not None]
+                if lines:
+                    break
+        if lines:
+            break
+    pricing = _find(dicts, ("pricing", "billBreakdown", "bill"), dict) or {}
+    # Totals/flags from the cart's own objects, never from line items inside lists.
+    data = {k: v for d in reversed(_walk_dicts(raw, into_lists=False)) for k, v in d.items()}  # shallow keys win
+    data["offers"] = _find(dicts, ("offers",), dict) or {}
+    data["paymentOptions"] = _find(dicts, ("paymentOptions",), dict)
+    data["availablePaymentMethods"] = _find(dicts, ("availablePaymentMethods", "available_payment_methods"), list)
     # Docs show two shapes for this field across examples: a bool alongside a
     # sibling coupon_discount, or a nested {"coupon_applied": {"coupon_discount": N}}.
     # Handle both defensively.
@@ -118,11 +163,14 @@ def _normalize_cart(raw: Any) -> CartResponse:
         error=str(gpo_error) if gpo_error else None,
         success=True,
         items=lines,
-        subtotal=_to_float(_first(pricing, "item_total") or _first(data, "subtotal", "sub_total")),
-        delivery_charges=_to_float(
-            _first(pricing, "delivery_charge") or _first(data, "deliveryCharges", "delivery_charges", "deliveryFee")
-        ),
-        total=_to_float(_first(pricing, "to_pay") or _first(data, "total", "grandTotal", "finalTotal")),
+        subtotal=_to_float(_first(pricing, "item_total", "itemTotal", default=_first(data, "subtotal", "sub_total"))),
+        # A 0 delivery charge is a real value (free delivery), not "missing".
+        delivery_charges=_to_float(_first(
+            pricing, "delivery_charge", "deliveryCharge",
+            default=_first(data, "deliveryCharges", "delivery_charges", "deliveryFee"),
+        )),
+        taxes=_to_float(_first(pricing, "taxes_and_charges", "taxesAndCharges")),
+        total=_to_float(_first(pricing, "to_pay", "toPay", default=_first(data, "total", "grandTotal", "finalTotal"))),
         available_payment_methods=[str(p) for p in payment_methods],
         coupon_applied=coupon_applied or (coupon_discount is not None and coupon_discount > 0),
         coupon_discount=coupon_discount,
@@ -233,7 +281,26 @@ class SwiggyOrderService:
         if restaurant_name:
             args["restaurantName"] = restaurant_name
         raw = await self.client.call_tool("get_food_cart", args)
-        return _normalize_cart(raw)
+        cart = _normalize_cart(raw)
+        if not cart.items:
+            # Structure only (keys/types, no values) so an unexpected shape is debuggable from logs.
+            logger.info("get_cart: no items parsed; payload shape=%s", json.dumps(_shape(raw))[:2000])
+        return cart
+
+    async def in_app_payment_methods(self, address_id: str) -> list[str]:
+        """Methods we can place in-app, from get_payment_options for the live cart.
+
+        Only pay-on-delivery for now: UPI needs the intent/QR hand-off and
+        check_payment_status polling, which the app doesn't do yet. Swiggy
+        rejects a UPI-eligible user's order without a paymentMethod, so checkout
+        must send one of these.
+        """
+        raw = await self.client.call_tool("get_payment_options", {"addressId": address_id})
+        data = _unwrap_envelope(raw) if isinstance(raw, dict) else {}
+        cod = data.get("cod") if isinstance(data, dict) else None
+        if isinstance(cod, dict) and cod.get("available"):
+            return [str(cod.get("id") or "COD")]
+        return []
 
     async def update_cart(
         self,

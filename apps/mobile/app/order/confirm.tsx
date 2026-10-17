@@ -131,7 +131,8 @@ export default function OrderConfirmScreen() {
   const subtotal = cart?.subtotal ?? 0;
   const delivery = cart?.deliveryCharges ?? 0;
   const discount = cart?.couponDiscount ?? 0;
-  const total = cart?.total ?? subtotal + delivery - discount;
+  const taxes = cart?.taxes ?? 0;
+  const total = cart?.total ?? subtotal + delivery + taxes - discount;
   const summary = cart?.items?.length ? cart.items.map((i) => `${i.quantity}× ${i.name}`).join(', ') : restaurantName;
 
   const saveOrderHistory = async (orderId: string | null | undefined) => {
@@ -275,6 +276,7 @@ export default function OrderConfirmScreen() {
         <Surface kind="solid" radius={24} style={{ marginHorizontal: space.gutter, marginTop: 12, paddingVertical: 14, paddingHorizontal: 16, gap: 9 }}>
           <BillRow label="Item total" value={fmt(subtotal)} />
           <BillRow label="Delivery" value={deliveryTxt} />
+          {taxes > 0 ? <BillRow label="Taxes & charges" value={fmt(taxes)} /> : null}
           {discount > 0 ? <BillRow label={`Coupon (${appliedCoupon})`} value={`−${fmt(discount)}`} accent /> : null}
           <View style={{ height: 1, backgroundColor: c.line, marginVertical: 3 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -291,7 +293,7 @@ export default function OrderConfirmScreen() {
                 <Pressable key={m} onPress={() => setPaymentMethod(m)} accessibilityRole="radio" accessibilityState={{ selected: paymentMethod === m }}>
                   <Surface radius={18} style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Icon name={/cash|cod/i.test(m) ? 'payments' : /upi/i.test(m) ? 'qr_code_2' : 'credit_card'} size={22} tone="ink2" />
-                    <Text variant="bodyStrong14" style={{ flex: 1 }}>{m}</Text>
+                    <Text variant="bodyStrong14" style={{ flex: 1 }}>{PAYMENT_LABELS[m] ?? m}</Text>
                     <Radio selected={paymentMethod === m} />
                   </Surface>
                 </Pressable>
@@ -351,6 +353,8 @@ export default function OrderConfirmScreen() {
     </View>
   );
 }
+
+const PAYMENT_LABELS: Record<string, string> = { COD: 'Pay on delivery' };
 
 function BillRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
