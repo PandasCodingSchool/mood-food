@@ -66,6 +66,19 @@ def _normalize_cart_line(raw: dict) -> Optional[CartLine]:
     return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity)
 
 
+def _payment_option_groups(options: Any) -> list[str]:
+    """Group names from paymentOptions.allMethods (what place_food_order's paymentMethod takes)."""
+    methods = options.get("allMethods") if isinstance(options, dict) else None
+    groups: list[str] = []
+    for m in methods if isinstance(methods, list) else []:
+        if not isinstance(m, dict) or m.get("enabled") is False:
+            continue
+        group = _first(m, "groupName", "id")
+        if group and str(group) not in groups:
+            groups.append(str(group))
+    return groups
+
+
 def _normalize_cart(raw: Any) -> CartResponse:
     outer = _unwrap_envelope(raw) or {}
     if not isinstance(outer, dict):
@@ -93,10 +106,16 @@ def _normalize_cart(raw: Any) -> CartResponse:
     else:
         coupon_discount = _to_float(_first(offers, "coupon_discount", "couponDiscount"))
         coupon_applied = bool(applied_raw)
+    if isinstance(applied_raw, str):
+        # Live shape: coupon_applied is the code; a 0 discount means it is only
+        # auto-suggested, not applied.
+        coupon_applied = coupon_discount is not None and coupon_discount > 0
     payment_methods = _first(data, "availablePaymentMethods", "available_payment_methods", default=[])
-    if not isinstance(payment_methods, list):
-        payment_methods = []
+    if not isinstance(payment_methods, list) or not payment_methods:
+        payment_methods = _payment_option_groups(data.get("paymentOptions"))
+    gpo_error = _first(data, "gpoError")
     return CartResponse(
+        error=str(gpo_error) if gpo_error else None,
         success=True,
         items=lines,
         subtotal=_to_float(_first(pricing, "item_total") or _first(data, "subtotal", "sub_total")),

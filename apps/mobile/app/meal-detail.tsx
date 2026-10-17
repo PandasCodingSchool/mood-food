@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { palette, space } from '@moodfood/tokens';
 import { Chip, DishImage, Icon, IconButton, MatchBadge, ProgressRing, Screen, Surface, Text, Button, useTheme, useToast, type IconName } from '@moodfood/ui';
-import { BottomBar } from '../src/components/v2';
+import { BottomBar, ErrorBlock } from '../src/components/v2';
 import { SwapRow } from '../src/components/v2/RecCards';
 import { MOOD_COPY, WEATHER_COPY } from '../src/constants/copy';
 import { useLiveMood } from '../src/context/LiveMood';
@@ -26,7 +26,7 @@ export default function MealDetailScreen() {
   const { colors, dark } = useTheme();
   const { weather, mood } = useLiveMood();
   const params = useLocalSearchParams<{ rec: string; rank?: string; variant?: Variant }>();
-  const rec = useMemo<Recommendation | null>(() => (params.rec ? JSON.parse(params.rec) : null), [params.rec]);
+  const rec = useMemo(() => parseRec(params.rec), [params.rec]);
   const rank = Number(params.rank || 0);
   const [variant, setVariant] = useState<Variant>(params.variant ?? 'original');
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -48,7 +48,13 @@ export default function MealDetailScreen() {
     };
   }, [rec, variant]);
 
-  if (!rec || !current) return null;
+  if (!rec || !current) {
+    return (
+      <Screen>
+        <ErrorBlock message="Couldn't open this pick. Head back and tap it again." onRetry={() => (router.canGoBack() ? router.back() : router.replace('/home'))} />
+      </Screen>
+    );
+  }
   const v = recView(current);
   const swaps = (rec.alternatives ?? []).filter((a) => a.type === 'healthier_swap' || a.type === 'budget_swap');
 
@@ -228,6 +234,17 @@ export default function MealDetailScreen() {
       </BottomBar>
     </View>
   );
+}
+
+/** The rec param is a whole card as JSON in the URL; a bad one shows an error, not a crash. */
+function parseRec(raw?: string): Recommendation | null {
+  if (!raw) return null;
+  try {
+    const rec = JSON.parse(raw) as Recommendation;
+    return rec?.dish?.name ? rec : null;
+  } catch {
+    return null;
+  }
 }
 
 function Meta({ icon, text, accent }: { icon: IconName; text: string; accent?: boolean }) {

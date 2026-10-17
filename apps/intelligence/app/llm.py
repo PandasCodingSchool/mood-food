@@ -7,14 +7,17 @@ Call sites keep LangChain message objects for prompt building but go through
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Iterable, Optional
+from typing import Any, Awaitable, Callable, Iterable, Optional
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 from app.config import settings
 from app.observability import timed_call
+
+logger = logging.getLogger("llm")
 
 _ROLES = {"system": "system", "human": "user", "user": "user", "ai": "assistant", "assistant": "assistant"}
 
@@ -44,11 +47,36 @@ def _as_message(m: Any) -> dict:
     return {"role": _ROLES.get(getattr(m, "type", "user"), "user"), "content": m.content}
 
 
+# Set once a model rejects `temperature` (400 unsupported_value), so later calls
+# skip it even when OPENAI_SUPPORTS_TEMPERATURE was left at its default.
+_temperature_rejected = False
+
+
 def sampling_kwargs(temperature: Optional[float]) -> dict:
     """Temperature only when the configured model accepts it."""
-    if temperature is None or not settings.openai_supports_temperature:
+    if temperature is None or not settings.openai_supports_temperature or _temperature_rejected:
         return {}
     return {"temperature": temperature}
+
+
+def _rejects_temperature(exc: BadRequestError) -> bool:
+    body = exc.body if isinstance(exc.body, dict) else {}
+    err = body.get("error", body) if isinstance(body.get("error", body), dict) else {}
+    return err.get("param") == "temperature" or "'temperature'" in str(exc)
+
+
+async def _create(create: Callable[..., Awaitable[Any]], kwargs: dict[str, Any]) -> Any:
+    """Call ``create``; if the model rejects temperature, remember that and retry without it."""
+    global _temperature_rejected
+    try:
+        return await create(**kwargs)
+    except BadRequestError as exc:
+        if "temperature" not in kwargs or not _rejects_temperature(exc):
+            raise
+        _temperature_rejected = True
+        logger.warning("model %s rejects temperature; retrying without it (set OPENAI_SUPPORTS_TEMPERATURE=false)",
+                       kwargs.get("model"))
+        return await create(**{k: v for k, v in kwargs.items() if k != "temperature"})
 
 
 @dataclass
@@ -81,7 +109,7 @@ class JsonChat:
         if self.timeout_s:
             kwargs["timeout"] = self.timeout_s
         with timed_call(self.kind, "openai", self.model) as fields:
-            resp = await async_openai().chat.completions.create(**kwargs)
+            resp = await _create(async_openai().chat.completions.create, kwargs)
             usage = resp.usage.model_dump() if resp.usage else {}
             fields["tokens"] = usage.get("total_tokens")
         return LLMResult(
@@ -93,11 +121,9 @@ class JsonChat:
 async def parse_structured(kind: str, model: str, messages: list[dict], schema: type, temperature: Optional[float] = None):
     """Structured output (Pydantic ``schema``). Raises if the model refuses."""
     with timed_call(kind, "openai", model) as fields:
-        completion = await async_openai().chat.completions.parse(
-            model=model,
-            messages=messages,
-            response_format=schema,
-            **sampling_kwargs(temperature),
+        completion = await _create(
+            async_openai().chat.completions.parse,
+            {"model": model, "messages": messages, "response_format": schema, **sampling_kwargs(temperature)},
         )
         if completion.usage:
             fields["tokens"] = completion.usage.total_tokens
