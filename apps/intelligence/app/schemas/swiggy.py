@@ -188,6 +188,18 @@ class CartLine(BaseModel):
     quantity: int = 1
 
 
+class PaymentOption(BaseModel):
+    """One way to pay that the app can complete in-app (from get_payment_options)."""
+    id: str
+    label: str
+    # cash | swiggy_money | upi_app (opens a UPI app) | upi_qr (Swiggy's scan-QR page)
+    kind: str
+    # What place_food_order takes: paymentMethod, plus intentApp for a UPI app.
+    payment_method: str
+    intent_app: Optional[str] = None
+    icon_url: Optional[str] = None
+
+
 class CartResponse(BaseModel):
     success: bool
     items: list[CartLine] = Field(default_factory=list)
@@ -196,6 +208,7 @@ class CartResponse(BaseModel):
     taxes: Optional[float] = None
     total: Optional[float] = None
     available_payment_methods: list[str] = Field(default_factory=list)
+    payment_options: list[PaymentOption] = Field(default_factory=list)
     coupon_applied: bool = False
     coupon_discount: Optional[float] = None
     error: Optional[str] = None
@@ -232,6 +245,10 @@ class ApplyCouponResponse(BaseModel):
 class PlaceOrderRequest(BaseModel):
     address_id: str
     payment_method: Optional[str] = None
+    # UPI: the chosen app's id from get_payment_options (never put it in payment_method),
+    # or generate_upi_qr for the scan-QR page.
+    intent_app: Optional[str] = None
+    generate_upi_qr: bool = False
     # Mandatory per the Swiggy docs: explicit user confirmation before placing.
     # The server refuses to call place_food_order unless this is true — the API
     # boundary itself enforces the rule, not just the client UI.
@@ -248,6 +265,59 @@ class PlaceOrderResponse(BaseModel):
     address_required: bool = False
     cap_exceeded: bool = False
     cap_amount: int = ORDER_VALUE_CAP_INR
+    # UPI: the order is NOT placed yet (status PENDING_PAYMENT). The app opens
+    # upi_intent_url (or bridge_url), polls /payment/status, then confirms.
+    payment_pending: bool = False
+    paas_id: Optional[str] = None
+    upi_intent_url: Optional[str] = None
+    bridge_url: Optional[str] = None
+    is_qr_flow: bool = False
+    polling_interval_ms: Optional[int] = None
+    max_poll_ms: Optional[int] = None
+    cart_id: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    address_id: Optional[str] = None
+    total_amount: Optional[float] = None
+
+
+class PaymentStatusRequest(BaseModel):
+    paas_id: str
+    order_id: Optional[str] = None
+    address_id: Optional[str] = None
+    cart_id: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class PaymentStatusResponse(BaseModel):
+    success: bool
+    status: Optional[str] = None
+    terminal: bool = False
+    paid: bool = False
+    failed: bool = False
+    # True when Swiggy already finalised the order (no confirm_order needed).
+    confirmed: bool = False
+    order_id: Optional[str] = None
+    order_status: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ConfirmOrderRequest(BaseModel):
+    order_id: str
+    address_id: str
+    lat: float
+    lng: float
+    cart_id: Optional[str] = None
+
+
+class ConfirmOrderResponse(BaseModel):
+    success: bool
+    # success | failed | pending (Swiggy's `result`); success = order placed.
+    result: Optional[str] = None
+    order_id: Optional[str] = None
+    order_status: Optional[str] = None
+    error: Optional[str] = None
 
 
 class OrderSummary(BaseModel):

@@ -26,11 +26,15 @@ from app.schemas.swiggy import (
     ApplyCouponResponse,
     CartLine,
     CartResponse,
+    ConfirmOrderResponse,
     Coupon,
     CouponsResponse,
     OrderDetailsResponse,
     OrderSummary,
     OrdersResponse,
+    PaymentOption,
+    PaymentStatusRequest,
+    PaymentStatusResponse,
     PlaceOrderResponse,
     TrackOrderResponse,
 )
@@ -43,6 +47,9 @@ from app.services.swiggy_mcp import (
 )
 
 logger = logging.getLogger("swiggy_order")
+
+# check_payment_status holds the request ~19s while pending; the API proxy allows 25s.
+PAYMENT_STATUS_TIMEOUT_S = 22.0
 
 
 def _to_float(v: Any) -> Optional[float]:
@@ -177,6 +184,81 @@ def _normalize_cart(raw: Any) -> CartResponse:
     )
 
 
+def _payment_options(raw: Any) -> list[PaymentOption]:
+    data = _unwrap_envelope(raw) if isinstance(raw, dict) else {}
+    if not isinstance(data, dict):
+        return []
+    upi_apps: list[PaymentOption] = []
+    upi_qr: Optional[PaymentOption] = None
+    for m in data.get("allMethods") if isinstance(data.get("allMethods"), list) else []:
+        if not isinstance(m, dict) or m.get("enabled") is False or not m.get("id"):
+            continue
+        raw_m = m.get("raw") if isinstance(m.get("raw"), dict) else {}
+        if str(m.get("groupName") or raw_m.get("payment_code") or "").upper() != "UPI":
+            continue  # COD / Swiggy Money come from their own blocks below
+        label = str(m.get("displayName") or raw_m.get("display_name") or m["id"])
+        intent = m.get("kind") == "intent" or raw_m.get("upiIntent") is True
+        if intent:
+            upi_apps.append(PaymentOption(id=str(m["id"]), label=label, kind="upi_app", payment_method="UPI",
+                                          intent_app=str(m["id"]), icon_url=m.get("iconUrl")))
+        elif upi_qr is None:
+            upi_qr = PaymentOption(id=str(m["id"]), label=label, kind="upi_qr", payment_method="UPI",
+                                   icon_url=m.get("iconUrl"))
+    options = upi_apps + ([upi_qr] if upi_qr else [])
+    money = data.get("swiggyMoney")
+    if isinstance(money, dict) and money.get("available"):
+        options.append(PaymentOption(id=str(money.get("id") or "SwiggyPay"), label=str(money.get("displayName") or "Swiggy Money"),
+                                     kind="swiggy_money", payment_method="SwiggyPay"))
+    cod = data.get("cod")
+    if isinstance(cod, dict) and cod.get("available"):
+        # The option id is "COD" but place_food_order takes paymentMethod "Cash".
+        options.append(PaymentOption(id=str(cod.get("id") or "COD"), label=str(cod.get("displayName") or "Pay on delivery"),
+                                     kind="cash", payment_method="Cash"))
+    return options
+
+
+def _merged(raw: Any) -> dict:
+    """Top-level keys of a tool result and its nested dicts (shallow keys win), skipping lists."""
+    return {k: v for d in reversed(_walk_dicts(raw, into_lists=False)) for k, v in d.items()}
+
+
+def _str_or_none(v: Any) -> Optional[str]:
+    return str(v) if v is not None else None
+
+
+def _int_or_none(v: Any) -> Optional[int]:
+    f = _to_float(v)
+    return int(f) if f is not None else None
+
+
+def _normalize_placed(raw: Any) -> PlaceOrderResponse:
+    """place_food_order result: placed (cash / Swiggy Money) or UPI PENDING_PAYMENT."""
+    data = _merged(raw)
+    status = _first(data, "status")
+    paas_id = _first(data, "paasId")
+    pending = (str(status or "").upper() == "PENDING_PAYMENT"
+               or str(_first(data, "normalizedStatus") or "").lower() == "pending" or paas_id is not None)
+    return PlaceOrderResponse(
+        success=True,
+        order_id=_str_or_none(_first(data, "orderId", "order_id")),
+        status=_str_or_none(status),
+        estimated_delivery_time=_str_or_none(_first(data, "estimatedDeliveryTime", "estimatedDelivery", "estimated_delivery_time")),
+        message=_first(data, "message", default="Awaiting payment" if pending else "Order placed successfully"),
+        payment_pending=pending,
+        paas_id=_str_or_none(paas_id),
+        upi_intent_url=_first(data, "upiIntentUrl"),
+        bridge_url=_first(data, "bridgeUrl"),
+        is_qr_flow=data.get("isQrFlow") is True,
+        polling_interval_ms=_int_or_none(_first(data, "pollingIntervalInMs")),
+        max_poll_ms=_int_or_none(_first(data, "maxTimeToPollForInMs")),
+        cart_id=_str_or_none(_first(data, "cartId")),
+        lat=_to_float(_first(data, "lat")),
+        lng=_to_float(_first(data, "lng")),
+        address_id=_str_or_none(_first(data, "addressId")),
+        total_amount=_to_float(_first(data, "totalAmount")),
+    )
+
+
 def _normalize_coupon(raw: dict) -> Optional[Coupon]:
     code = _first(raw, "couponCode", "coupon_code", "code")
     if code is None:
@@ -287,20 +369,16 @@ class SwiggyOrderService:
             logger.info("get_cart: no items parsed; payload shape=%s", json.dumps(_shape(raw))[:2000])
         return cart
 
-    async def in_app_payment_methods(self, address_id: str) -> list[str]:
-        """Methods we can place in-app, from get_payment_options for the live cart.
+    async def payment_options(self, address_id: str) -> list[PaymentOption]:
+        """Ways to pay for the live cart, from get_payment_options.
 
-        Only pay-on-delivery for now: UPI needs the intent/QR hand-off and
-        check_payment_status polling, which the app doesn't do yet. Swiggy
-        rejects a UPI-eligible user's order without a paymentMethod, so checkout
-        must send one of these.
+        UPI apps (intent) and Swiggy's scan-QR page go through UPI; Swiggy Money
+        and cash are placed immediately. Card/netbanking aren't offered by the
+        MCP. Swiggy rejects a UPI-eligible user's order without a paymentMethod,
+        so checkout must send one of these.
         """
         raw = await self.client.call_tool("get_payment_options", {"addressId": address_id})
-        data = _unwrap_envelope(raw) if isinstance(raw, dict) else {}
-        cod = data.get("cod") if isinstance(data, dict) else None
-        if isinstance(cod, dict) and cod.get("available"):
-            return [str(cod.get("id") or "COD")]
-        return []
+        return _payment_options(raw)
 
     async def update_cart(
         self,
@@ -378,7 +456,12 @@ class SwiggyOrderService:
         )
 
     async def place_order(
-        self, address_id: str, payment_method: Optional[str] = None, confirmed: bool = False
+        self,
+        address_id: str,
+        payment_method: Optional[str] = None,
+        confirmed: bool = False,
+        intent_app: Optional[str] = None,
+        generate_upi_qr: bool = False,
     ) -> PlaceOrderResponse:
         if not confirmed:
             return PlaceOrderResponse(
@@ -408,6 +491,10 @@ class SwiggyOrderService:
         args: dict[str, Any] = {"addressId": address_id}
         if payment_method:
             args["paymentMethod"] = payment_method
+        if intent_app:
+            args["intentApp"] = intent_app
+        elif generate_upi_qr:
+            args["generateUPIQR"] = True
 
         # 2. Non-idempotent call: single attempt, no built-in retry. On a
         #    retryable failure, verify via get_food_orders (safe, idempotent)
@@ -443,15 +530,46 @@ class SwiggyOrderService:
                     )
                 return PlaceOrderResponse(success=False, error=str(retry_exc))
 
-        data = _unwrap_envelope(raw) or {}
-        if not isinstance(data, dict):
-            data = {}
-        return PlaceOrderResponse(
+        return _normalize_placed(raw)
+
+    async def payment_status(self, req: PaymentStatusRequest) -> PaymentStatusResponse:
+        """One check_payment_status read (Swiggy long-polls it ~19s while pending)."""
+        args: dict[str, Any] = {"paasId": req.paas_id}
+        for key, value in (("orderId", req.order_id), ("addressId", req.address_id), ("cartId", req.cart_id),
+                           ("lat", req.lat), ("lng", req.lng)):
+            if value is not None:
+                args[key] = value
+        raw = await self.client.call_tool("check_payment_status", args, timeout_s=PAYMENT_STATUS_TIMEOUT_S)
+        data = _merged(raw)
+        status = _first(data, "status")
+        state = str(status or "").lower()
+        paid = bool(data.get("isTerminalSuccess")) or state in ("success", "paid")
+        failed = bool(data.get("isTerminalFailure")) or state in ("failed", "cancelled", "refund-initiated", "cart_changed")
+        return PaymentStatusResponse(
             success=True,
-            order_id=_first(data, "orderId", "order_id"),
-            status=_first(data, "status"),
-            estimated_delivery_time=_first(data, "estimatedDeliveryTime", "estimated_delivery_time"),
-            message=_first(data, "message", default="Order placed successfully"),
+            status=str(status) if status is not None else None,
+            terminal=bool(data.get("terminal")) or paid or failed,
+            paid=paid,
+            failed=failed and not paid,
+            confirmed=data.get("confirmed") is True,
+            order_id=_str_or_none(_first(data, "orderId")),
+            order_status=_str_or_none(_first(data, "orderStatus")),
+        )
+
+    async def confirm_order(
+        self, order_id: str, address_id: str, lat: float, lng: float, cart_id: Optional[str] = None
+    ) -> ConfirmOrderResponse:
+        """Finalise a UPI order once paid (only when check_payment_status didn't already)."""
+        args: dict[str, Any] = {"orderId": order_id, "addressId": address_id, "lat": lat, "lng": lng}
+        if cart_id:
+            args["cartId"] = cart_id
+        data = _merged(await self.client.call_tool("confirm_order", args))
+        result = _str_or_none(_first(data, "result"))
+        return ConfirmOrderResponse(
+            success=True,
+            result=result,
+            order_id=_str_or_none(_first(data, "orderId")) or order_id,
+            order_status=_str_or_none(_first(data, "orderStatus")),
         )
 
     async def _find_recent_order(self, address_id: str) -> Optional[OrderSummary]:

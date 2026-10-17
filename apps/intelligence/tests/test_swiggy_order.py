@@ -14,7 +14,7 @@ from app.services.swiggy_order import SwiggyOrderService, ORDER_VALUE_CAP_INR
 
 def _client_with(tool_returns):
     client = SwiggyMCPClient(token="test-token")
-    client.call_tool = AsyncMock(side_effect=lambda name, args: tool_returns[name])
+    client.call_tool = AsyncMock(side_effect=lambda name, args, **kw: tool_returns[name])
     return client
 
 
@@ -331,21 +331,99 @@ async def test_empty_real_cart_is_empty_not_an_error():
     assert cart.success and cart.items == [] and cart.error is None
 
 
+# get_payment_options as the live server returns it (Oct 2026), trimmed.
+PAYMENT_OPTIONS_LIVE = {
+    "cod": {"available": True, "id": "COD", "displayName": "Pay on delivery"},
+    "swiggyMoney": {"available": True, "id": "SwiggyPay", "displayName": "Swiggy Money"},
+    "allMethods": [
+        {"id": "gpay://upi/", "groupName": "UPI", "displayName": "Google Pay", "iconUrl": "https://x/gpay", "enabled": True,
+         "raw": {"groupName": "UPI", "upiIntent": True, "payment_code": "UPI", "enabled": True}},
+        {"id": "phonepe://", "groupName": "UPI", "displayName": "PhonePe UPI", "enabled": False,
+         "raw": {"upiIntent": True, "payment_code": "UPI"}},
+        {"id": "PayWithQR", "groupName": "UPI", "displayName": "Pay with QR", "enabled": True,
+         "raw": {"upiIntent": False, "payment_code": "UPI"}},
+        {"id": "COD", "groupName": "COD", "displayName": "Pay on delivery", "enabled": True},
+    ],
+}
+
+
 @pytest.mark.asyncio
-async def test_in_app_payment_methods_is_pay_on_delivery_only():
-    options = {"cod": {"available": True, "id": "COD", "displayName": "Pay on delivery"},
-               "allMethods": [{"id": "gpay://upi/", "groupName": "UPI", "enabled": True}]}
-    svc = SwiggyOrderService(client=_client_with({"get_payment_options": options}))
-    assert await svc.in_app_payment_methods("a") == ["COD"]
-    svc = SwiggyOrderService(client=_client_with({"get_payment_options": {"cod": {"available": False}}}))
-    assert await svc.in_app_payment_methods("a") == []
+async def test_payment_options_from_live_shape():
+    svc = SwiggyOrderService(client=_client_with({"get_payment_options": PAYMENT_OPTIONS_LIVE}))
+    opts = await svc.payment_options("a")
+    assert [(o.kind, o.payment_method, o.intent_app) for o in opts] == [
+        ("upi_app", "UPI", "gpay://upi/"),   # disabled PhonePe skipped
+        ("upi_qr", "UPI", None),
+        ("swiggy_money", "SwiggyPay", None),
+        ("cash", "Cash", None),              # option id COD, but place_food_order takes "Cash"
+    ]
 
 
 def test_cart_route_adds_pay_on_delivery_for_checkout(client, monkeypatch):
     from app.routes import swiggy as swiggy_routes
 
     svc = SwiggyOrderService(client=_client_with({"get_food_cart": CART_REAL_SHAPE,
-                                                  "get_payment_options": {"cod": {"available": True, "id": "COD"}}}))
+                                                  "get_payment_options": PAYMENT_OPTIONS_LIVE}))
     monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: svc)
     body = client.get("/api/swiggy/cart", params={"address_id": "addr_1"}).json()
-    assert body["available_payment_methods"] == ["COD"] and body["taxes"] == 47
+    assert body["available_payment_methods"] == ["UPI", "SwiggyPay", "Cash"] and body["taxes"] == 47
+    assert body["payment_options"][0]["intent_app"] == "gpay://upi/"
+
+
+UPI_PENDING = {"success": True, "data": {
+    "orderId": "o1", "paasId": "p1", "transactionId": "t1", "upiIntentUrl": "upi://pay?pa=x", "bridgeUrl": "https://pay/x",
+    "isQrFlow": False, "pollingIntervalInMs": 3000, "maxTimeToPollForInMs": 300000, "paymentMethod": "UPI",
+    "status": "PENDING_PAYMENT", "normalizedStatus": "pending", "totalAmount": 216, "addressId": "addr_1",
+    "cartId": "c1", "lat": 12.9, "lng": 77.6}}
+
+
+@pytest.mark.asyncio
+async def test_place_order_upi_sends_intent_app_and_returns_pending():
+    client = _client_with({"get_food_cart": CART_REAL_SHAPE, "place_food_order": UPI_PENDING})
+    client.call_tool_once = AsyncMock(return_value=UPI_PENDING)
+    res = await SwiggyOrderService(client=client).place_order(
+        "addr_1", "UPI", confirmed=True, intent_app="gpay://upi/")
+    client.call_tool_once.assert_awaited_once_with(
+        "place_food_order", {"addressId": "addr_1", "paymentMethod": "UPI", "intentApp": "gpay://upi/"})
+    assert res.success and res.payment_pending and res.paas_id == "p1" and res.order_id == "o1"
+    assert (res.upi_intent_url, res.bridge_url, res.polling_interval_ms, res.cart_id, res.lat) == (
+        "upi://pay?pa=x", "https://pay/x", 3000, "c1", 12.9)
+
+
+@pytest.mark.asyncio
+async def test_place_order_qr_and_cash():
+    placed = {"success": True, "data": {"orderId": "o2", "status": "CONFIRMED", "normalizedStatus": "success"}}
+    client = _client_with({"get_food_cart": CART_REAL_SHAPE})
+    client.call_tool_once = AsyncMock(return_value=placed)
+    svc = SwiggyOrderService(client=client)
+    res = await svc.place_order("a", "Cash", confirmed=True)
+    assert res.success and not res.payment_pending and res.order_id == "o2"
+    await svc.place_order("a", "UPI", confirmed=True, generate_upi_qr=True)
+    assert client.call_tool_once.call_args.args[1] == {"addressId": "a", "paymentMethod": "UPI", "generateUPIQR": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("data,paid,failed,terminal,confirmed", [
+    ({"status": "success", "terminal": True, "isTerminalSuccess": True, "confirmed": True}, True, False, True, True),
+    ({"status": "SUCCESS"}, True, False, True, False),
+    ({"status": "pending", "terminal": False}, False, False, False, False),
+    ({"status": "failed", "terminal": True, "isTerminalFailure": True}, False, True, True, False),
+    ({"status": "refund-initiated"}, False, True, True, False),
+])
+async def test_payment_status_normalises(data, paid, failed, terminal, confirmed):
+    from app.schemas.swiggy import PaymentStatusRequest
+
+    client = _client_with({"check_payment_status": {"success": True, "data": {"paasId": "p1", **data}}})
+    res = await SwiggyOrderService(client=client).payment_status(PaymentStatusRequest(paas_id="p1", order_id="o1", lat=1.0))
+    assert (res.paid, res.failed, res.terminal, res.confirmed) == (paid, failed, terminal, confirmed)
+    name, args = client.call_tool.call_args.args
+    assert name == "check_payment_status" and args == {"paasId": "p1", "orderId": "o1", "lat": 1.0}
+    assert client.call_tool.call_args.kwargs["timeout_s"] > 20  # long-poll
+
+
+@pytest.mark.asyncio
+async def test_confirm_order():
+    client = _client_with({"confirm_order": {"success": True, "data": {"orderId": "o1", "result": "success"}}})
+    res = await SwiggyOrderService(client=client).confirm_order("o1", "a", 12.9, 77.6, "c1")
+    assert res.result == "success" and res.order_id == "o1"
+    assert client.call_tool.call_args.args[1] == {"orderId": "o1", "addressId": "a", "lat": 12.9, "lng": 77.6, "cartId": "c1"}
