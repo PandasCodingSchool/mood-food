@@ -29,6 +29,9 @@ import type { LearnedProfile, RecommendationResponse } from '../src/types';
 import { trackEvent } from '../src/utils/analytics';
 import { recView } from '../src/utils/recView';
 
+// How long the hero waits for "Suggested for you" before showing the mood picks.
+const SUGGEST_WAIT_MS = 10_000;
+
 // Ask for today's check-in once per app session; "Skip" then sticks.
 let promptedCheckinThisSession = false;
 
@@ -50,6 +53,8 @@ export default function HomeScreen() {
   const [liveOrder, setLiveOrder] = useState<ActiveOrder | null>(null);
   const [brain, setBrain] = useState<Brain | null>(null);
   const [suggested, setSuggested] = useState<Suggestions | null>(null);
+  // Mood picks wait for "Suggested for you" so the hero doesn't paint one dish and swap to another.
+  const [suggestDone, setSuggestDone] = useState(false);
   const loadedFor = useRef<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +81,18 @@ export default function HomeScreen() {
           router.push({ pathname: '/mood-checkin', params: { next: '/home' } });
           return;
         }
+        // Started before the other loads (it decides the hero); capped so a slow brain falls back to mood picks.
+        void Promise.race([
+          resolveAddressId()
+            .catch(() => undefined)
+            .then((addressId) => fetchSuggestions({ addressId })),
+          new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), SUGGEST_WAIT_MS)),
+        ]).then((sug) => {
+          if (cancelled) return;
+          // A timeout keeps whatever was showing; a real answer (even "none") replaces it.
+          if (sug !== 'timeout') setSuggested(sug?.recommendations.length ? sug : null);
+          setSuggestDone(true);
+        });
         const [learned, s, notifs, b] = await Promise.all([
           fetchLearnedProfile().catch(() => null),
           fetchStreak().catch(() => 0),
@@ -85,10 +102,6 @@ export default function HomeScreen() {
         if (cancelled) return;
         setProfile(learned);
         setBrain(b);
-        void resolveAddressId()
-          .catch(() => undefined)
-          .then((addressId) => fetchSuggestions({ addressId }))
-          .then((sug) => !cancelled && setSuggested(sug && sug.recommendations.length ? sug : null));
         if (await unseenHouseEvent(b?.house)) {
           router.push('/house-reveal');
           return;
@@ -122,7 +135,7 @@ export default function HomeScreen() {
   const t = TIME_COPY[time];
   const w = WEATHER_SPECS[weather];
   // Suggested for you (brain) when it has picks; otherwise the mood-based recommendations.
-  const list = suggested?.recommendations ?? recs?.recommendations ?? [];
+  const list = suggested?.recommendations ?? (suggestDone ? recs?.recommendations : null) ?? [];
   const top = list[0];
   const topV = top ? recView(top) : null;
   const reasonFor = (r: (typeof list)[number]) => (suggested && r.dish?.id ? suggested.reasons[r.dish.id] : undefined);
@@ -211,7 +224,7 @@ export default function HomeScreen() {
                 </>
               }
             />
-          ) : recsError ? (
+          ) : recsError && suggestDone ? (
             <ErrorBlock message={recsError} onRetry={loadRecs} />
           ) : (
             <LoadingBlock label="Finding tonight's pick" />

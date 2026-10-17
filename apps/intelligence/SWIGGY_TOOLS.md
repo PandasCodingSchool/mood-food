@@ -53,8 +53,23 @@ Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 - Wired: `SwiggyOrderService.get_cart`; `place_order` always re-fetches the cart first.
 
 ### ✅ get_payment_options
-- **In:** `addressId` (Food). **Out:** `{cod: {available, id: "COD"}, swiggyMoney, allMethods: [{id, groupName: "UPI"|"COD"|…, enabled}], platforms, paymentAmount}` for the live cart.
-- Wired: `SwiggyOrderService.in_app_payment_methods` — pay-on-delivery only until the UPI intent/QR + `check_payment_status` flow exists. `GET /api/swiggy/cart` fills `available_payment_methods` from it.
+- **In:** `addressId` (Food). **Out:** `{cod: {available, id: "COD"}, swiggyMoney: {available, id: "SwiggyPay"}, allMethods: [{id, groupName: "UPI"|"COD"|…, displayName, iconUrl, enabled, raw: {upiIntent}}], platforms, paymentAmount}` for the live cart.
+- Card / netbanking are **not** offered through the MCP. UPI Collect (VPA) is not allowed (NPCI).
+- Wired: `SwiggyOrderService.payment_options` → `PaymentOption`s; `GET /api/swiggy/cart` fills `payment_options` from it.
+
+| Option | place_food_order args | Result |
+|---|---|---|
+| UPI app (`raw.upiIntent`) | `paymentMethod: "UPI"`, `intentApp: <method id>` | `PENDING_PAYMENT` |
+| Scan QR (`PayWithQR`) | `paymentMethod: "UPI"`, `generateUPIQR: true` | `PENDING_PAYMENT` (`isQrFlow`) |
+| Swiggy Money | `paymentMethod: "SwiggyPay"` | placed |
+| Pay on delivery | `paymentMethod: "Cash"` (option id is `COD`) | placed |
+
+### ✅ check_payment_status / confirm_order (UPI)
+- `place_food_order` UPI returns `{orderId, paasId, upiIntentUrl, bridgeUrl, isQrFlow, pollingIntervalInMs, maxTimeToPollForInMs, cartId, lat, lng, status: "PENDING_PAYMENT"}` — the order is **not placed** yet.
+- App opens `upiIntentUrl` (phone) or `bridgeUrl` (web / QR), then polls `check_payment_status` (`paasId` + echoes; server long-polls ~19s) at the returned interval up to the cap.
+- Paid + `confirmed: true` → placed. Paid without it → `confirm_order {orderId, addressId, lat, lng, cartId}` (`result: "success"` = placed). Still pending at the cap → `confirm_order` once. Failed / cancelled / refund-initiated / cart_changed → not placed, never confirm.
+- Wired: `SwiggyOrderService.payment_status` / `confirm_order`; routes `POST /api/swiggy/payment/status`, `POST /api/swiggy/order/confirm`; mobile `waitForUpiPayment`.
+- Unverified live: the UPI response shapes above come from the docs (no real payment was made while building this).
 
 ### ✅ update_food_cart
 - **In:** `restaurantId` (req), `cartItems[]` (req — `{menu_item_id, quantity}` **snake_case**, plus `variants` XOR `variantsV2`, addons), `addressId` (req), `restaurantName` (opt)
@@ -71,7 +86,7 @@ Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 ## Order
 
 ### ✅ place_food_order
-- **In:** `addressId` (req — coords fetched automatically), `paymentMethod` (**required for UPI-eligible users** — from `get_payment_options`; omission is rejected)
+- **In:** `addressId` (req — coords fetched automatically), `paymentMethod` (**required for UPI-eligible users** — see the table above; omission is rejected), `intentApp` / `generateUPIQR` (UPI only)
 - **Rules:** explicit user confirmation **mandatory**; cart must be **< ₹1000** (beta); call `get_food_cart` first; non-idempotent → on 5xx verify with `get_food_orders` before retry; use the tool's exact success message verbatim.
 - Wired: `SwiggyOrderService.place_order` — refuses without `confirmed=true`, checks the cap against `get_cart().total` before calling the tool, calls the tool via `SwiggyMCPClient.call_tool_once` (no built-in retry — placement must never be silently retried by the transport layer), and on a retryable failure verifies via `get_food_orders` before a single bounded manual retry.
 

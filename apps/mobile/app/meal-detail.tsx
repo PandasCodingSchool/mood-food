@@ -15,6 +15,7 @@ import { getSavedAddressId } from '../src/services/aiRecommendations';
 import { saveOrder, toggleSaved } from '../src/services/history';
 import { useStartOrder } from '../src/services/orderFlow';
 import type { Recommendation } from '../src/types';
+import { resolveDishImage } from '../src/utils/dishVisuals';
 import { imageCaption, recView } from '../src/utils/recView';
 
 type Variant = 'original' | 'healthier_swap' | 'budget_swap';
@@ -209,7 +210,7 @@ export default function MealDetailScreen() {
               <Text variant="bodyStrong15" style={{ marginTop: 20 }}>Explore alternatives</Text>
               <View style={{ gap: 8, marginTop: 10 }}>
                 {variant !== 'original' ? (
-                  <SwapRow compact label="Original pick" name={rec.dish.name} onPress={() => setVariant('original')} />
+                  <SwapRow compact label="Original pick" name={rec.dish.name} imageUrl={resolveDishImage(rec)} onPress={() => setVariant('original')} />
                 ) : null}
                 {swaps
                   .filter((a) => a.type !== variant)
@@ -219,6 +220,7 @@ export default function MealDetailScreen() {
                       compact
                       label={a.type === 'healthier_swap' ? 'Healthier swap' : 'Budget pick'}
                       name={a.name}
+                      imageUrl={a.swiggy?.item?.image_url || a.image_url}
                       delta={a.practical_details?.estimated_price != null ? `₹${Math.round(a.practical_details.estimated_price)}` : null}
                       onPress={() => setVariant(a.type as Variant)}
                     />

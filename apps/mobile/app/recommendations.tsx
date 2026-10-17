@@ -233,6 +233,7 @@ export default function RecommendationsScreen() {
                       key={a.dish_id}
                       label={a.type === 'healthier_swap' ? 'Healthier swap' : 'Budget pick'}
                       name={a.name}
+                      imageUrl={a.swiggy?.item?.image_url || a.image_url}
                       delta={a.reason}
                       onPress={() =>
                         router.push({ pathname: '/meal-detail', params: { rec: JSON.stringify(top), rank: '0', variant: a.type } })
