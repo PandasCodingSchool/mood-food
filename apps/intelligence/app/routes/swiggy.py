@@ -248,7 +248,15 @@ async def apply_coupon(req: ApplyCouponRequest, request: Request) -> ApplyCoupon
 @router.get("/cart", response_model=CartResponse)
 async def get_cart(request: Request, address_id: str, restaurant_name: Optional[str] = None) -> CartResponse:
     try:
-        return await _order_service(request).get_cart(address_id, restaurant_name)
+        service = _order_service(request)
+        cart = await service.get_cart(address_id, restaurant_name)
+        if cart.items and not cart.available_payment_methods:
+            # Checkout read: the live cart lists no methods; Swiggy's own picker does.
+            try:
+                cart.available_payment_methods = await service.in_app_payment_methods(address_id)
+            except SwiggyMCPError as exc:
+                logger.warning("get_payment_options failed: %s", exc)
+        return cart
     except SwiggyAddressRequiredError as exc:
         return CartResponse(success=False, error=str(exc), address_required=True)
     except (SwiggyAuthError, SwiggyMCPError) as exc:
@@ -261,7 +269,9 @@ async def update_cart(req: UpdateCartRequest, request: Request) -> CartResponse:
     try:
         cart_items = [
             {
-                "menuItemId": item.menu_item_id,
+                # Swiggy's schema requires snake_case `menu_item_id`; `menuItemId` is
+                # accepted silently and leaves the cart empty.
+                "menu_item_id": item.menu_item_id,
                 "quantity": item.quantity,
                 **({"variants": item.variants} if item.variants else {}),
                 **({"addons": item.addons} if item.addons else {}),

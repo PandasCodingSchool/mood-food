@@ -48,12 +48,17 @@ Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 
 ### ✅ get_food_cart
 - **In:** `addressId` (req), `restaurantName` (opt)
-- **Out:** `data` with item lines (+ `valid_addons` per item), `availablePaymentMethods[]`, `offers.coupon_applied.coupon_discount`, totals & fees.
+- **Out (live, verified Oct 2026 — differs from the docs):** `{statusCode, statusMessage: "CART", successful, addressId, data}`; `data` is `null` for an empty cart, else `{cart_id, restaurant, items: [{menu_item_id (int), name, quantity, final_price (line total), …}], pricing: {item_total, delivery_charge, taxes_and_charges, to_pay}, offers: {coupon_applied (code|null), coupon_discount}}`. **No payment methods** — those come from `get_payment_options`.
 - Call **before** `place_food_order` to validate totals + payment methods.
 - Wired: `SwiggyOrderService.get_cart`; `place_order` always re-fetches the cart first.
 
+### ✅ get_payment_options
+- **In:** `addressId` (Food). **Out:** `{cod: {available, id: "COD"}, swiggyMoney, allMethods: [{id, groupName: "UPI"|"COD"|…, enabled}], platforms, paymentAmount}` for the live cart.
+- Wired: `SwiggyOrderService.in_app_payment_methods` — pay-on-delivery only until the UPI intent/QR + `check_payment_status` flow exists. `GET /api/swiggy/cart` fills `available_payment_methods` from it.
+
 ### ✅ update_food_cart
-- **In:** `restaurantId` (req), `cartItems[]` (req — items with `variants` XOR `variantsV2`, plus addons), `addressId` (req), `restaurantName` (opt)
+- **In:** `restaurantId` (req), `cartItems[]` (req — `{menu_item_id, quantity}` **snake_case**, plus `variants` XOR `variantsV2`, addons), `addressId` (req), `restaurantName` (opt)
+- ⚠️ `menuItemId` (camelCase) is accepted without error but leaves the cart **empty** — the checkout bug of Oct 2026.
 - Carts are restaurant-scoped; switching restaurants clears the cart. Does **not** render UI — always follow with `get_food_cart`.
 - Wired: `SwiggyOrderService.update_cart` always calls `get_food_cart` immediately after.
 
@@ -66,7 +71,7 @@ Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 ## Order
 
 ### ✅ place_food_order
-- **In:** `addressId` (req — coords fetched automatically), `paymentMethod` (opt — must match `availablePaymentMethods` from `get_food_cart`)
+- **In:** `addressId` (req — coords fetched automatically), `paymentMethod` (**required for UPI-eligible users** — from `get_payment_options`; omission is rejected)
 - **Rules:** explicit user confirmation **mandatory**; cart must be **< ₹1000** (beta); call `get_food_cart` first; non-idempotent → on 5xx verify with `get_food_orders` before retry; use the tool's exact success message verbatim.
 - Wired: `SwiggyOrderService.place_order` — refuses without `confirmed=true`, checks the cap against `get_cart().total` before calling the tool, calls the tool via `SwiggyMCPClient.call_tool_once` (no built-in retry — placement must never be silently retried by the transport layer), and on a retryable failure verifies via `get_food_orders` before a single bounded manual retry.
 

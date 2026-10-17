@@ -2,10 +2,13 @@
 fully mocked — mirrors tests/test_swiggy.py's style.
 """
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock
 
 from app.services.swiggy_mcp import SwiggyMCPClient, SwiggyMCPError
+from app.schemas.swiggy import CartResponse
 from app.services.swiggy_order import SwiggyOrderService, ORDER_VALUE_CAP_INR
 
 
@@ -83,6 +86,41 @@ async def test_get_cart_reads_live_nested_shape():
     assert (cart.subtotal, cart.delivery_charges, cart.total) == (700, 30, 765)
     assert cart.available_payment_methods == ["COD"]
     assert cart.coupon_applied is True and cart.coupon_discount == 50
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wrap", [
+    lambda c: {"cart": c},                       # extra wrapper key
+    lambda c: {"result": {"content": c}},        # deeper wrapper
+    lambda c: json.dumps(c),                     # JSON text block instead of structuredContent
+])
+async def test_get_cart_finds_cart_at_any_depth(wrap):
+    client = _client_with({"get_food_cart": wrap(CART_LIVE_SHAPE)})
+    cart = await SwiggyOrderService(client=client).get_cart("addr_1")
+    assert [i.id for i in cart.items] == ["m1", "m2"]
+    assert cart.total == 765 and cart.available_payment_methods == ["COD"]
+
+
+@pytest.mark.asyncio
+async def test_get_cart_camel_pricing_and_no_line_total_leak():
+    raw = {"data": {"items": [{"menuItemId": "x", "itemName": "Biryani", "quantity": 2, "total": 500}],
+                    "billBreakdown": {"itemTotal": 500, "deliveryCharge": 40, "toPay": 560}}}
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": raw})).get_cart("a")
+    assert (cart.items[0].price, cart.subtotal, cart.delivery_charges, cart.total) == (250, 500, 40, 560)
+
+    no_pricing = {"data": {"items": [{"menu_item_id": "x", "name": "Biryani", "quantity": 1, "total": 500}]}}
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": no_pricing})).get_cart("a")
+    assert cart.total is None  # the line's own total is not the cart total
+
+
+@pytest.mark.asyncio
+async def test_get_cart_logs_shape_when_empty(caplog):
+    raw = {"data": {"view": "markdown", "rows": [{"secret_name": "x"}]}}
+    with caplog.at_level("INFO", logger="swiggy_order"):
+        cart = await SwiggyOrderService(client=_client_with({"get_food_cart": raw})).get_cart("a")
+    assert cart.items == []
+    msg = next(r.getMessage() for r in caplog.records if "no items parsed" in r.getMessage())
+    assert '"secret_name": "str"' in msg and '"x"' not in msg
 
 
 @pytest.mark.asyncio
@@ -241,3 +279,73 @@ async def test_place_order_non_retryable_failure_returns_error_without_retry():
     assert result.success is False
     assert "closed" in (result.error or "").lower()
     client.call_tool_once.assert_called_once()
+
+
+def test_update_cart_route_sends_snake_case_menu_item_id(client, monkeypatch):
+    # Live schema requires `menu_item_id`; camelCase was accepted silently and left the cart empty.
+    from app.routes import swiggy as swiggy_routes
+
+    sent = {}
+
+    class FakeService:
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None):
+            sent["items"] = cart_items
+            return CartResponse(success=True)
+
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
+    res = client.post("/api/swiggy/cart", json={
+        "restaurant_id": "78138", "address_id": "a", "items": [{"menu_item_id": "34114193", "quantity": 1}],
+    })
+    assert res.status_code == 200
+    assert sent["items"] == [{"menu_item_id": "34114193", "quantity": 1}]
+
+
+# Shape captured from the live server (Oct 2026), values made up: no success/data
+# envelope, cart under data, ints for ids, no payment methods on the cart.
+CART_REAL_SHAPE = {
+    "statusCode": 0, "statusMessage": "CART", "successful": True, "addressId": "addr_1",
+    "data": {
+        "cart_id": 123, "result": "ok", "restaurant": {"name": "Imperio", "deliverySubtitle": "49 mins"},
+        "items": [{"menu_item_id": 34114193, "name": "Paneer Butter Masala", "quantity": 1, "is_veg": "1",
+                   "subtotal": 169, "total": 169.0, "final_price": 169, "in_stock": 1, "variants": [{}], "addons": []}],
+        "item_count": 1,
+        "pricing": {"item_total": 169, "delivery_charge": 0, "delivery_charge_strikeoff": 30,
+                    "taxes_and_charges": 47.0, "to_pay": 216},
+        "offers": {"coupon_applied": None, "coupon_discount": 0, "free_delivery_applied": True},
+    },
+}
+
+
+@pytest.mark.asyncio
+async def test_get_cart_reads_real_live_shape():
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": CART_REAL_SHAPE})).get_cart("addr_1")
+    assert [(i.id, i.name, i.quantity, i.price) for i in cart.items] == [("34114193", "Paneer Butter Masala", 1, 169)]
+    assert (cart.subtotal, cart.delivery_charges, cart.taxes, cart.total) == (169, 0, 47, 216)
+    assert cart.coupon_applied is False
+
+
+@pytest.mark.asyncio
+async def test_empty_real_cart_is_empty_not_an_error():
+    raw = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": None, "addressId": "a"}
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": raw})).get_cart("a")
+    assert cart.success and cart.items == [] and cart.error is None
+
+
+@pytest.mark.asyncio
+async def test_in_app_payment_methods_is_pay_on_delivery_only():
+    options = {"cod": {"available": True, "id": "COD", "displayName": "Pay on delivery"},
+               "allMethods": [{"id": "gpay://upi/", "groupName": "UPI", "enabled": True}]}
+    svc = SwiggyOrderService(client=_client_with({"get_payment_options": options}))
+    assert await svc.in_app_payment_methods("a") == ["COD"]
+    svc = SwiggyOrderService(client=_client_with({"get_payment_options": {"cod": {"available": False}}}))
+    assert await svc.in_app_payment_methods("a") == []
+
+
+def test_cart_route_adds_pay_on_delivery_for_checkout(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    svc = SwiggyOrderService(client=_client_with({"get_food_cart": CART_REAL_SHAPE,
+                                                  "get_payment_options": {"cod": {"available": True, "id": "COD"}}}))
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: svc)
+    body = client.get("/api/swiggy/cart", params={"address_id": "addr_1"}).json()
+    assert body["available_payment_methods"] == ["COD"] and body["taxes"] == 47
