@@ -86,6 +86,48 @@ export interface CartItemInput {
   quantity: number;
   /** Dish name — lets the server fill a dish's required choices (e.g. "Choice of Rice"). */
   name?: string;
+  /** Picked in the choice sheet; omitted for plain dishes. */
+  choice?: ItemChoice;
+}
+
+/** A dish's picked variants/addons, as update_food_cart takes them. */
+export interface ItemChoice {
+  /** Which cart field the variations go in — the one the dish's menu row uses. */
+  variantFormat: 'variants_v2' | 'variants' | null;
+  variants: { group_id: string; variation_id: string }[];
+  addons: { group_id: string; choice_id: string }[];
+  /** Names shown under the dish, e.g. ["Medium", "Extra Cheese"]. */
+  labels: string[];
+  /** Estimated price of one, with these choices (the cart has the real total). */
+  unitPrice?: number | null;
+}
+
+export interface OptionChoice {
+  id: string;
+  name: string;
+  price?: number | null;
+  isDefault: boolean;
+}
+
+export interface OptionGroup {
+  id: string;
+  name: string;
+  min: number;
+  /** null = no limit. */
+  max: number | null;
+  choices: OptionChoice[];
+  /** Size-specific addon group: shown only with this variation picked. */
+  onlyWithVariation?: string | null;
+  /** Generic addon group replaced by a size-specific one for these variations. */
+  hiddenWithVariations: string[];
+}
+
+export interface ItemOptions {
+  success: boolean;
+  variantFormat: 'variants_v2' | 'variants' | null;
+  variantGroups: OptionGroup[];
+  addonGroups: OptionGroup[];
+  error?: string;
 }
 
 export interface MenuItem {
@@ -96,6 +138,9 @@ export interface MenuItem {
   isVeg?: boolean | null;
   rating?: number | null;
   description?: string | null;
+  /** Has sizes/options or extras: adding it opens the choice sheet. */
+  hasVariants?: boolean | null;
+  hasAddons?: boolean | null;
 }
 
 export interface MenuCategory {
@@ -189,7 +234,13 @@ export async function updateCartItems(
       restaurant_id: restaurantId,
       restaurant_name: restaurantName,
       address_id: addressId,
-      items: items.map((i) => ({ menu_item_id: i.menuItemId, quantity: i.quantity, name: i.name })),
+      items: items.map((i) => ({
+        menu_item_id: i.menuItemId,
+        quantity: i.quantity,
+        name: i.name,
+        ...(i.choice?.variants.length ? { [i.choice.variantFormat === 'variants' ? 'variants' : 'variants_v2']: i.choice.variants } : {}),
+        ...(i.choice?.addons.length ? { addons: i.choice.addons } : {}),
+      })),
     }),
   });
   const data = await res.json();
@@ -214,6 +265,45 @@ export async function updateCart(
   restaurantName?: string,
 ): Promise<CartState> {
   return updateCartItems(restaurantId, addressId, [{ menuItemId, quantity }], restaurantName);
+}
+
+function mapGroup(g: Record<string, unknown>): OptionGroup {
+  return {
+    id: String(g.id),
+    name: String(g.name ?? ''),
+    min: Number(g.min ?? 0),
+    max: g.max == null ? null : Number(g.max),
+    choices: ((g.choices as Record<string, unknown>[]) || []).map((c) => ({
+      id: String(c.id),
+      name: String(c.name ?? ''),
+      price: c.price as number | null,
+      isDefault: !!c.is_default,
+    })),
+    onlyWithVariation: (g.only_with_variation as string | null) ?? null,
+    hiddenWithVariations: (g.hidden_with_variations as string[]) || [],
+  };
+}
+
+/** A dish's sizes, required choices and extras, for the choice sheet. Never throws. */
+export async function getItemOptions(restaurantId: string, itemId: string, addressId: string, name: string): Promise<ItemOptions> {
+  const failed: ItemOptions = { success: false, variantFormat: null, variantGroups: [], addonGroups: [], error: "Couldn't load the options for this dish." };
+  try {
+    const params = new URLSearchParams({ address_id: addressId, name });
+    const res = await fetch(
+      `${API_BASE_URL}/swiggy/restaurant/${encodeURIComponent(restaurantId)}/items/${encodeURIComponent(itemId)}/options?${params.toString()}`,
+      { headers: await getHeaders() },
+    );
+    const data = await res.json();
+    if (!data.success) return { ...failed, error: data.error || failed.error };
+    return {
+      success: true,
+      variantFormat: data.variant_format ?? null,
+      variantGroups: (data.variant_groups || []).map(mapGroup),
+      addonGroups: (data.addon_groups || []).map(mapGroup),
+    };
+  } catch {
+    return failed;
+  }
 }
 
 export async function getRestaurantMenu(restaurantId: string, addressId: string): Promise<RestaurantMenu> {
@@ -248,6 +338,8 @@ export async function getRestaurantMenu(restaurantId: string, addressId: string)
       isVeg: i.is_veg,
       rating: i.rating,
       description: i.description,
+      hasVariants: i.has_variants,
+      hasAddons: i.has_addons,
     })),
   }));
   return {

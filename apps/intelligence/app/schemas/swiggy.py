@@ -35,6 +35,9 @@ class SwiggyMenuItem(BaseModel):
     restaurant_id: Optional[str] = None
     restaurant_name: Optional[str] = None
     eta_min: Optional[int] = None
+    # Customizable dishes: the app opens a choice picker before adding.
+    has_variants: Optional[bool] = None
+    has_addons: Optional[bool] = None
 
 
 # --- Requests ---
@@ -172,9 +175,42 @@ class CartItemInput(BaseModel):
     quantity: int = 1
     # Dish name: lets the server look up required addon groups with search_menu.
     name: Optional[str] = None
-    variants: Optional[dict] = None
+    # Swiggy takes an item's variants in the format its menu row uses, never both:
+    # legacy `variants` or `variantsV2`, each [{"group_id": ..., "variation_id": ...}].
+    variants: list[dict] = Field(default_factory=list)
+    variants_v2: list[dict] = Field(default_factory=list)
     # Swiggy addon choices: [{"group_id": ..., "choice_id": ...}].
     addons: list[dict] = Field(default_factory=list)
+
+
+class OptionChoice(BaseModel):
+    id: str
+    name: str
+    price: Optional[float] = None
+    is_default: bool = False
+
+
+class OptionGroup(BaseModel):
+    id: str
+    name: str
+    min: int = 0
+    # None = no upper limit.
+    max: Optional[int] = None
+    choices: list[OptionChoice] = Field(default_factory=list)
+    # Size-specific addon groups ("Extra Cheese Medium"): shown only with this
+    # variation picked, while the generic sibling is hidden for it.
+    only_with_variation: Optional[str] = None
+    hidden_with_variations: list[str] = Field(default_factory=list)
+
+
+class ItemOptionsResponse(BaseModel):
+    success: bool
+    item_id: Optional[str] = None
+    # "variants_v2" | "variants": which cart field the picked variations go in.
+    variant_format: Optional[str] = None
+    variant_groups: list[OptionGroup] = Field(default_factory=list)
+    addon_groups: list[OptionGroup] = Field(default_factory=list)
+    error: Optional[str] = None
 
 
 class UpdateCartRequest(BaseModel):

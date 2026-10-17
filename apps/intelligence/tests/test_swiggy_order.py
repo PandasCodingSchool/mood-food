@@ -518,3 +518,97 @@ async def test_confirm_order():
     res = await SwiggyOrderService(client=client).confirm_order("o1", "a", 12.9, 77.6, "c1")
     assert res.result == "success" and res.order_id == "o1"
     assert client.call_tool.call_args.args[1] == {"orderId": "o1", "addressId": "a", "lat": 12.9, "lng": 77.6, "cartId": "c1"}
+
+
+# search_menu row shape from the live server (Oct 2026): variantsV2 sizes plus
+# addon groups, some only valid for one size ("… Medium").
+PIZZA_ROW = {
+    "name": "Margherita", "menu_item_id": "p1", "hasVariants": True, "hasAddons": True,
+    "variantsV2": [
+        {"groupId": "g_crust", "name": "Choose your Crust", "variations": [{"name": "Classic", "id": "v_classic", "inStock": 1, "default": 1}]},
+        {"groupId": "g_size", "name": "Choose Your Size", "variations": [
+            {"name": "Medium", "price": 428, "id": "v_med", "inStock": 1, "default": 1},
+            {"name": "Personal", "price": 228, "id": "v_pers", "inStock": 1},
+            {"name": "Large", "price": 628, "id": "v_large", "inStock": 0}]},
+    ],
+    "addons": [
+        {"groupId": "a_cheese_med", "groupName": "Extra Cheese Medium", "choices": [{"id": "c1", "name": "Cheese", "price": 85}], "maxAddons": 1},
+        {"groupId": "a_meal", "groupName": "Make it a Meal", "choices": [{"id": "c2", "name": "Pepsi", "price": 57}], "maxAddons": -1},
+        {"groupId": "a_cheese", "groupName": "Extra Cheese", "choices": [{"id": "c3", "name": "Cheese", "price": 65}], "maxAddons": 1},
+    ],
+}
+
+
+def test_item_options_shapes_variants_and_ties_size_specific_addons():
+    from app.services.swiggy_order import _item_options
+
+    o = _item_options(PIZZA_ROW)
+    assert o.variant_format == "variants_v2"
+    size = o.variant_groups[1]
+    assert (size.min, size.max) == (1, 1)
+    assert [(c.id, c.price, c.is_default) for c in size.choices] == [("v_med", 428, True), ("v_pers", 228, False)]  # out of stock dropped
+    groups = {g.id: g for g in o.addon_groups}
+    assert groups["a_cheese_med"].only_with_variation == "v_med"
+    assert groups["a_cheese"].hidden_with_variations == ["v_med"]
+    assert groups["a_meal"].max is None and groups["a_meal"].only_with_variation is None
+
+
+def test_item_options_required_addon_groups_keep_their_minimum():
+    from app.services.swiggy_order import _item_options
+
+    o = _item_options(SEARCH_THALI["items"][0])
+    assert o.variant_format is None and o.variant_groups == []
+    assert [(g.id, g.min, g.max) for g in o.addon_groups] == [("g_staple", 1, 1), ("g_extras", 0, 4)]
+
+
+def test_item_options_route(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    client_mock = _client_with({"search_menu": {"items": [PIZZA_ROW]}})
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: SwiggyOrderService(client=client_mock))
+    res = client.get("/api/swiggy/restaurant/r1/items/p1/options", params={"address_id": "a", "name": "Margherita"})
+    body = res.json()
+    assert body["success"] and body["variant_format"] == "variants_v2"
+    client_mock.call_tool.assert_called_once_with(
+        "search_menu", {"query": "Margherita", "addressId": "a", "restaurantIdOfAddedItem": "r1"}
+    )
+
+
+def test_item_options_unknown_item_is_a_soft_error(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    client_mock = _client_with({"search_menu": {"items": []}})
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: SwiggyOrderService(client=client_mock))
+    body = client.get("/api/swiggy/restaurant/r1/items/zz/options", params={"address_id": "a", "name": "X"}).json()
+    assert body["success"] is False and body["error"]
+
+
+def test_update_cart_route_sends_picked_variants_and_addons(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    sent = {}
+
+    class FakeService:
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None, item_names=None):
+            sent["items"] = cart_items
+            return CartResponse(success=True)
+
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
+    client.post("/api/swiggy/cart", json={"restaurant_id": "r", "address_id": "a", "items": [{
+        "menu_item_id": "p1", "quantity": 1, "name": "Margherita",
+        "variants_v2": [{"group_id": "g_size", "variation_id": "v_med"}],
+        "addons": [{"group_id": "a_cheese_med", "choice_id": "c1"}],
+    }]})
+    assert sent["items"] == [{
+        "menu_item_id": "p1", "quantity": 1,
+        "variantsV2": [{"group_id": "g_size", "variation_id": "v_med"}],
+        "addons": [{"group_id": "a_cheese_med", "choice_id": "c1"}],
+    }]
+
+
+def test_menu_items_carry_customizable_flags():
+    from app.services.swiggy_discovery import normalize_menu_item
+
+    item = normalize_menu_item({"id": "1", "name": "Thali", "price": 337, "hasVariants": False, "hasAddons": True})
+    assert (item.has_variants, item.has_addons) == (False, True)
+    assert normalize_menu_item({"id": "2", "name": "Naan", "price": 40}).has_addons is None

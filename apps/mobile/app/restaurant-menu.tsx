@@ -10,8 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { palette, space } from '@moodfood/tokens';
 import { Button, DishImage, Icon, IconButton, Surface, Text, useTheme } from '@moodfood/ui';
 import { ErrorBlock, LoadingBlock, PoweredBySwiggy } from '../src/components/v2';
+import ItemOptionsSheet from '../src/components/ItemOptionsSheet';
 import MenuChat from '../src/components/MenuChat';
-import { flushCart, getRestaurantMenu, updateCartItems, type MenuItem, type RestaurantMenu } from '../src/services/swiggyOrder';
+import { flushCart, getRestaurantMenu, updateCartItems, type ItemChoice, type MenuItem, type RestaurantMenu } from '../src/services/swiggyOrder';
 
 const SYNC_DEBOUNCE_MS = 400;
 
@@ -32,6 +33,11 @@ export default function RestaurantMenuScreen() {
   const [menu, setMenu] = useState<RestaurantMenu | null>(null);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
+  // Picked variants/addons per customizable dish (one set per dish). A ref too,
+  // so a push always sends the latest picks.
+  const [choices, setChoices] = useState<Record<string, ItemChoice>>({});
+  const choicesRef = useRef<Record<string, ItemChoice>>({});
+  const [picking, setPicking] = useState<string | null>(null);
   const [view, setView] = useState<'chat' | 'menu'>(params.addInitial === '1' ? 'menu' : 'chat');
   const [section, setSection] = useState(0);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,7 +68,7 @@ export default function RestaurantMenuScreen() {
     (next: Record<string, number>) => {
       const items = Object.entries(next)
         .filter(([, q]) => q > 0)
-        .map(([menuItemId, quantity]) => ({ menuItemId, quantity, name: allItems[menuItemId]?.name }));
+        .map(([menuItemId, quantity]) => ({ menuItemId, quantity, name: allItems[menuItemId]?.name, choice: choicesRef.current[menuItemId] }));
       const push = () =>
         items.length ? updateCartItems(params.restaurantId, params.addressId, items, params.restaurantName).then(() => undefined) : flushCart();
       syncChain.current = syncChain.current.then(push, push).catch(() => undefined);
@@ -92,6 +98,27 @@ export default function RestaurantMenuScreen() {
     });
   }, []);
 
+  // Customizable dishes open the choice sheet the first time; after that, + repeats the same picks.
+  const addItem = useCallback(
+    (id: string) => {
+      const it = allItems[id];
+      if (it && (it.hasVariants || it.hasAddons) && !choicesRef.current[id]) setPicking(id);
+      else changeQty(id, 1);
+    },
+    [allItems, changeQty],
+  );
+
+  const confirmChoice = (choice: ItemChoice) => {
+    const id = picking;
+    setPicking(null);
+    if (!id) return;
+    choicesRef.current = { ...choicesRef.current, [id]: choice };
+    setChoices(choicesRef.current);
+    // A new dish goes in; changed picks on one already in the cart re-push it.
+    if (cart[id]) syncCart(cart);
+    else changeQty(id, 1);
+  };
+
   // Sync after commit (not inside the state updater, which may run twice).
   const firstRender = useRef(true);
   useEffect(() => {
@@ -105,7 +132,11 @@ export default function RestaurantMenuScreen() {
   useEffect(() => {
     load().then((m) => {
       const id = params.initialMenuItemId;
-      if (params.addInitial === '1' && id && m.categories.some((c) => c.items.some((i) => i.id === id))) changeQty(id, 1);
+      const it = id ? m.categories.flatMap((c) => c.items).find((i) => i.id === id) : undefined;
+      if (params.addInitial === '1' && it) {
+        if (it.hasVariants || it.hasAddons) setPicking(it.id);
+        else changeQty(it.id, 1);
+      }
     });
     return () => {
       if (syncTimer.current) clearTimeout(syncTimer.current);
@@ -138,7 +169,7 @@ export default function RestaurantMenuScreen() {
     return pick ? [{ title: 'Your match', note: 'Picked for your mood', items: [pick] }, ...cats.map((c) => ({ ...c, note: '' }))] : cats.map((c) => ({ ...c, note: '' }));
   }, [menu, allItems, params.initialMenuItemId]);
   const count = Object.values(cart).reduce((a, b) => a + b, 0);
-  const total = Object.entries(cart).reduce((a, [id, q]) => a + (allItems[id]?.price || 0) * q, 0);
+  const total = Object.entries(cart).reduce((a, [id, q]) => a + (choices[id]?.unitPrice ?? allItems[id]?.price ?? 0) * q, 0);
 
   const toCheckout = async () => {
     if (openingCheckout) return;
@@ -246,7 +277,7 @@ export default function RestaurantMenuScreen() {
               addressId={params.addressId}
               dishContext={{ dishId: params.dishId, dishName: params.dishName, why: params.why }}
               getItem={(id) => allItems[id]}
-              onSuggestedItemAdd={(id) => changeQty(id, 1)}
+              onSuggestedItemAdd={addItem}
               onExploreMenu={() => setView('menu')}
               bottomInset={count > 0 && !chatTyping ? 128 : 0}
               keyboardOpen={chatTyping}
@@ -260,7 +291,15 @@ export default function RestaurantMenuScreen() {
                 {s.note ? <Text variant="micro12" tone="ink2">{s.note}</Text> : null}
               </View>
               {s.items.map((it) => (
-                <ItemRow key={it.id} item={it} qty={cart[it.id] || 0} highlight={it.id === params.initialMenuItemId} onChange={(d) => changeQty(it.id, d)} />
+                <ItemRow
+                  key={it.id}
+                  item={it}
+                  qty={cart[it.id] || 0}
+                  choice={choices[it.id]}
+                  highlight={it.id === params.initialMenuItemId}
+                  onChange={(d) => (d > 0 && !cart[it.id] ? addItem(it.id) : changeQty(it.id, d))}
+                  onEditChoice={() => setPicking(it.id)}
+                />
               ))}
             </View>
           ))
@@ -268,6 +307,14 @@ export default function RestaurantMenuScreen() {
         {chatTyping ? null : <PoweredBySwiggy style={{ paddingTop: 28 }} />}
       </ScrollView>
       {cartBar}
+      <ItemOptionsSheet
+        item={picking ? allItems[picking] ?? null : null}
+        restaurantId={params.restaurantId}
+        addressId={params.addressId}
+        initial={picking ? choices[picking] : undefined}
+        onClose={() => setPicking(null)}
+        onConfirm={confirmChoice}
+      />
     </View>
   );
 }
@@ -296,7 +343,14 @@ function Tab({ label, on, onPress, icon }: { label: string; on: boolean; onPress
   );
 }
 
-function ItemRow({ item, qty, highlight, onChange }: { item: MenuItem; qty: number; highlight: boolean; onChange: (d: number) => void }) {
+function ItemRow({ item, qty, choice, highlight, onChange, onEditChoice }: {
+  item: MenuItem;
+  qty: number;
+  choice?: ItemChoice;
+  highlight: boolean;
+  onChange: (d: number) => void;
+  onEditChoice: () => void;
+}) {
   const { colors } = useTheme();
   const vegColor = item.isVeg ? palette.veg : palette.nonVeg;
   return (
@@ -313,6 +367,14 @@ function ItemRow({ item, qty, highlight, onChange }: { item: MenuItem; qty: numb
         <Text variant="bodyStrong15" style={{ fontSize: 15.5, marginTop: 6 }}>{item.name}</Text>
         {item.price != null ? <Text variant="body14" style={{ fontSize: 14, marginTop: 4 }}>{`₹${Math.round(item.price)}`}</Text> : null}
         {item.description ? <Text variant="caption12" tone="ink2" numberOfLines={3} style={{ marginTop: 6 }}>{item.description}</Text> : null}
+        {qty > 0 && choice ? (
+          <Pressable onPress={onEditChoice} accessibilityRole="button" accessibilityLabel={`Change choices for ${item.name}`} style={{ marginTop: 8 }}>
+            {choice.labels.length ? <Text variant="caption12" numberOfLines={2}>{choice.labels.join(', ')}</Text> : null}
+            <Text variant="micro12" tone="accText" style={{ marginTop: 2 }}>Change</Text>
+          </Pressable>
+        ) : !qty && (item.hasVariants || item.hasAddons) ? (
+          <Text variant="micro12" tone="ink2" style={{ marginTop: 6 }}>Customisable</Text>
+        ) : null}
       </View>
       <View style={{ width: 104, paddingBottom: 14 }}>
         <DishImage uri={item.imageUrl} height={96} radius={16} stripe={7} />

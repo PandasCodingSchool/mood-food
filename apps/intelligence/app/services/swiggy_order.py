@@ -30,6 +30,9 @@ from app.schemas.swiggy import (
     ConfirmOrderResponse,
     Coupon,
     CouponsResponse,
+    ItemOptionsResponse,
+    OptionChoice,
+    OptionGroup,
     OrderDetailsResponse,
     OrderSummary,
     OrdersResponse,
@@ -105,10 +108,70 @@ def _default_addons(row: dict) -> list[dict]:
         gid = _first(group, "groupId", "group_id")
         if need <= 0 or gid is None:
             continue
-        choices = [c for c in group.get("choices") or [] if isinstance(c, dict) and c.get("inStock", 1) not in (0, "0", False)]
+        choices = [c for c in group.get("choices") or [] if isinstance(c, dict) and _in_stock(c)]
         choices.sort(key=lambda c: _to_float(c.get("price")) or 0)  # stable: menu order among equals
         picks += [{"group_id": str(gid), "choice_id": str(c["id"])} for c in choices[:need] if c.get("id") is not None]
     return picks
+
+
+def _in_stock(choice: dict) -> bool:
+    return choice.get("inStock", 1) not in (0, "0", False)
+
+
+def _option_group(raw: dict, choices_key: str, required: bool) -> Optional[OptionGroup]:
+    gid = _first(raw, "groupId", "group_id")
+    if gid is None:
+        return None
+    choices = [
+        OptionChoice(id=str(c["id"]), name=str(c.get("name") or ""), price=_to_float(c.get("price")),
+                     is_default=bool(c.get("default")))
+        for c in raw.get(choices_key) or [] if isinstance(c, dict) and c.get("id") is not None and _in_stock(c)
+    ]
+    if not choices:
+        return None
+    if required:  # a variant group: exactly one
+        return OptionGroup(id=str(gid), name=str(_first(raw, "name", "groupName", default="")), min=1, max=1, choices=choices)
+    upper = int(_to_float(raw.get("maxAddons")) or 0)
+    return OptionGroup(
+        id=str(gid), name=str(_first(raw, "groupName", "name", default="")),
+        min=int(_to_float(raw.get("minAddons")) or 0),
+        max=upper if upper > 0 else None,  # 0 / -1 = unlimited
+        choices=choices,
+    )
+
+
+def _item_options(row: dict) -> ItemOptionsResponse:
+    """A search_menu row's choices, shaped for the app's picker.
+
+    An item carries EITHER legacy `variations` OR `variantsV2` (each a list of
+    groups with `variations`), plus `addons` groups with min/maxAddons.
+    search_menu lists every addon group for every size; Swiggy only says which
+    apply to the chosen size once the item is in the cart, so size-suffixed
+    groups ("Extra Cheese Medium") are tied to that size by name.
+    """
+    v2 = row.get("variantsV2")
+    legacy = row.get("variations")
+    raw_variants = v2 if isinstance(v2, list) and v2 else legacy if isinstance(legacy, list) else []
+    variant_groups = [g for g in (_option_group(r, "variations", True) for r in raw_variants if isinstance(r, dict)) if g]
+    addon_groups = [g for g in (_option_group(r, "choices", False) for r in row.get("addons") or [] if isinstance(r, dict)) if g]
+    by_name = {g.name.strip().lower(): g for g in addon_groups}
+    variations = [(c.id, c.name.strip().lower()) for g in variant_groups for c in g.choices if c.name.strip()]
+    for g in addon_groups:
+        name = g.name.strip().lower()
+        for vid, vname in variations:
+            if name.endswith(" " + vname):
+                g.only_with_variation = vid
+                generic = by_name.get(name[: -len(vname)].strip())
+                if generic is not None and vid not in generic.hidden_with_variations:
+                    generic.hidden_with_variations.append(vid)
+                break
+    return ItemOptionsResponse(
+        success=True,
+        item_id=str(_first(row, "menu_item_id", "id", default="")) or None,
+        variant_format=("variants_v2" if raw_variants is v2 else "variants") if variant_groups else None,
+        variant_groups=variant_groups,
+        addon_groups=addon_groups,
+    )
 
 
 def _payment_option_groups(options: Any) -> list[str]:
@@ -463,10 +526,7 @@ class SwiggyOrderService:
             if item.get("addons") or not name:
                 filled.append(item)
                 continue
-            raw = await self.client.call_tool(
-                "search_menu", {"query": name, "addressId": address_id, "restaurantIdOfAddedItem": restaurant_id}
-            )
-            row = next((d for d in _walk_dicts(raw) if str(_first(d, "menu_item_id", "id", default="")) == iid), None)
+            row = await self._menu_row(restaurant_id, address_id, iid, name)
             addons = _default_addons(row) if row else []
             if not addons:
                 logger.info("update_cart: no required addons found for item %s", iid)
@@ -474,6 +534,20 @@ class SwiggyOrderService:
             changed = changed or bool(addons)
             filled.append({**item, "addons": addons} if addons else item)
         return filled if changed else None
+
+    async def _menu_row(self, restaurant_id: str, address_id: str, item_id: str, name: str) -> Optional[dict]:
+        """The item's full search_menu row (with its variants/addons); search_menu scoped to the restaurant."""
+        raw = await self.client.call_tool(
+            "search_menu", {"query": name, "addressId": address_id, "restaurantIdOfAddedItem": restaurant_id}
+        )
+        return next((d for d in _walk_dicts(raw) if str(_first(d, "menu_item_id", "id", default="")) == item_id), None)
+
+    async def item_options(self, restaurant_id: str, address_id: str, item_id: str, name: str) -> ItemOptionsResponse:
+        """Variant/addon groups for one dish, for the app's choice picker."""
+        row = await self._menu_row(restaurant_id, address_id, item_id, name)
+        if row is None:
+            return ItemOptionsResponse(success=False, item_id=item_id, error="Couldn't load the options for this dish.")
+        return _item_options(row)
 
     async def flush_cart(self) -> None:
         await self.client.call_tool("flush_food_cart", {})

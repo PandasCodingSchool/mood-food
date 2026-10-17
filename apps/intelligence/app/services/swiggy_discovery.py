@@ -134,7 +134,13 @@ def normalize_menu_item(raw: dict) -> Optional[SwiggyMenuItem]:
         eta_min=_parse_eta_int(
             _first(raw, "eta_min", "deliveryTimeMinutes", "deliveryTime", "sla", "deliveryTimeRange")
         ),
+        has_variants=_flag(_first(raw, "hasVariants", "has_variants")),
+        has_addons=_flag(_first(raw, "hasAddons", "has_addons")),
     )
+
+
+def _flag(v: Any) -> Optional[bool]:
+    return None if v is None else v not in (False, 0, "0", "false")
 
 
 def _extract_menu_items(raw: Any, restaurant_id: Optional[str] = None) -> list[SwiggyMenuItem]:
