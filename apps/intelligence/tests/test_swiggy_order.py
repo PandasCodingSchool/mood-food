@@ -612,3 +612,104 @@ def test_menu_items_carry_customizable_flags():
     item = normalize_menu_item({"id": "1", "name": "Thali", "price": 337, "hasVariants": False, "hasAddons": True})
     assert (item.has_variants, item.has_addons) == (False, True)
     assert normalize_menu_item({"id": "2", "name": "Naan", "price": 40}).has_addons is None
+
+
+# fetch_food_coupons live shape (Oct 2026: top level, no envelope); coupon fields per
+# the builder docs' schema — no live store returned a non-empty section to copy.
+COUPONS_LIVE = {
+    "status_message": "done successfully",
+    "coupon_sections": [
+        {"title": "Best coupon", "type": "BEST", "coupons": [
+            {"id": "FLAT75", "applicable": False, "title": "Flat ₹75 off", "subtitle": "Add ₹120 more to avail",
+             "description": "On orders above ₹499", "ribbon_text": "SAVE ₹75",
+             "terms_and_conditions": {"title": "T&C", "bullet_texts": ["Valid once per user", "Cash on delivery"]}},
+            {"id": "TRYNEW", "applicable": True, "title": "50% off up to ₹100", "description": "New users"},
+        ]},
+    ],
+    "summary": {"total_coupons": 2, "applicable_coupons": 1, "sections_count": 1, "filter_applied": "COD only"},
+}
+
+
+@pytest.mark.asyncio
+async def test_fetch_coupons_reads_live_coupon_sections():
+    result = await SwiggyOrderService(client=_client_with({"fetch_food_coupons": COUPONS_LIVE})).fetch_coupons("r", "a")
+    assert [c.coupon_code for c in result.coupons] == ["TRYNEW", "FLAT75"]  # applicable first
+    flat = result.coupons[1]
+    assert (flat.title, flat.subtitle, flat.ribbon_text, flat.applicable, flat.section) == (
+        "Flat ₹75 off", "Add ₹120 more to avail", "SAVE ₹75", False, "Best coupon")
+    assert flat.terms == ["Valid once per user", "Cash on delivery"]
+    assert result.filter_applied == "COD only"
+
+
+@pytest.mark.asyncio
+async def test_fetch_coupons_empty_live_reply():
+    raw = {"status_message": "done successfully", "coupon_sections": [],
+           "summary": {"total_coupons": 0, "applicable_coupons": 0, "sections_count": 0, "filter_applied": "COD only"}}
+    result = await SwiggyOrderService(client=_client_with({"fetch_food_coupons": raw})).fetch_coupons("r", "a")
+    assert result.success and result.coupons == [] and result.filter_applied == "COD only"
+
+
+APPLY_OK = {"statusCode": 0, "statusMessage": "CART", "data": {
+    "cart_id": "c1", "pricing": {"item_total": 428, "delivery_fee": 0, "taxes": 81, "coupon_discount": 75, "to_pay": 434},
+    "offers": {"coupon_applied": "FLAT75", "coupon_discount": 75}, "item_count": 1}}
+CART_AFTER_APPLY = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": {
+    "items": [{"menu_item_id": 1, "name": "Margherita", "quantity": 1, "final_price": 428}],
+    "pricing": {"item_total": 428, "delivery_charge": 0, "delivery_charge_strikeoff": 51, "taxes_and_charges": 81, "to_pay": 434},
+    "offers": {"coupon_applied": "FLAT75", "coupon_discount": 75, "free_delivery_applied": True}}}
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_returns_the_full_cart_with_the_discount():
+    client = _client_with({"apply_food_coupon": APPLY_OK, "get_food_cart": CART_AFTER_APPLY})
+    result = await SwiggyOrderService(client=client).apply_coupon("FLAT75", "a")
+    assert result.success
+    cart = result.cart
+    assert [i.name for i in cart.items] == ["Margherita"]
+    assert (cart.coupon_applied, cart.coupon_discount, cart.coupon_code, cart.total) == (True, 75, "FLAT75", 434)
+    assert (cart.free_delivery, cart.delivery_strikeoff, cart.delivery_charges) == (True, 51, 0)
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_without_a_discount_is_not_applied():
+    raw = {"statusCode": 1, "statusMessage": "Add items worth ₹120 more to apply this coupon",
+           "data": {"offers": {"coupon_applied": "FLAT75", "coupon_discount": 0}}}
+    client = _client_with({"apply_food_coupon": raw})
+    result = await SwiggyOrderService(client=client).apply_coupon("FLAT75", "a")
+    assert result.success is False and result.error == "Add items worth ₹120 more to apply this coupon"
+    assert [c.args[0] for c in client.call_tool.call_args_list] == ["apply_food_coupon"]
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_reads_the_documented_error_envelope():
+    raw = {"success": False, "error": {"message": "Invalid coupon code"}}
+    result = await SwiggyOrderService(client=_client_with({"apply_food_coupon": raw})).apply_coupon("NOPE", "a")
+    assert result.success is False and result.error == "Invalid coupon code"
+
+
+@pytest.mark.asyncio
+async def test_cart_exposes_free_delivery_and_suggested_coupon():
+    raw = {**CART_AFTER_APPLY, "data": {**CART_AFTER_APPLY["data"], "offers": {
+        "coupon_applied": "TRYNEW", "coupon_discount": 0, "free_delivery_applied": True}}}
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": raw})).get_cart("a")
+    assert cart.coupon_applied is False and cart.coupon_code is None
+    assert cart.suggested_coupon == "TRYNEW"
+    assert cart.free_delivery and cart.delivery_strikeoff == 51
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_shows_swiggy_reason_for_an_unknown_code():
+    # Live (Oct 2026): an unknown code is an MCP tool error with report-id boilerplate.
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=SwiggyMCPError(
+        "Swiggy tool error: Coupon does not exist\nReport ID: ERR-X\nSomething went wrong. If this persists, quote report ID"
+    ))
+    result = await SwiggyOrderService(client=client).apply_coupon("NOPE", "a")
+    assert result.success is False and result.error == "Coupon does not exist"
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_transport_errors_still_raise():
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=SwiggyMCPError("Swiggy transport error: 503", retryable=True))
+    with pytest.raises(SwiggyMCPError):
+        await SwiggyOrderService(client=client).apply_coupon("X", "a")

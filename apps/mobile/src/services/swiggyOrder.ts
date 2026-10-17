@@ -30,6 +30,13 @@ export interface CartState {
   paymentOptions: PaymentOption[];
   couponApplied: boolean;
   couponDiscount?: number | null;
+  /** The applied code (only when it actually took money off). */
+  couponCode?: string | null;
+  /** Swiggy's best coupon for this cart — suggested, not applied yet. */
+  suggestedCoupon?: string | null;
+  /** Delivery fee Swiggy waived (shown struck out). */
+  deliveryStrikeoff?: number | null;
+  freeDelivery?: boolean;
   error?: string;
   addressRequired?: boolean;
 }
@@ -41,6 +48,13 @@ export interface Coupon {
   applicabilityStatus?: string | null;
   paymentMethod?: string | null;
   termsAndConditions?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  /** Swiggy's badge, e.g. "SAVE ₹75". */
+  ribbonText?: string | null;
+  /** false = listed but not valid for this cart yet (e.g. below the minimum order). */
+  applicable?: boolean | null;
+  terms: string[];
 }
 
 export interface PlaceOrderResult {
@@ -198,6 +212,10 @@ function mapCart(data: Record<string, unknown>): CartState {
     })),
     couponApplied: !!data.coupon_applied,
     couponDiscount: data.coupon_discount as number | null,
+    couponCode: data.coupon_code as string | null,
+    suggestedCoupon: data.suggested_coupon as string | null,
+    deliveryStrikeoff: data.delivery_strikeoff as number | null,
+    freeDelivery: !!data.free_delivery,
     error: data.error as string | undefined,
     addressRequired: !!data.address_required,
   };
@@ -431,6 +449,11 @@ export async function fetchCoupons(restaurantId: string, addressId: string): Pro
     applicabilityStatus: c.applicability_status,
     paymentMethod: c.payment_method,
     termsAndConditions: c.terms_and_conditions,
+    title: c.title,
+    subtitle: c.subtitle,
+    ribbonText: c.ribbon_text,
+    applicable: c.applicable,
+    terms: (c.terms as string[]) || [],
   }));
 }
 
@@ -440,9 +463,9 @@ export async function applyCoupon(couponCode: string, addressId: string): Promis
     headers: await getHeaders(),
     body: JSON.stringify({ coupon_code: couponCode, address_id: addressId }),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!data.success) {
-    return { success: false, items: [], availablePaymentMethods: [], paymentOptions: [], couponApplied: false, error: data.error };
+    return { success: false, items: [], availablePaymentMethods: [], paymentOptions: [], couponApplied: false, error: data.error || "Couldn't apply this coupon." };
   }
   return mapCart(data.cart || {});
 }

@@ -257,7 +257,9 @@ def _normalize_cart(raw: Any) -> CartResponse:
         coupon_discount = _to_float(_first(applied_raw, "coupon_discount", "couponDiscount"))
         coupon_applied = coupon_discount is not None and coupon_discount > 0
     else:
-        coupon_discount = _to_float(_first(offers, "coupon_discount", "couponDiscount"))
+        # apply_food_coupon also reports it under pricing.
+        coupon_discount = _to_float(_first(offers, "coupon_discount", "couponDiscount",
+                                           default=_first(pricing, "coupon_discount", "couponDiscount")))
         coupon_applied = bool(applied_raw)
     if isinstance(applied_raw, str):
         # Live shape: coupon_applied is the code; a 0 discount means it is only
@@ -274,10 +276,14 @@ def _normalize_cart(raw: Any) -> CartResponse:
         subtotal=_to_float(_first(pricing, "item_total", "itemTotal", default=_first(data, "subtotal", "sub_total"))),
         # A 0 delivery charge is a real value (free delivery), not "missing".
         delivery_charges=_to_float(_first(
-            pricing, "delivery_charge", "deliveryCharge",
+            pricing, "delivery_charge", "deliveryCharge", "delivery_fee",
             default=_first(data, "deliveryCharges", "delivery_charges", "deliveryFee"),
         )),
-        taxes=_to_float(_first(pricing, "taxes_and_charges", "taxesAndCharges")),
+        delivery_strikeoff=_to_float(_first(pricing, "delivery_charge_strikeoff", "deliveryChargeStrikeoff")),
+        free_delivery=bool(_first(offers, "free_delivery_applied", "freeDeliveryApplied", default=False)),
+        coupon_code=applied_raw if isinstance(applied_raw, str) and applied_raw and coupon_discount and coupon_discount > 0 else None,
+        suggested_coupon=applied_raw if isinstance(applied_raw, str) and applied_raw and not (coupon_discount and coupon_discount > 0) else None,
+        taxes=_to_float(_first(pricing, "taxes_and_charges", "taxesAndCharges", "taxes")),
         total=_to_float(_first(pricing, "to_pay", "toPay", default=_first(data, "total", "grandTotal", "finalTotal"))),
         available_payment_methods=[str(p) for p in payment_methods],
         coupon_applied=coupon_applied or (coupon_discount is not None and coupon_discount > 0),
@@ -360,18 +366,68 @@ def _normalize_placed(raw: Any) -> PlaceOrderResponse:
     )
 
 
-def _normalize_coupon(raw: dict) -> Optional[Coupon]:
-    code = _first(raw, "couponCode", "coupon_code", "code")
+def _normalize_coupon(raw: dict, section: Optional[str] = None) -> Optional[Coupon]:
+    # Live cards carry the code as `id`; older/doc shapes as couponCode.
+    code = _first(raw, "couponCode", "coupon_code", "code", "id")
     if code is None:
         return None
+    terms_raw = _first(raw, "termsAndConditions", "terms_and_conditions")
+    terms: list[str] = []
+    if isinstance(terms_raw, dict):  # live: {title, bullet_texts: [...]}
+        terms = [str(t) for t in terms_raw.get("bullet_texts") or [] if t]
+        terms_raw = " ".join(terms) or None
+    applicable = raw.get("applicable")
     return Coupon(
         coupon_code=str(code),
-        discount=_first(raw, "discount"),
-        description=_first(raw, "description"),
+        discount=_str_or_none(_first(raw, "discount")),
+        description=_str_or_none(_first(raw, "description")),
         applicability_status=_first(raw, "applicabilityStatus", "applicability_status"),
         payment_method=_first(raw, "paymentMethod", "payment_method"),
-        terms_and_conditions=_first(raw, "termsAndConditions", "terms_and_conditions"),
+        terms_and_conditions=_str_or_none(terms_raw),
+        title=_str_or_none(raw.get("title")),
+        subtitle=_str_or_none(raw.get("subtitle")),
+        ribbon_text=_str_or_none(raw.get("ribbon_text")),
+        applicable=bool(applicable) if applicable is not None else None,
+        terms=terms,
+        section=section,
     )
+
+
+def _coupon_rows(raw: Any) -> list[tuple[dict, Optional[str]]]:
+    """(coupon, section title) from the live coupon_sections shape, else a flat coupons list."""
+    for d in _walk_dicts(raw, into_lists=False):
+        sections = d.get("coupon_sections")
+        if isinstance(sections, list):
+            return [
+                (c, _str_or_none(s.get("title")))
+                for s in sections if isinstance(s, dict)
+                for c in s.get("coupons") or [] if isinstance(c, dict)
+            ]
+    return [(r, None) for r in _as_list(raw, "coupons", "data") if isinstance(r, dict)]
+
+
+_TOOL_ERROR_PREFIX = "Swiggy tool error: "
+
+
+def _tool_error_reason(message: str) -> Optional[str]:
+    """First line of a Swiggy domain error (not transport/auth), without the report-id boilerplate."""
+    if not message.startswith(_TOOL_ERROR_PREFIX):
+        return None
+    first = message[len(_TOOL_ERROR_PREFIX):].strip().splitlines()
+    return first[0].strip() if first and first[0].strip() else None
+
+
+def _coupon_refusal(raw: Any) -> str:
+    """Swiggy's reason a coupon didn't apply, in a form we can show."""
+    if isinstance(raw, dict):
+        err = raw.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+        for d in _walk_dicts(raw, into_lists=False):
+            msg = _first(d, "titleMessage", "statusMessage", "message")
+            if isinstance(msg, str) and msg.strip() and msg.strip().upper() not in ("CART", "OK", "SUCCESS", "DONE SUCCESSFULLY"):
+                return msg.strip()
+    return "This coupon can't be applied to your cart."
 
 
 def _is_cod_eligible(coupon: Coupon) -> bool:
@@ -441,22 +497,43 @@ class SwiggyOrderService:
         if coupon_code:
             args["couponCode"] = coupon_code
         raw = await self.client.call_tool("fetch_food_coupons", args)
-        rows = _as_list(raw, "coupons", "data")
-        coupons = [c for c in (_normalize_coupon(r) for r in rows) if c is not None]
+        coupons = [c for c in (_normalize_coupon(r, s) for r, s in _coupon_rows(raw)) if c is not None]
+        # Swiggy already filters to COD-valid coupons ("filter_applied": "COD only");
+        # this only drops rows that explicitly say otherwise.
         cod_coupons = [c for c in coupons if _is_cod_eligible(c)]
+        cod_coupons.sort(key=lambda c: c.applicable is False)  # usable ones first, Swiggy order kept
+        summary = next((d["summary"] for d in _walk_dicts(raw, into_lists=False) if isinstance(d.get("summary"), dict)), {})
         logger.info(
-            "fetch_coupons restaurant=%s: %d coupons, %d COD-eligible",
-            restaurant_id, len(coupons), len(cod_coupons),
+            "fetch_coupons restaurant=%s: %d coupons, %d COD-eligible, filter=%s",
+            restaurant_id, len(coupons), len(cod_coupons), summary.get("filter_applied"),
         )
-        return CouponsResponse(success=True, coupons=cod_coupons)
+        return CouponsResponse(success=True, coupons=cod_coupons, filter_applied=_str_or_none(summary.get("filter_applied")))
 
     async def apply_coupon(self, coupon_code: str, address_id: str) -> ApplyCouponResponse:
-        raw = await self.client.call_tool(
-            "apply_food_coupon", {"couponCode": coupon_code, "addressId": address_id}
-        )
-        cart = _normalize_cart(raw)
+        try:
+            raw = await self.client.call_tool(
+                "apply_food_coupon", {"couponCode": coupon_code, "addressId": address_id}
+            )
+        except SwiggyMCPError as exc:
+            # A refused code comes back as a tool error: "Coupon does not exist\nReport ID: …".
+            reason = _tool_error_reason(str(exc))
+            if reason is None:
+                raise
+            logger.info("apply_coupon %s: refused (%s)", coupon_code, reason)
+            return ApplyCouponResponse(success=False, error=reason)
+        applied = _normalize_cart(raw)
+        # Swiggy's rule: a coupon is applied only when coupon_discount > 0. A
+        # refusal may still come back as a "success" with no discount.
+        if not applied.coupon_applied:
+            message = _coupon_refusal(raw)
+            logger.info("apply_coupon %s: not applied (%s)", coupon_code, message)
+            return ApplyCouponResponse(success=False, error=message)
+        # The apply reply is a trimmed cart (no lines, other price keys): read the full one.
+        cart = await self.get_cart(address_id)
         if not cart.coupon_applied:
-            logger.info("apply_coupon %s: applied but no discount detected in response", coupon_code)
+            cart.coupon_applied, cart.coupon_discount = True, applied.coupon_discount
+            cart.total = applied.total if applied.total is not None else cart.total
+        cart.coupon_code = cart.coupon_code or coupon_code
         return ApplyCouponResponse(success=True, cart=cart)
 
     async def get_cart(self, address_id: str, restaurant_name: Optional[str] = None) -> CartResponse:

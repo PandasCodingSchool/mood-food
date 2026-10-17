@@ -252,6 +252,13 @@ class CartResponse(BaseModel):
     payment_options: list[PaymentOption] = Field(default_factory=list)
     coupon_applied: bool = False
     coupon_discount: Optional[float] = None
+    # The applied code (only when coupon_discount > 0).
+    coupon_code: Optional[str] = None
+    # Swiggy's best coupon for this cart, suggested but NOT applied (discount 0).
+    suggested_coupon: Optional[str] = None
+    # Delivery fee before Swiggy's own waiver (e.g. 51 when delivery is free).
+    delivery_strikeoff: Optional[float] = None
+    free_delivery: bool = False
     error: Optional[str] = None
     address_required: bool = False
 
@@ -263,11 +270,21 @@ class Coupon(BaseModel):
     applicability_status: Optional[str] = None
     payment_method: Optional[str] = None
     terms_and_conditions: Optional[str] = None
+    # Live coupon cards (coupon_sections[].coupons[]).
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    ribbon_text: Optional[str] = None
+    # False = shown by Swiggy but not valid for this cart yet (e.g. below min order).
+    applicable: Optional[bool] = None
+    terms: list[str] = Field(default_factory=list)
+    section: Optional[str] = None
 
 
 class CouponsResponse(BaseModel):
     success: bool
     coupons: list[Coupon] = Field(default_factory=list)
+    # Swiggy's own filter on the list — "COD only" for the MCP.
+    filter_applied: Optional[str] = None
     error: Optional[str] = None
     address_required: bool = False
 
