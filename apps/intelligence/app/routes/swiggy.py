@@ -19,6 +19,8 @@ from app.schemas.swiggy import (
     ApplyCouponRequest,
     ApplyCouponResponse,
     CartResponse,
+    ConfirmOrderRequest,
+    ConfirmOrderResponse,
     CouponsResponse,
     EnrichAlternativesRequest,
     EnrichAlternativesResponse,
@@ -32,6 +34,8 @@ from app.schemas.swiggy import (
     MenuSearchResponse,
     OrderDetailsResponse,
     OrdersResponse,
+    PaymentStatusRequest,
+    PaymentStatusResponse,
     PlaceOrderRequest,
     PlaceOrderResponse,
     RestaurantMenuResponse,
@@ -250,10 +254,11 @@ async def get_cart(request: Request, address_id: str, restaurant_name: Optional[
     try:
         service = _order_service(request)
         cart = await service.get_cart(address_id, restaurant_name)
-        if cart.items and not cart.available_payment_methods:
-            # Checkout read: the live cart lists no methods; Swiggy's own picker does.
+        if cart.items and not cart.payment_options:
+            # Checkout read: the live cart lists no methods; get_payment_options does.
             try:
-                cart.available_payment_methods = await service.in_app_payment_methods(address_id)
+                cart.payment_options = await service.payment_options(address_id)
+                cart.available_payment_methods = list(dict.fromkeys(o.payment_method for o in cart.payment_options))
             except SwiggyMCPError as exc:
                 logger.warning("get_payment_options failed: %s", exc)
         return cart
@@ -300,13 +305,32 @@ async def flush_cart(request: Request) -> dict:
 async def place_order(req: PlaceOrderRequest, request: Request) -> PlaceOrderResponse:
     try:
         return await _order_service(request).place_order(
-            req.address_id, req.payment_method, req.confirmed
+            req.address_id, req.payment_method, req.confirmed,
+            intent_app=req.intent_app, generate_upi_qr=req.generate_upi_qr,
         )
     except SwiggyAddressRequiredError as exc:
         return PlaceOrderResponse(success=False, error=str(exc), address_required=True)
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("place_order failed: %s", exc)
         return PlaceOrderResponse(success=False, error=str(exc))
+
+
+@router.post("/payment/status", response_model=PaymentStatusResponse)
+async def payment_status(req: PaymentStatusRequest, request: Request) -> PaymentStatusResponse:
+    try:
+        return await _order_service(request).payment_status(req)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("payment_status failed: %s", exc)
+        return PaymentStatusResponse(success=False, error=str(exc))
+
+
+@router.post("/order/confirm", response_model=ConfirmOrderResponse)
+async def confirm_order(req: ConfirmOrderRequest, request: Request) -> ConfirmOrderResponse:
+    try:
+        return await _order_service(request).confirm_order(req.order_id, req.address_id, req.lat, req.lng, req.cart_id)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("confirm_order failed: %s", exc)
+        return ConfirmOrderResponse(success=False, error=str(exc))
 
 
 @router.get("/orders", response_model=OrdersResponse)

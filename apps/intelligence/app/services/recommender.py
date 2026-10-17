@@ -674,6 +674,24 @@ def _apply_diet_filter(ranked: list[dict], restrictions: diet.RulesLike, count: 
     return filtered
 
 
+def _swap_similarity(dish: DishRecord, other: DishRecord) -> float:
+    """How alike two dishes are to eat: protein, cooking style, mood, meal time, spice."""
+    def overlap(x: list[str], y: list[str]) -> float:
+        return len(set(x) & set(y)) / len(set(x) | set(y)) if x and y else 0.0
+
+    score = 0.0
+    if dish.protein and dish.protein == other.protein:
+        score += 3.0
+    if dish.cooking_method and dish.cooking_method == other.cooking_method:
+        score += 1.5
+    if dish.region and dish.region == other.region:
+        score += 0.5
+    if dish.spice_level == other.spice_level:
+        score += 0.5
+    score += 2.0 * overlap(dish.mood_tags, other.mood_tags) + overlap(dish.meal_time, other.meal_time)
+    return score
+
+
 def _build_alternatives(
     dish: DishRecord,
     restrictions: diet.RulesLike,
@@ -696,13 +714,18 @@ def _build_alternatives(
         return []
 
     alts: list[Alternative] = []
-    healthier = max(pool, key=lambda d: d.health_score)
+    # The closest dish that's actually healthier / cheaper — not the single
+    # healthiest or cheapest one, which made every Indian main swap to the same
+    # Daal Rice and Poha.
+    lighter = [d for d in pool if d.health_score > dish.health_score]
+    healthier = (max(lighter, key=lambda d: (_swap_similarity(dish, d), d.health_score)) if lighter
+                 else max(pool, key=lambda d: d.health_score))
     alts.append(_make_alternative(healthier, "healthier_swap", "Lighter pick, similar vibe"))
 
     others = [d for d in pool if d.id != healthier.id]
     cheaper = [d for d in others if d.price_inr < dish.price_inr]
     if cheaper:
-        budget = min(cheaper, key=lambda d: d.price_inr)
+        budget = max(cheaper, key=lambda d: (_swap_similarity(dish, d), -d.price_inr))
         alts.append(_make_alternative(budget, "budget_swap", "Cheaper, same course"))
     else:
         band_max = dish.price_inr * 1.15

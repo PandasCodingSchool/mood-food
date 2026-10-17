@@ -7,6 +7,16 @@ export interface CartLine {
   quantity: number;
 }
 
+/** A way to pay the app can complete (from Swiggy's get_payment_options). */
+export interface PaymentOption {
+  id: string;
+  label: string;
+  kind: 'upi_app' | 'upi_qr' | 'swiggy_money' | 'cash';
+  paymentMethod: string;
+  intentApp?: string | null;
+  iconUrl?: string | null;
+}
+
 export interface CartState {
   success: boolean;
   items: CartLine[];
@@ -15,6 +25,7 @@ export interface CartState {
   taxes?: number | null;
   total?: number | null;
   availablePaymentMethods: string[];
+  paymentOptions: PaymentOption[];
   couponApplied: boolean;
   couponDiscount?: number | null;
   error?: string;
@@ -40,6 +51,23 @@ export interface PlaceOrderResult {
   addressRequired?: boolean;
   capExceeded?: boolean;
   capAmount?: number;
+  /** UPI: the order is NOT placed until payment succeeds (see waitForUpiPayment). */
+  payment?: UpiPayment | null;
+}
+
+/** A UPI order awaiting payment, as place_food_order returned it. */
+export interface UpiPayment {
+  orderId: string;
+  paasId: string;
+  upiIntentUrl?: string | null;
+  bridgeUrl?: string | null;
+  isQrFlow: boolean;
+  pollingIntervalMs: number;
+  maxPollMs: number;
+  addressId?: string | null;
+  cartId?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface TrackOrderResult {
@@ -111,6 +139,14 @@ function mapCart(data: Record<string, unknown>): CartState {
     taxes: data.taxes as number | null,
     total: data.total as number | null,
     availablePaymentMethods: (data.available_payment_methods as string[]) || [],
+    paymentOptions: ((data.payment_options as Record<string, unknown>[]) || []).map((o) => ({
+      id: o.id as string,
+      label: o.label as string,
+      kind: o.kind as PaymentOption['kind'],
+      paymentMethod: o.payment_method as string,
+      intentApp: o.intent_app as string | null,
+      iconUrl: o.icon_url as string | null,
+    })),
     couponApplied: !!data.coupon_applied,
     couponDiscount: data.coupon_discount as number | null,
     error: data.error as string | undefined,
@@ -127,7 +163,7 @@ export async function getCart(addressId: string, restaurantName?: string): Promi
     });
     return mapCart(await res.json());
   } catch {
-    return { success: false, items: [], availablePaymentMethods: [], couponApplied: false, error: "Couldn't load your cart. Please try again." };
+    return { success: false, items: [], availablePaymentMethods: [], paymentOptions: [], couponApplied: false, error: "Couldn't load your cart. Please try again." };
   }
 }
 
@@ -310,23 +346,46 @@ export async function applyCoupon(couponCode: string, addressId: string): Promis
   });
   const data = await res.json();
   if (!data.success) {
-    return { success: false, items: [], availablePaymentMethods: [], couponApplied: false, error: data.error };
+    return { success: false, items: [], availablePaymentMethods: [], paymentOptions: [], couponApplied: false, error: data.error };
   }
   return mapCart(data.cart || {});
 }
 
 export async function placeOrder(
   addressId: string,
-  paymentMethod: string | undefined,
+  option: PaymentOption | undefined,
   confirmed: boolean,
 ): Promise<PlaceOrderResult> {
   const res = await fetch(`${API_BASE_URL}/swiggy/order`, {
     method: 'POST',
     headers: await getHeaders(),
-    body: JSON.stringify({ address_id: addressId, payment_method: paymentMethod, confirmed }),
+    body: JSON.stringify({
+      address_id: addressId,
+      payment_method: option?.paymentMethod,
+      intent_app: option?.kind === 'upi_app' ? option.intentApp : undefined,
+      generate_upi_qr: option?.kind === 'upi_qr',
+      confirmed,
+    }),
   });
   const data = await res.json();
+  const payment: UpiPayment | null =
+    data.payment_pending && data.paas_id && data.order_id
+      ? {
+          orderId: data.order_id,
+          paasId: data.paas_id,
+          upiIntentUrl: data.upi_intent_url,
+          bridgeUrl: data.bridge_url,
+          isQrFlow: !!data.is_qr_flow,
+          pollingIntervalMs: Math.max(2000, data.polling_interval_ms || 3000),
+          maxPollMs: data.max_poll_ms || 5 * 60_000,
+          addressId: data.address_id ?? addressId,
+          cartId: data.cart_id,
+          lat: data.lat,
+          lng: data.lng,
+        }
+      : null;
   return {
+    payment,
     success: !!data.success,
     orderId: data.order_id,
     status: data.status,
@@ -337,6 +396,51 @@ export async function placeOrder(
     capExceeded: !!data.cap_exceeded,
     capAmount: data.cap_amount,
   };
+}
+
+export type UpiOutcome =
+  | { state: 'placed'; orderId: string }
+  | { state: 'failed'; error: string }
+  | { state: 'cancelled' };
+
+async function postJson(path: string, body: unknown): Promise<Record<string, any> | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', headers: await getHeaders(), body: JSON.stringify(body) });
+    return await res.json();
+  } catch {
+    return null; // network blip: callers retry on the next poll
+  }
+}
+
+async function confirmUpiOrder(p: UpiPayment): Promise<UpiOutcome> {
+  if (!p.addressId || p.lat == null || p.lng == null) {
+    return { state: 'failed', error: "We couldn't confirm the order. Check the Swiggy app before trying again." };
+  }
+  const data = await postJson('/swiggy/order/confirm', { order_id: p.orderId, address_id: p.addressId, lat: p.lat, lng: p.lng, cart_id: p.cartId });
+  if (data?.success && String(data.result).toLowerCase() === 'success') return { state: 'placed', orderId: data.order_id || p.orderId };
+  return { state: 'failed', error: "Payment didn't go through, so the order wasn't placed. If money was debited, Swiggy refunds it." };
+}
+
+/**
+ * Waits for a UPI payment: polls check_payment_status (Swiggy holds each call
+ * ~19s while pending) at the returned interval until paid, failed or the
+ * returned cap. Paid but not auto-confirmed → confirm_order; still pending at
+ * the cap → confirm_order once, as Swiggy's flow requires. Never claims the
+ * order is placed before Swiggy says so.
+ */
+export async function waitForUpiPayment(p: UpiPayment, isCancelled: () => boolean): Promise<UpiOutcome> {
+  const deadline = Date.now() + p.maxPollMs;
+  const body = { paas_id: p.paasId, order_id: p.orderId, address_id: p.addressId, cart_id: p.cartId, lat: p.lat, lng: p.lng };
+  while (Date.now() < deadline) {
+    if (isCancelled()) return { state: 'cancelled' };
+    const s = await postJson('/swiggy/payment/status', body);
+    if (s?.success && s.paid) return s.confirmed ? { state: 'placed', orderId: s.order_id || p.orderId } : confirmUpiOrder(p);
+    if (s?.success && s.failed) {
+      return { state: 'failed', error: s.status === 'cart_changed' ? 'Your cart changed during payment, so the order wasn\'t placed. Please review it.' : 'Payment failed or was cancelled. Try again or pick another way to pay.' };
+    }
+    await new Promise((r) => setTimeout(r, p.pollingIntervalMs));
+  }
+  return isCancelled() ? { state: 'cancelled' } : confirmUpiOrder(p);
 }
 
 export async function trackOrder(orderId: string): Promise<TrackOrderResult> {

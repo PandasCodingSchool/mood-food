@@ -3,8 +3,8 @@
 // history + signals + quests. Every order goes through the user's Swiggy account.
 // Params: restaurantId, restaurantName, addressId, etaMin?, and dishId/dishName
 // of the recommendation that led here (for signals).
-import { useState, useEffect, useCallback } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Image, Linking, Modal, Platform, Pressable, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,9 +30,30 @@ import {
   fetchCoupons,
   applyCoupon,
   placeOrder,
+  waitForUpiPayment,
   type CartState,
   type Coupon,
+  type PaymentOption,
+  type UpiPayment,
 } from '../../src/services/swiggyOrder';
+
+// UPI app intents only open on a phone; the web app pays through Swiggy's QR page.
+const usableOn = (o: PaymentOption) => Platform.OS !== 'web' || o.kind !== 'upi_app';
+const PAY_ICONS = { upi_app: 'touch_app', upi_qr: 'qr_code_2', swiggy_money: 'savings', cash: 'payments' } as const;
+
+/** Opens the UPI app (intent), falling back to Swiggy's payment page (QR + "open in UPI app"). */
+async function openUpiPayment(p: UpiPayment) {
+  const urls = Platform.OS === 'web' || p.isQrFlow ? [p.bridgeUrl, p.upiIntentUrl] : [p.upiIntentUrl, p.bridgeUrl];
+  for (const url of urls) {
+    if (!url) continue;
+    try {
+      await Linking.openURL(url);
+      return;
+    } catch {
+      // app not installed / scheme blocked: try the next link
+    }
+  }
+}
 
 export default function OrderConfirmScreen() {
   const router = useRouter();
@@ -60,7 +81,14 @@ export default function OrderConfirmScreen() {
   const [cartLoading, setCartLoading] = useState(true);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  // Kept apart from `cart`: a coupon response doesn't carry payment options.
+  const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [upi, setUpi] = useState<{ payment: UpiPayment; label: string } | null>(null);
+  const cancelled = useRef(false);
+  useEffect(() => () => {
+    cancelled.current = true;
+  }, []);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [capExceeded, setCapExceeded] = useState(false);
 
@@ -74,7 +102,9 @@ export default function OrderConfirmScreen() {
       const result = await getCart(addrId, params.restaurantName);
       setCart(result);
       setCapExceeded((result.total ?? 0) >= 1000);
-      if (result.availablePaymentMethods.length > 0) setPaymentMethod(result.availablePaymentMethods[0]);
+      const options = result.paymentOptions.filter(usableOn);
+      setPaymentOptions(options);
+      setPaymentId((prev) => (options.some((o) => o.id === prev) ? prev : options[0]?.id ?? null));
       if (result.addressRequired) setOrderError('We need a delivery address to continue.');
       // Errors can ride on a successful read too (Swiggy's gpoError: closed, unserviceable…).
       else if (result.error) setOrderError(result.error);
@@ -156,25 +186,14 @@ export default function OrderConfirmScreen() {
     }
   };
 
-  const handlePlaceOrder = async () => {
-    if (!addressId) return setOrderError('Select a delivery address first.');
-    if (capExceeded) return; // UI shows the "open in Swiggy app" fallback instead of a place button
-    setPlacing(true);
-    setOrderError(null);
-    const result = await placeOrder(addressId, paymentMethod || undefined, true);
-    if (!result.success) {
-      if (result.capExceeded) setCapExceeded(true);
-      else if (result.addressRequired) setOrderError('We need a delivery address to continue.');
-      else setOrderError(result.error || 'Could not place the order. Please try again.');
-      setPlacing(false);
-      return;
-    }
-    await saveOrderHistory(result.orderId);
-    const eta = result.estimatedDeliveryTime || etaTxt || '';
-    if (result.orderId) {
+  /** The order exists on Swiggy: history, live-order banner, signals, success screen. */
+  const finishOrder = async (orderId: string | null | undefined, status: string | null | undefined, etaFromSwiggy?: string | null) => {
+    await saveOrderHistory(orderId);
+    const eta = etaFromSwiggy || etaTxt || '';
+    if (orderId) {
       // Powers the home "live order" banner and /order/track.
       await saveActiveOrder({
-        orderId: result.orderId,
+        orderId,
         restaurant: restaurantName,
         dishId: params.dishId || null,
         dishName: params.dishName || null,
@@ -183,15 +202,49 @@ export default function OrderConfirmScreen() {
         eta,
         placedAt: new Date().toISOString(),
         step: 'placed',
-        events: [{ step: 'placed', status: result.status ?? null, at: new Date().toISOString() }],
+        events: [{ step: 'placed', status: status ?? null, at: new Date().toISOString() }],
       });
     }
     void logSignal('order', { dish_id: params.dishId, dish_name: params.dishName || restaurantName, price: Math.round(total) });
     void bumpQuestProgress('try_3_cuisines');
     router.push({
       pathname: '/order/success',
-      params: { restaurantName, summary, total: total.toFixed(0), orderId: result.orderId || '', eta },
+      params: { restaurantName, summary, total: total.toFixed(0), orderId: orderId || '', eta },
     });
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!addressId) return setOrderError('Select a delivery address first.');
+    if (capExceeded) return; // UI shows the "open in Swiggy app" fallback instead of a place button
+    const option = paymentOptions.find((o) => o.id === paymentId);
+    if (paymentOptions.length > 0 && !option) return setOrderError('Choose how you want to pay.');
+    setPlacing(true);
+    setOrderError(null);
+    const result = await placeOrder(addressId, option, true);
+    if (!result.success) {
+      if (result.capExceeded) setCapExceeded(true);
+      else if (result.addressRequired) setOrderError('We need a delivery address to continue.');
+      else setOrderError(result.error || 'Could not place the order. Please try again.');
+      setPlacing(false);
+      return;
+    }
+    if (result.payment) {
+      // UPI: nothing is placed until Swiggy sees the payment.
+      setUpi({ payment: result.payment, label: option?.label || 'your UPI app' });
+      await openUpiPayment(result.payment);
+      const outcome = await waitForUpiPayment(result.payment, () => cancelled.current);
+      setUpi(null);
+      if (outcome.state === 'cancelled') return;
+      if (outcome.state === 'failed') {
+        setOrderError(outcome.error);
+        setPlacing(false);
+        return;
+      }
+      await finishOrder(outcome.orderId, 'CONFIRMED', result.estimatedDeliveryTime);
+      setPlacing(false);
+      return;
+    }
+    await finishOrder(result.orderId, result.status, result.estimatedDeliveryTime);
     setPlacing(false);
   };
 
@@ -285,21 +338,38 @@ export default function OrderConfirmScreen() {
           </View>
         </Surface>
 
-        {cart && cart.availablePaymentMethods.length > 0 ? (
+        {paymentOptions.length > 0 ? (
           <>
             <Text variant="bodyStrong15" style={{ paddingHorizontal: space.page, paddingTop: 22, paddingBottom: 10 }}>Pay with</Text>
             <View style={{ paddingHorizontal: space.gutter, gap: 8 }}>
-              {cart.availablePaymentMethods.map((m) => (
-                <Pressable key={m} onPress={() => setPaymentMethod(m)} accessibilityRole="radio" accessibilityState={{ selected: paymentMethod === m }}>
+              {paymentOptions.map((o) => (
+                <Pressable key={o.id} disabled={placing} onPress={() => setPaymentId(o.id)} accessibilityRole="radio" accessibilityState={{ selected: paymentId === o.id }}>
                   <Surface radius={18} style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Icon name={/cash|cod/i.test(m) ? 'payments' : /upi/i.test(m) ? 'qr_code_2' : 'credit_card'} size={22} tone="ink2" />
-                    <Text variant="bodyStrong14" style={{ flex: 1 }}>{PAYMENT_LABELS[m] ?? m}</Text>
-                    <Radio selected={paymentMethod === m} />
+                    {o.iconUrl ? (
+                      <Image source={{ uri: o.iconUrl }} style={{ width: 22, height: 22, borderRadius: 5 }} accessibilityIgnoresInvertColors />
+                    ) : (
+                      <Icon name={PAY_ICONS[o.kind]} size={22} tone="ink2" />
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text variant="bodyStrong14">{o.label}</Text>
+                      {o.kind === 'upi_qr' ? <Text variant="caption12" tone="ink2" style={{ marginTop: 2 }}>Scan a QR with any UPI app</Text> : null}
+                    </View>
+                    <Radio selected={paymentId === o.id} />
                   </Surface>
                 </Pressable>
               ))}
             </View>
           </>
+        ) : null}
+
+        {upi ? (
+          <Surface kind="accentSoft" radius={18} style={{ marginHorizontal: space.gutter, marginTop: 12, padding: 14, gap: 10 }} accessibilityLiveRegion="polite">
+            <Text variant="bodyStrong14">{`Waiting for your payment in ${upi.label}`}</Text>
+            <Text variant="caption12" tone="ink2">Your order is placed once Swiggy confirms the payment. Keep this screen open.</Text>
+            <Pressable onPress={() => void openUpiPayment(upi.payment)} accessibilityRole="button" hitSlop={8}>
+              <Text variant="button13" tone="accText">{Platform.OS === 'web' || upi.payment.isQrFlow ? 'Open the payment page again' : 'Open the UPI app again'}</Text>
+            </Pressable>
+          </Surface>
         ) : null}
 
         <View style={{ marginHorizontal: space.gutter, marginTop: 14, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -327,7 +397,7 @@ export default function OrderConfirmScreen() {
             style={{ flex: 1 }}
             loading={placing}
             disabled={!canPlace}
-            label={`Place order · ${fmt(total)}`}
+            label={upi ? 'Waiting for payment…' : `${paymentOptions.find((o) => o.id === paymentId)?.kind?.startsWith('upi') ? 'Pay' : 'Place order'} · ${fmt(total)}`}
             onPress={handlePlaceOrder}
           />
         )}
@@ -353,8 +423,6 @@ export default function OrderConfirmScreen() {
     </View>
   );
 }
-
-const PAYMENT_LABELS: Record<string, string> = { COD: 'Pay on delivery' };
 
 function BillRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (

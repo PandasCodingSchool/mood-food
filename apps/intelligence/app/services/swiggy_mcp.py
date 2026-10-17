@@ -248,9 +248,12 @@ class SwiggyMCPClient:
     def is_configured(self) -> bool:
         return bool(self._token and self._url)
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
-        """Call a single Food tool with retry + backoff (traced for the Lab; read-only guard)."""
-        call = self._call_tool(name, arguments)
+    async def call_tool(self, name: str, arguments: dict[str, Any], timeout_s: Optional[float] = None) -> Any:
+        """Call a single Food tool with retry + backoff (traced for the Lab; read-only guard).
+
+        ``timeout_s`` overrides the per-attempt timeout (e.g. check_payment_status long-polls ~19s).
+        """
+        call = self._call_tool(name, arguments, timeout_s) if timeout_s else self._call_tool(name, arguments)
         _guard(name, call)
         return await _traced(name, arguments, call)
 
@@ -260,7 +263,7 @@ class SwiggyMCPClient:
         _guard(name, call)
         return await _traced(name, arguments, call, once=True)
 
-    async def _call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+    async def _call_tool(self, name: str, arguments: dict[str, Any], timeout_s: Optional[float] = None) -> Any:
         """Call a single Food tool with retry + exponential backoff.
 
         If a reusable session is open (see `session()`), the call is routed
@@ -281,7 +284,7 @@ class SwiggyMCPClient:
             try:
                 async with _MCP_SEMAPHORE:  # cap concurrency to avoid 429s
                     return await asyncio.wait_for(
-                        self._call_once(name, arguments), timeout=settings.swiggy_timeout_s
+                        self._call_once(name, arguments), timeout=timeout_s or settings.swiggy_timeout_s
                     )
             except SwiggyAuthError:
                 raise  # never retry auth failures

@@ -91,3 +91,27 @@ def test_budget_swap_falls_back_to_similar_tier_within_band():
     assert "similar_tier_swap" in types
     similar = next(a for a in alts if a.type == "similar_tier_swap")
     assert similar.practical_details.estimated_price <= poha.price_inr * 1.15
+
+
+def test_swaps_vary_with_the_dish_not_one_global_pick():
+    # Regression: healthiest/cheapest-in-cuisine made 161 dishes swap to Daal Rice and 162 to Poha.
+    from collections import Counter
+
+    healthier, budget = Counter(), Counter()
+    mains = [d for d in DISHES if d.tier != "complimentary"]
+    for d in mains:
+        for a in _build_alternatives(d, []):
+            (healthier if a.type == "healthier_swap" else budget)[a.name] += 1
+    assert healthier.most_common(1)[0][1] < len(mains) * 0.1
+    assert budget.most_common(1)[0][1] < len(mains) * 0.1
+
+
+def test_swaps_are_actually_healthier_and_cheaper_and_alike():
+    from app.services.recommender import _swap_similarity
+
+    dish = next(d for d in DISHES if d.name == "Paneer Butter Masala")
+    alts = {a.type: a for a in _build_alternatives(dish, [])}
+    assert alts["healthier_swap"].practical_details.health_score > dish.health_score
+    assert alts["budget_swap"].practical_details.estimated_price < dish.price_inr
+    healthier = next(d for d in DISHES if d.id == alts["healthier_swap"].dish_id)
+    assert _swap_similarity(dish, healthier) > 0
