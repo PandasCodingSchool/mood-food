@@ -76,7 +76,8 @@ export default function OrderConfirmScreen() {
       setCapExceeded((result.total ?? 0) >= 1000);
       if (result.availablePaymentMethods.length > 0) setPaymentMethod(result.availablePaymentMethods[0]);
       if (result.addressRequired) setOrderError('We need a delivery address to continue.');
-      else if (!result.success && result.error) setOrderError(result.error);
+      // Errors can ride on a successful read too (Swiggy's gpoError: closed, unserviceable…).
+      else if (result.error) setOrderError(result.error);
       setCartLoading(false);
     },
     [params.restaurantName],
@@ -98,8 +99,11 @@ export default function OrderConfirmScreen() {
       }
       setAddressId(addrId);
       await loadCartFor(addrId);
-      if (restaurantId) setCoupons(await fetchCoupons(restaurantId, addrId));
-    })();
+      if (restaurantId) setCoupons(await fetchCoupons(restaurantId, addrId).catch(() => []));
+    })().catch(() => {
+      setOrderError("Couldn't load checkout. Please go back and try again.");
+      setCartLoading(false);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

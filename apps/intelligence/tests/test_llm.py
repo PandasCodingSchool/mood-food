@@ -25,6 +25,7 @@ def _fake_client(content='{"ok": true}'):
 def fake_openai(monkeypatch):
     client = _fake_client()
     monkeypatch.setattr(llm_mod, "async_openai", lambda: client)
+    monkeypatch.setattr(llm_mod, "_temperature_rejected", False)
     return client
 
 
@@ -48,6 +49,45 @@ async def test_temperature_omitted_when_model_rejects_it(fake_openai, monkeypatc
     monkeypatch.setattr(settings, "openai_supports_temperature", False)
     await llm_mod.JsonChat(model="m", kind="rank", temperature=0.9).ainvoke([HumanMessage(content="x")])
     assert "temperature" not in fake_openai.chat.completions.create.call_args.kwargs
+
+
+async def test_retries_without_temperature_when_model_rejects_it(fake_openai, monkeypatch):
+    import httpx
+    from openai import BadRequestError
+
+    monkeypatch.setattr(settings, "openai_supports_temperature", True)
+    monkeypatch.setattr(llm_mod, "_temperature_rejected", False)
+    body = {"error": {"message": "Unsupported value: 'temperature' does not support 0.5 with this model.",
+                      "type": "invalid_request_error", "param": "temperature", "code": "unsupported_value"}}
+    rejected = BadRequestError("Error code: 400", response=httpx.Response(400, request=httpx.Request("POST", "http://x")), body=body)
+    ok = fake_openai.chat.completions.create.return_value
+    fake_openai.chat.completions.create.side_effect = [rejected, ok, ok]
+
+    chat = llm_mod.JsonChat(model="m", kind="menu_chat", temperature=0.5)
+    result = await chat.ainvoke([HumanMessage(content="x")])
+    assert result.content == '{"ok": true}'
+    first, retry = fake_openai.chat.completions.create.call_args_list
+    assert first.kwargs["temperature"] == 0.5 and "temperature" not in retry.kwargs
+
+    # Remembered: the next call skips temperature up front (no second 400).
+    await chat.ainvoke([HumanMessage(content="y")])
+    assert "temperature" not in fake_openai.chat.completions.create.call_args.kwargs
+    assert fake_openai.chat.completions.create.call_count == 3
+
+
+async def test_other_bad_requests_propagate(monkeypatch):
+    import httpx
+    from openai import BadRequestError
+
+    monkeypatch.setattr(llm_mod, "_temperature_rejected", False)
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(side_effect=BadRequestError(
+        "bad", response=httpx.Response(400, request=httpx.Request("POST", "http://x")),
+        body={"error": {"message": "context too long", "param": "messages"}}))
+    monkeypatch.setattr(llm_mod, "async_openai", lambda: client)
+    with pytest.raises(BadRequestError):
+        await llm_mod.JsonChat(model="m", kind="rank", temperature=0.5).ainvoke([HumanMessage(content="x")])
+    assert client.chat.completions.create.call_count == 1
 
 
 async def test_call_failure_propagates(monkeypatch):

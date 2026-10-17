@@ -119,11 +119,14 @@ function mapCart(data: Record<string, unknown>): CartState {
 export async function getCart(addressId: string, restaurantName?: string): Promise<CartState> {
   const params = new URLSearchParams({ address_id: addressId });
   if (restaurantName) params.set('restaurant_name', restaurantName);
-  const res = await fetch(`${API_BASE_URL}/swiggy/cart?${params.toString()}`, {
-    headers: await getHeaders(),
-  });
-  const data = await res.json();
-  return mapCart(data);
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/cart?${params.toString()}`, {
+      headers: await getHeaders(),
+    });
+    return mapCart(await res.json());
+  } catch {
+    return { success: false, items: [], availablePaymentMethods: [], couponApplied: false, error: "Couldn't load your cart. Please try again." };
+  }
 }
 
 /**
@@ -173,10 +176,15 @@ export async function updateCart(
 
 export async function getRestaurantMenu(restaurantId: string, addressId: string): Promise<RestaurantMenu> {
   const params = new URLSearchParams({ address_id: addressId });
-  const res = await fetch(`${API_BASE_URL}/swiggy/restaurant/${encodeURIComponent(restaurantId)}/menu?${params.toString()}`, {
-    headers: await getHeaders(),
-  });
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(`${API_BASE_URL}/swiggy/restaurant/${encodeURIComponent(restaurantId)}/menu?${params.toString()}`, {
+      headers: await getHeaders(),
+    });
+    data = await res.json();
+  } catch {
+    return { success: false, categories: [], error: "Couldn't load this menu right now." };
+  }
   const restaurant = data.restaurant
     ? {
         id: data.restaurant.id,
@@ -280,7 +288,7 @@ export async function fetchCoupons(restaurantId: string, addressId: string): Pro
     headers: await getHeaders(),
   });
   if (!res.ok) return [];
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!data.success) return [];
   return (data.coupons || []).map((c: Record<string, unknown>) => ({
     couponCode: c.coupon_code,

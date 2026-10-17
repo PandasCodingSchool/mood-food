@@ -86,6 +86,33 @@ async def test_get_cart_reads_live_nested_shape():
 
 
 @pytest.mark.asyncio
+async def test_get_cart_reads_payment_options_and_suggested_coupon():
+    raw = {
+        "success": True,
+        "data": {
+            "data": {
+                "items": [{"menu_item_id": "m1", "name": "Dal Makhani", "quantity": 1, "final_price": 240}],
+                "pricing": {"item_total": 240, "delivery_charge": 0, "taxes_and_charges": 12, "to_pay": 252},
+                "offers": {"coupon_applied": "TRYNEW", "coupon_discount": 0},
+            },
+            "addressId": "addr_1",
+            "paymentOptions": {"allMethods": [
+                {"id": "gpay", "groupName": "UPI", "displayName": "Google Pay"},
+                {"id": "phonepe", "groupName": "UPI", "displayName": "PhonePe"},
+                {"id": "cod", "groupName": "Cash", "enabled": True},
+                {"id": "card", "groupName": "Card", "enabled": False},
+            ]},
+            "gpoError": "Restaurant is not accepting orders right now",
+        },
+    }
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": raw})).get_cart("addr_1")
+    assert cart.total == 252
+    assert cart.available_payment_methods == ["UPI", "Cash"]
+    assert cart.coupon_applied is False  # suggested, discount 0
+    assert cart.error == "Restaurant is not accepting orders right now"
+
+
+@pytest.mark.asyncio
 async def test_fetch_coupons_filters_to_cod_eligible():
     raw = {
         "success": True,
