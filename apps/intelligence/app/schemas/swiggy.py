@@ -193,6 +193,7 @@ class CartResponse(BaseModel):
     items: list[CartLine] = Field(default_factory=list)
     subtotal: Optional[float] = None
     delivery_charges: Optional[float] = None
+    taxes: Optional[float] = None
     total: Optional[float] = None
     available_payment_methods: list[str] = Field(default_factory=list)
     coupon_applied: bool = False

@@ -12,6 +12,7 @@ export interface CartState {
   items: CartLine[];
   subtotal?: number | null;
   deliveryCharges?: number | null;
+  taxes?: number | null;
   total?: number | null;
   availablePaymentMethods: string[];
   couponApplied: boolean;
@@ -107,6 +108,7 @@ function mapCart(data: Record<string, unknown>): CartState {
     items: (data.items as CartLine[]) || [],
     subtotal: data.subtotal as number | null,
     deliveryCharges: data.delivery_charges as number | null,
+    taxes: data.taxes as number | null,
     total: data.total as number | null,
     availablePaymentMethods: (data.available_payment_methods as string[]) || [],
     couponApplied: !!data.coupon_applied,
