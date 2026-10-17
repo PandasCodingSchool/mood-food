@@ -250,7 +250,7 @@ export default function OrderConfirmScreen() {
 
   const { weather } = useLiveMood();
   const fmt = (n: number) => `₹${Math.round(n)}`;
-  const lines = (cart?.items ?? []).map((i) => ({ key: i.id, name: i.name, qty: i.quantity, total: i.price != null ? fmt(i.price * i.quantity) : '' }));
+  const lines = (cart?.items ?? []).map((i) => ({ key: i.id, name: i.name, note: (i.customizations ?? []).join(', '), qty: i.quantity, total: i.price != null ? fmt(i.price * i.quantity) : '' }));
   const deliveryTxt = delivery === 0 ? 'Included' : fmt(delivery);
   const canPlace = !placing && !cartLoading && !!addressId && lines.length > 0;
 
@@ -292,7 +292,10 @@ export default function OrderConfirmScreen() {
                 <View style={{ height: 32, minWidth: 34, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1, borderColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
                   <Text variant="button13">{`${l.qty}×`}</Text>
                 </View>
-                <Text variant="bodyStrong14" style={{ flex: 1 }} numberOfLines={2}>{l.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyStrong14" numberOfLines={2}>{l.name}</Text>
+                  {l.note ? <Text variant="caption12" tone="ink2" numberOfLines={2} style={{ marginTop: 2 }}>{l.note}</Text> : null}
+                </View>
                 <Text variant="bodyStrong14">{l.total}</Text>
               </View>
             ))

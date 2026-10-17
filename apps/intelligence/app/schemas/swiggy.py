@@ -170,8 +170,11 @@ ORDER_VALUE_CAP_INR = 1000
 class CartItemInput(BaseModel):
     menu_item_id: str
     quantity: int = 1
+    # Dish name: lets the server look up required addon groups with search_menu.
+    name: Optional[str] = None
     variants: Optional[dict] = None
-    addons: list[str] = Field(default_factory=list)
+    # Swiggy addon choices: [{"group_id": ..., "choice_id": ...}].
+    addons: list[dict] = Field(default_factory=list)
 
 
 class UpdateCartRequest(BaseModel):
@@ -186,6 +189,8 @@ class CartLine(BaseModel):
     name: str
     price: Optional[float] = None
     quantity: int = 1
+    # Chosen variant/addon names, e.g. ["Chapati (3 pcs)", "Punjabi Rajma"].
+    customizations: list[str] = Field(default_factory=list)
 
 
 class PaymentOption(BaseModel):

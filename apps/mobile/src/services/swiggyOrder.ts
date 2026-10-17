@@ -5,6 +5,8 @@ export interface CartLine {
   name: string;
   price?: number | null;
   quantity: number;
+  /** Chosen variant/addon names, e.g. "Chapati (3 pcs)". */
+  customizations?: string[];
 }
 
 /** A way to pay the app can complete (from Swiggy's get_payment_options). */
@@ -82,6 +84,8 @@ export interface TrackOrderResult {
 export interface CartItemInput {
   menuItemId: string;
   quantity: number;
+  /** Dish name — lets the server fill a dish's required choices (e.g. "Choice of Rice"). */
+  name?: string;
 }
 
 export interface MenuItem {
@@ -185,7 +189,7 @@ export async function updateCartItems(
       restaurant_id: restaurantId,
       restaurant_name: restaurantName,
       address_id: addressId,
-      items: items.map((i) => ({ menu_item_id: i.menuItemId, quantity: i.quantity })),
+      items: items.map((i) => ({ menu_item_id: i.menuItemId, quantity: i.quantity, name: i.name })),
     }),
   });
   const data = await res.json();

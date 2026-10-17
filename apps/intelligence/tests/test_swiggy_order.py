@@ -288,8 +288,9 @@ def test_update_cart_route_sends_snake_case_menu_item_id(client, monkeypatch):
     sent = {}
 
     class FakeService:
-        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None):
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None, item_names=None):
             sent["items"] = cart_items
+            sent["names"] = item_names
             return CartResponse(success=True)
 
     monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
@@ -298,6 +299,96 @@ def test_update_cart_route_sends_snake_case_menu_item_id(client, monkeypatch):
     })
     assert res.status_code == 200
     assert sent["items"] == [{"menu_item_id": "34114193", "quantity": 1}]
+
+
+def test_update_cart_route_passes_names_aside_not_to_swiggy(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    sent = {}
+
+    class FakeService:
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None, item_names=None):
+            sent.update(items=cart_items, names=item_names)
+            return CartResponse(success=True)
+
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
+    client.post("/api/swiggy/cart", json={
+        "restaurant_id": "r", "address_id": "a", "items": [{"menu_item_id": "m1", "quantity": 1, "name": "Thali"}],
+    })
+    assert sent["items"] == [{"menu_item_id": "m1", "quantity": 1}]
+    assert sent["names"] == {"m1": "Thali"}
+
+
+# Live update_food_cart reply when a dish's required choice is missing (Oct 2026):
+# isError=False, but the item is dropped and the cart stays empty.
+INVALID_ADDON_REPLY = {
+    "statusCode": 1, "statusMessage": "Restaurant may have removed the item(s) from their menu.",
+    "titleMessage": "Apologies! one or more items in your cart are no longer available",
+    "data": None, "errorCodes": ["INVALID_ADDON"], "successful": False,
+}
+UPDATED_REPLY = {"statusCode": 0, "statusMessage": "CART_UPDATED_SUCCESSFULLY", "data": {}}
+EMPTY_CART = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": None}
+SEARCH_THALI = {"items": [{
+    "name": "Mini Veg Thali", "menu_item_id": "m1", "hasAddons": True,
+    "addons": [
+        {"groupId": "g_staple", "minAddons": 1, "maxAddons": 1, "choices": [
+            {"id": "c_naan", "name": "Butter Naan", "price": 20}, {"id": "c_chapati", "name": "Chapati", "price": 0},
+            {"id": "c_rice", "name": "Rice", "price": 0}]},
+        {"groupId": "g_extras", "maxAddons": 4, "choices": [{"id": "c_dahi", "name": "Dahi", "price": 60}]},
+    ],
+}]}
+CART_WITH_THALI = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": {
+    "items": [{"menu_item_id": 1, "name": "Mini Veg Thali", "quantity": 1, "final_price": 337,
+               "variants": [{"name": "Mini Veg Thali"}], "addons": [{"choice_id": "c_chapati", "name": "Chapati"}]}],
+    "pricing": {"item_total": 337, "to_pay": 380},
+}}
+
+
+def _sequenced(script):
+    """call_tool mock returning each tool's replies in order; records every call."""
+    queues = {k: list(v) for k, v in script.items()}
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=lambda name, args, **kw: queues[name].pop(0))
+    return client
+
+
+@pytest.mark.asyncio
+async def test_update_cart_fills_required_addons_and_retries():
+    client = _sequenced({
+        "update_food_cart": [INVALID_ADDON_REPLY, UPDATED_REPLY],
+        "search_menu": [SEARCH_THALI],
+        "get_food_cart": [CART_WITH_THALI],
+    })
+    cart = await SwiggyOrderService(client=client).update_cart(
+        "r1", "a", [{"menu_item_id": "m1", "quantity": 1}], "Resto", {"m1": "Mini Veg Thali"},
+    )
+    assert cart.success and [i.name for i in cart.items] == ["Mini Veg Thali"]
+    assert cart.items[0].customizations == ["Chapati"]
+    updates = [c.args[1] for c in client.call_tool.call_args_list if c.args[0] == "update_food_cart"]
+    # Required group only, cheapest in-stock choice in menu order; optional extras untouched.
+    assert updates[1]["cartItems"] == [
+        {"menu_item_id": "m1", "quantity": 1, "addons": [{"group_id": "g_staple", "choice_id": "c_chapati"}]}
+    ]
+    search = next(c.args[1] for c in client.call_tool.call_args_list if c.args[0] == "search_menu")
+    assert search == {"query": "Mini Veg Thali", "addressId": "a", "restaurantIdOfAddedItem": "r1"}
+
+
+@pytest.mark.asyncio
+async def test_update_cart_surfaces_swiggy_rejection_instead_of_silent_empty_cart():
+    client = _sequenced({"update_food_cart": [INVALID_ADDON_REPLY], "get_food_cart": [EMPTY_CART]})
+    cart = await SwiggyOrderService(client=client).update_cart("r1", "a", [{"menu_item_id": "m1", "quantity": 1}])
+    assert cart.success is False and cart.items == []
+    assert "no longer available" in cart.error
+
+
+@pytest.mark.asyncio
+async def test_update_cart_success_makes_no_extra_calls():
+    client = _sequenced({"update_food_cart": [UPDATED_REPLY], "get_food_cart": [CART_WITH_THALI]})
+    cart = await SwiggyOrderService(client=client).update_cart(
+        "r1", "a", [{"menu_item_id": "m1", "quantity": 1}], None, {"m1": "Mini Veg Thali"},
+    )
+    assert cart.success and cart.error is None
+    assert [c.args[0] for c in client.call_tool.call_args_list] == ["update_food_cart", "get_food_cart"]
 
 
 # Shape captured from the live server (Oct 2026), values made up: no success/data

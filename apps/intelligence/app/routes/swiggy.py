@@ -283,8 +283,9 @@ async def update_cart(req: UpdateCartRequest, request: Request) -> CartResponse:
             }
             for item in req.items
         ]
+        item_names = {item.menu_item_id: item.name for item in req.items if item.name}
         return await _order_service(request).update_cart(
-            req.restaurant_id, req.address_id, cart_items, req.restaurant_name
+            req.restaurant_id, req.address_id, cart_items, req.restaurant_name, item_names
         )
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("update_cart failed: %s", exc)

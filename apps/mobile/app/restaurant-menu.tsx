@@ -62,13 +62,13 @@ export default function RestaurantMenuScreen() {
     (next: Record<string, number>) => {
       const items = Object.entries(next)
         .filter(([, q]) => q > 0)
-        .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
+        .map(([menuItemId, quantity]) => ({ menuItemId, quantity, name: allItems[menuItemId]?.name }));
       const push = () =>
         items.length ? updateCartItems(params.restaurantId, params.addressId, items, params.restaurantName).then(() => undefined) : flushCart();
       syncChain.current = syncChain.current.then(push, push).catch(() => undefined);
       return syncChain.current;
     },
-    [params.restaurantId, params.addressId, params.restaurantName],
+    [params.restaurantId, params.addressId, params.restaurantName, allItems],
   );
 
   const syncCart = useCallback(

@@ -21,6 +21,7 @@ import logging
 import re
 from typing import Any, Optional
 
+from app.lab import trace
 from app.schemas.swiggy import (
     ORDER_VALUE_CAP_INR,
     ApplyCouponResponse,
@@ -70,7 +71,44 @@ def _normalize_cart_line(raw: dict) -> Optional[CartLine]:
         # Real get_food_cart lines carry per-line totals, not a unit price.
         line_total = _to_float(_first(raw, "final_price", "total", "subtotal"))
         price = line_total / quantity if line_total is not None and quantity else None
-    return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity)
+    # Live lines echo the chosen variant (often just the dish name again) and addons.
+    picked = [
+        str(c["name"]) for key in ("variants", "addons") for c in (raw.get(key) or [])
+        if isinstance(c, dict) and c.get("name") and str(c["name"]) != str(name)
+    ]
+    return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity, customizations=picked)
+
+
+def _update_rejection(raw: Any) -> Optional[tuple[str, list[str]]]:
+    """(message, errorCodes) when update_food_cart refused the items, else None.
+
+    A refused update still comes back isError=False — e.g. {statusCode: 1,
+    successful: false, errorCodes: ["INVALID_ADDON"]} — and leaves the cart empty.
+    """
+    if not isinstance(raw, dict):
+        return None
+    code = raw.get("statusCode")
+    if raw.get("successful") is not False and code in (None, 0):
+        return None
+    codes = [str(c) for c in (raw.get("errorCodes") or [])]
+    message = raw.get("titleMessage") or raw.get("statusMessage") or "Swiggy couldn't add these items."
+    return str(message), codes
+
+
+def _default_addons(row: dict) -> list[dict]:
+    """One pick per required addon group (minAddons > 0): free and in-stock first, in menu order."""
+    picks: list[dict] = []
+    for group in row.get("addons") or []:
+        if not isinstance(group, dict):
+            continue
+        need = int(_to_float(group.get("minAddons")) or 0)
+        gid = _first(group, "groupId", "group_id")
+        if need <= 0 or gid is None:
+            continue
+        choices = [c for c in group.get("choices") or [] if isinstance(c, dict) and c.get("inStock", 1) not in (0, "0", False)]
+        choices.sort(key=lambda c: _to_float(c.get("price")) or 0)  # stable: menu order among equals
+        picks += [{"group_id": str(gid), "choice_id": str(c["id"])} for c in choices[:need] if c.get("id") is not None]
+    return picks
 
 
 def _payment_option_groups(options: Any) -> list[str]:
@@ -386,6 +424,7 @@ class SwiggyOrderService:
         address_id: str,
         cart_items: list[dict],
         restaurant_name: Optional[str] = None,
+        item_names: Optional[dict[str, str]] = None,
     ) -> CartResponse:
         args: dict[str, Any] = {
             "restaurantId": restaurant_id,
@@ -394,10 +433,47 @@ class SwiggyOrderService:
         }
         if restaurant_name:
             args["restaurantName"] = restaurant_name
-        await self.client.call_tool("update_food_cart", args)
+        rejection = _update_rejection(await self.client.call_tool("update_food_cart", args))
+        if rejection and "INVALID_ADDON" in rejection[1]:
+            # Dishes with a required choice (e.g. "Choice of Rice") are dropped
+            # without one. The app has no picker, so pick the defaults and retry once.
+            filled = await self._with_required_addons(restaurant_id, address_id, cart_items, item_names or {})
+            if filled is not None:
+                args["cartItems"] = filled
+                rejection = _update_rejection(await self.client.call_tool("update_food_cart", args))
         # update_food_cart "does not render UI" per the docs — always follow
         # with get_food_cart to get the authoritative totals.
-        return await self.get_cart(address_id, restaurant_name)
+        cart = await self.get_cart(address_id, restaurant_name)
+        if rejection:
+            logger.warning("update_food_cart rejected: %s codes=%s", rejection[0], rejection[1])
+            if not cart.items:
+                cart.success = False
+                cart.error = rejection[0]
+        return cart
+
+    async def _with_required_addons(
+        self, restaurant_id: str, address_id: str, cart_items: list[dict], item_names: dict[str, str]
+    ) -> Optional[list[dict]]:
+        """cart_items with default picks for each item's required addon groups (None if nothing to add)."""
+        filled: list[dict] = []
+        changed = False
+        for item in cart_items:
+            iid = str(item.get("menu_item_id"))
+            name = item_names.get(iid)
+            if item.get("addons") or not name:
+                filled.append(item)
+                continue
+            raw = await self.client.call_tool(
+                "search_menu", {"query": name, "addressId": address_id, "restaurantIdOfAddedItem": restaurant_id}
+            )
+            row = next((d for d in _walk_dicts(raw) if str(_first(d, "menu_item_id", "id", default="")) == iid), None)
+            addons = _default_addons(row) if row else []
+            if not addons:
+                logger.info("update_cart: no required addons found for item %s", iid)
+            trace.emit("cart.default_addons", item=iid, name=name, addons=addons)
+            changed = changed or bool(addons)
+            filled.append({**item, "addons": addons} if addons else item)
+        return filled if changed else None
 
     async def flush_cart(self) -> None:
         await self.client.call_tool("flush_food_cart", {})
