@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { API_BASE_URL, getHeaders } from './apiBase';
+import { getSessionId } from './session';
 
 // Lazy-load expo-notifications because importing it eagerly in Expo Go
 // crashes on SDK 53 (remote push notifications are unavailable there).
@@ -59,8 +60,20 @@ async function registerTokenOnServer(token: string): Promise<void> {
   }
 }
 
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
+/** Next sign-in registers again (the token belongs to whichever account is signed in). */
+export async function forgetPushRegistration(): Promise<void> {
+  await setLastRegisteredToken(null);
+}
+
+/**
+ * Registers this device's Expo push token for the signed-in account. Runs on
+ * launch and (force) after every new session, since the server keys the token
+ * by user: a launch while signed out can't register, and a new account on the
+ * same device needs it too.
+ */
+export async function registerForPushNotificationsAsync(opts: { force?: boolean } = {}): Promise<string | null> {
   if (Platform.OS === 'web') return null;
+  if (!(await getSessionId())) return null; // nothing to attach it to yet; setSessionId retries
   if (isExpoGo()) {
     console.log('Push token registration skipped in Expo Go');
     return null;
@@ -104,7 +117,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     const token = tokenResponse.data;
 
     const lastToken = await getLastRegisteredToken();
-    if (token !== lastToken) {
+    if (opts.force || token !== lastToken) {
       await registerTokenOnServer(token);
       await setLastRegisteredToken(token);
     }

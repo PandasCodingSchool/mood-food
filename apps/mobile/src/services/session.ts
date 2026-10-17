@@ -24,11 +24,17 @@ export async function setSessionId(sessionId: string): Promise<void> {
   await SecureStore.setItem(SESSION_KEY, sessionId);
   const expiry = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await SecureStore.setItem(SESSION_EXPIRY_KEY, expiry);
+  // A new session can be a different account: attach this device's push token to it.
+  // Lazy import keeps expo-notifications out of the auth path (and avoids a cycle).
+  void import("./pushNotifications")
+    .then((m) => m.registerForPushNotificationsAsync({ force: true }))
+    .catch(() => undefined);
 }
 
 export async function clearSessionId(): Promise<void> {
   await SecureStore.deleteItem(SESSION_KEY);
   await SecureStore.deleteItem(SESSION_EXPIRY_KEY);
+  void import("./pushNotifications").then((m) => m.forgetPushRegistration()).catch(() => undefined);
 }
 
 export async function isSessionValid(): Promise<boolean> {
