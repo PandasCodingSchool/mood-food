@@ -208,7 +208,7 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
         )}
       </ScrollView>
 
-      {keyboardOpen ? null : <View style={{ paddingHorizontal: 16 }}>{exploreMenuButton}</View>}
+      {keyboardOpen ? null : <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 }}>{exploreMenuButton}</View>}
 
       <View style={{ flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 24, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'flex-end' }}>
         <TouchableOpacity

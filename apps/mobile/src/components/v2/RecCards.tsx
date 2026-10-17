@@ -137,11 +137,11 @@ export function MatchCard({ v, chip, liked, saved, vetoed, choosingReason, onOpe
 }
 
 /** Healthier / budget swap row. */
-export function SwapRow({ label, name, delta, onPress, compact }: { label: string; name: string; delta?: string | null; onPress?: () => void; compact?: boolean }) {
+export function SwapRow({ label, name, delta, onPress, compact, imageUrl }: { label: string; name: string; delta?: string | null; onPress?: () => void; compact?: boolean; imageUrl?: string | null }) {
   const { colors } = useTheme();
   const body = (
     <>
-      <DishImage height={compact ? 48 : 64} radius={compact ? 14 : 16} stripe={7} style={{ width: compact ? 48 : 64 }} />
+      <DishImage uri={imageUrl} height={compact ? 48 : 64} radius={compact ? 14 : 16} stripe={7} style={{ width: compact ? 48 : 64 }} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text variant="labelSmall" tone="accText">{label}</Text>
         <Text variant={compact ? 'bodyStrong14' : 'bodyStrong15'} numberOfLines={1} style={{ marginTop: 3 }}>{name}</Text>
