@@ -27,6 +27,7 @@ from app.schemas.swiggy import (
     EnrichDishInput,
     EnrichRequest,
     EnrichResponse,
+    ItemOptionsResponse,
     MenuCategory,
     MenuChatRequest,
     MenuChatResponse,
@@ -249,6 +250,18 @@ async def apply_coupon(req: ApplyCouponRequest, request: Request) -> ApplyCoupon
         return ApplyCouponResponse(success=False, error=str(exc))
 
 
+@router.get("/restaurant/{restaurant_id}/items/{item_id}/options", response_model=ItemOptionsResponse)
+async def item_options(
+    request: Request, restaurant_id: str, item_id: str, address_id: str, name: str
+) -> ItemOptionsResponse:
+    """A dish's variants and addons (sizes, required choices, extras) for the app's picker."""
+    try:
+        return await _order_service(request).item_options(restaurant_id, address_id, item_id, name)
+    except (SwiggyAuthError, SwiggyMCPError) as exc:
+        logger.warning("item_options failed: %s", exc)
+        return ItemOptionsResponse(success=False, item_id=item_id, error=str(exc))
+
+
 @router.get("/cart", response_model=CartResponse)
 async def get_cart(request: Request, address_id: str, restaurant_name: Optional[str] = None) -> CartResponse:
     try:
@@ -279,12 +292,14 @@ async def update_cart(req: UpdateCartRequest, request: Request) -> CartResponse:
                 "menu_item_id": item.menu_item_id,
                 "quantity": item.quantity,
                 **({"variants": item.variants} if item.variants else {}),
+                **({"variantsV2": item.variants_v2} if item.variants_v2 else {}),
                 **({"addons": item.addons} if item.addons else {}),
             }
             for item in req.items
         ]
+        item_names = {item.menu_item_id: item.name for item in req.items if item.name}
         return await _order_service(request).update_cart(
-            req.restaurant_id, req.address_id, cart_items, req.restaurant_name
+            req.restaurant_id, req.address_id, cart_items, req.restaurant_name, item_names
         )
     except (SwiggyAuthError, SwiggyMCPError) as exc:
         logger.warning("update_cart failed: %s", exc)

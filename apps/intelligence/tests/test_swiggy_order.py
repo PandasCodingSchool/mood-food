@@ -288,8 +288,9 @@ def test_update_cart_route_sends_snake_case_menu_item_id(client, monkeypatch):
     sent = {}
 
     class FakeService:
-        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None):
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None, item_names=None):
             sent["items"] = cart_items
+            sent["names"] = item_names
             return CartResponse(success=True)
 
     monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
@@ -298,6 +299,96 @@ def test_update_cart_route_sends_snake_case_menu_item_id(client, monkeypatch):
     })
     assert res.status_code == 200
     assert sent["items"] == [{"menu_item_id": "34114193", "quantity": 1}]
+
+
+def test_update_cart_route_passes_names_aside_not_to_swiggy(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    sent = {}
+
+    class FakeService:
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None, item_names=None):
+            sent.update(items=cart_items, names=item_names)
+            return CartResponse(success=True)
+
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
+    client.post("/api/swiggy/cart", json={
+        "restaurant_id": "r", "address_id": "a", "items": [{"menu_item_id": "m1", "quantity": 1, "name": "Thali"}],
+    })
+    assert sent["items"] == [{"menu_item_id": "m1", "quantity": 1}]
+    assert sent["names"] == {"m1": "Thali"}
+
+
+# Live update_food_cart reply when a dish's required choice is missing (Oct 2026):
+# isError=False, but the item is dropped and the cart stays empty.
+INVALID_ADDON_REPLY = {
+    "statusCode": 1, "statusMessage": "Restaurant may have removed the item(s) from their menu.",
+    "titleMessage": "Apologies! one or more items in your cart are no longer available",
+    "data": None, "errorCodes": ["INVALID_ADDON"], "successful": False,
+}
+UPDATED_REPLY = {"statusCode": 0, "statusMessage": "CART_UPDATED_SUCCESSFULLY", "data": {}}
+EMPTY_CART = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": None}
+SEARCH_THALI = {"items": [{
+    "name": "Mini Veg Thali", "menu_item_id": "m1", "hasAddons": True,
+    "addons": [
+        {"groupId": "g_staple", "minAddons": 1, "maxAddons": 1, "choices": [
+            {"id": "c_naan", "name": "Butter Naan", "price": 20}, {"id": "c_chapati", "name": "Chapati", "price": 0},
+            {"id": "c_rice", "name": "Rice", "price": 0}]},
+        {"groupId": "g_extras", "maxAddons": 4, "choices": [{"id": "c_dahi", "name": "Dahi", "price": 60}]},
+    ],
+}]}
+CART_WITH_THALI = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": {
+    "items": [{"menu_item_id": 1, "name": "Mini Veg Thali", "quantity": 1, "final_price": 337,
+               "variants": [{"name": "Mini Veg Thali"}], "addons": [{"choice_id": "c_chapati", "name": "Chapati"}]}],
+    "pricing": {"item_total": 337, "to_pay": 380},
+}}
+
+
+def _sequenced(script):
+    """call_tool mock returning each tool's replies in order; records every call."""
+    queues = {k: list(v) for k, v in script.items()}
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=lambda name, args, **kw: queues[name].pop(0))
+    return client
+
+
+@pytest.mark.asyncio
+async def test_update_cart_fills_required_addons_and_retries():
+    client = _sequenced({
+        "update_food_cart": [INVALID_ADDON_REPLY, UPDATED_REPLY],
+        "search_menu": [SEARCH_THALI],
+        "get_food_cart": [CART_WITH_THALI],
+    })
+    cart = await SwiggyOrderService(client=client).update_cart(
+        "r1", "a", [{"menu_item_id": "m1", "quantity": 1}], "Resto", {"m1": "Mini Veg Thali"},
+    )
+    assert cart.success and [i.name for i in cart.items] == ["Mini Veg Thali"]
+    assert cart.items[0].customizations == ["Chapati"]
+    updates = [c.args[1] for c in client.call_tool.call_args_list if c.args[0] == "update_food_cart"]
+    # Required group only, cheapest in-stock choice in menu order; optional extras untouched.
+    assert updates[1]["cartItems"] == [
+        {"menu_item_id": "m1", "quantity": 1, "addons": [{"group_id": "g_staple", "choice_id": "c_chapati"}]}
+    ]
+    search = next(c.args[1] for c in client.call_tool.call_args_list if c.args[0] == "search_menu")
+    assert search == {"query": "Mini Veg Thali", "addressId": "a", "restaurantIdOfAddedItem": "r1"}
+
+
+@pytest.mark.asyncio
+async def test_update_cart_surfaces_swiggy_rejection_instead_of_silent_empty_cart():
+    client = _sequenced({"update_food_cart": [INVALID_ADDON_REPLY], "get_food_cart": [EMPTY_CART]})
+    cart = await SwiggyOrderService(client=client).update_cart("r1", "a", [{"menu_item_id": "m1", "quantity": 1}])
+    assert cart.success is False and cart.items == []
+    assert "no longer available" in cart.error
+
+
+@pytest.mark.asyncio
+async def test_update_cart_success_makes_no_extra_calls():
+    client = _sequenced({"update_food_cart": [UPDATED_REPLY], "get_food_cart": [CART_WITH_THALI]})
+    cart = await SwiggyOrderService(client=client).update_cart(
+        "r1", "a", [{"menu_item_id": "m1", "quantity": 1}], None, {"m1": "Mini Veg Thali"},
+    )
+    assert cart.success and cart.error is None
+    assert [c.args[0] for c in client.call_tool.call_args_list] == ["update_food_cart", "get_food_cart"]
 
 
 # Shape captured from the live server (Oct 2026), values made up: no success/data
@@ -427,3 +518,198 @@ async def test_confirm_order():
     res = await SwiggyOrderService(client=client).confirm_order("o1", "a", 12.9, 77.6, "c1")
     assert res.result == "success" and res.order_id == "o1"
     assert client.call_tool.call_args.args[1] == {"orderId": "o1", "addressId": "a", "lat": 12.9, "lng": 77.6, "cartId": "c1"}
+
+
+# search_menu row shape from the live server (Oct 2026): variantsV2 sizes plus
+# addon groups, some only valid for one size ("… Medium").
+PIZZA_ROW = {
+    "name": "Margherita", "menu_item_id": "p1", "hasVariants": True, "hasAddons": True,
+    "variantsV2": [
+        {"groupId": "g_crust", "name": "Choose your Crust", "variations": [{"name": "Classic", "id": "v_classic", "inStock": 1, "default": 1}]},
+        {"groupId": "g_size", "name": "Choose Your Size", "variations": [
+            {"name": "Medium", "price": 428, "id": "v_med", "inStock": 1, "default": 1},
+            {"name": "Personal", "price": 228, "id": "v_pers", "inStock": 1},
+            {"name": "Large", "price": 628, "id": "v_large", "inStock": 0}]},
+    ],
+    "addons": [
+        {"groupId": "a_cheese_med", "groupName": "Extra Cheese Medium", "choices": [{"id": "c1", "name": "Cheese", "price": 85}], "maxAddons": 1},
+        {"groupId": "a_meal", "groupName": "Make it a Meal", "choices": [{"id": "c2", "name": "Pepsi", "price": 57}], "maxAddons": -1},
+        {"groupId": "a_cheese", "groupName": "Extra Cheese", "choices": [{"id": "c3", "name": "Cheese", "price": 65}], "maxAddons": 1},
+    ],
+}
+
+
+def test_item_options_shapes_variants_and_ties_size_specific_addons():
+    from app.services.swiggy_order import _item_options
+
+    o = _item_options(PIZZA_ROW)
+    assert o.variant_format == "variants_v2"
+    size = o.variant_groups[1]
+    assert (size.min, size.max) == (1, 1)
+    assert [(c.id, c.price, c.is_default) for c in size.choices] == [("v_med", 428, True), ("v_pers", 228, False)]  # out of stock dropped
+    groups = {g.id: g for g in o.addon_groups}
+    assert groups["a_cheese_med"].only_with_variation == "v_med"
+    assert groups["a_cheese"].hidden_with_variations == ["v_med"]
+    assert groups["a_meal"].max is None and groups["a_meal"].only_with_variation is None
+
+
+def test_item_options_required_addon_groups_keep_their_minimum():
+    from app.services.swiggy_order import _item_options
+
+    o = _item_options(SEARCH_THALI["items"][0])
+    assert o.variant_format is None and o.variant_groups == []
+    assert [(g.id, g.min, g.max) for g in o.addon_groups] == [("g_staple", 1, 1), ("g_extras", 0, 4)]
+
+
+def test_item_options_route(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    client_mock = _client_with({"search_menu": {"items": [PIZZA_ROW]}})
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: SwiggyOrderService(client=client_mock))
+    res = client.get("/api/swiggy/restaurant/r1/items/p1/options", params={"address_id": "a", "name": "Margherita"})
+    body = res.json()
+    assert body["success"] and body["variant_format"] == "variants_v2"
+    client_mock.call_tool.assert_called_once_with(
+        "search_menu", {"query": "Margherita", "addressId": "a", "restaurantIdOfAddedItem": "r1"}
+    )
+
+
+def test_item_options_unknown_item_is_a_soft_error(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    client_mock = _client_with({"search_menu": {"items": []}})
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: SwiggyOrderService(client=client_mock))
+    body = client.get("/api/swiggy/restaurant/r1/items/zz/options", params={"address_id": "a", "name": "X"}).json()
+    assert body["success"] is False and body["error"]
+
+
+def test_update_cart_route_sends_picked_variants_and_addons(client, monkeypatch):
+    from app.routes import swiggy as swiggy_routes
+
+    sent = {}
+
+    class FakeService:
+        async def update_cart(self, restaurant_id, address_id, cart_items, restaurant_name=None, item_names=None):
+            sent["items"] = cart_items
+            return CartResponse(success=True)
+
+    monkeypatch.setattr(swiggy_routes, "_order_service", lambda request: FakeService())
+    client.post("/api/swiggy/cart", json={"restaurant_id": "r", "address_id": "a", "items": [{
+        "menu_item_id": "p1", "quantity": 1, "name": "Margherita",
+        "variants_v2": [{"group_id": "g_size", "variation_id": "v_med"}],
+        "addons": [{"group_id": "a_cheese_med", "choice_id": "c1"}],
+    }]})
+    assert sent["items"] == [{
+        "menu_item_id": "p1", "quantity": 1,
+        "variantsV2": [{"group_id": "g_size", "variation_id": "v_med"}],
+        "addons": [{"group_id": "a_cheese_med", "choice_id": "c1"}],
+    }]
+
+
+def test_menu_items_carry_customizable_flags():
+    from app.services.swiggy_discovery import normalize_menu_item
+
+    item = normalize_menu_item({"id": "1", "name": "Thali", "price": 337, "hasVariants": False, "hasAddons": True})
+    assert (item.has_variants, item.has_addons) == (False, True)
+    assert normalize_menu_item({"id": "2", "name": "Naan", "price": 40}).has_addons is None
+
+
+# fetch_food_coupons live shape (Oct 2026: top level, no envelope); coupon fields per
+# the builder docs' schema — no live store returned a non-empty section to copy.
+COUPONS_LIVE = {
+    "status_message": "done successfully",
+    "coupon_sections": [
+        {"title": "Best coupon", "type": "BEST", "coupons": [
+            {"id": "FLAT75", "applicable": False, "title": "Flat ₹75 off", "subtitle": "Add ₹120 more to avail",
+             "description": "On orders above ₹499", "ribbon_text": "SAVE ₹75",
+             "terms_and_conditions": {"title": "T&C", "bullet_texts": ["Valid once per user", "Cash on delivery"]}},
+            {"id": "TRYNEW", "applicable": True, "title": "50% off up to ₹100", "description": "New users"},
+        ]},
+    ],
+    "summary": {"total_coupons": 2, "applicable_coupons": 1, "sections_count": 1, "filter_applied": "COD only"},
+}
+
+
+@pytest.mark.asyncio
+async def test_fetch_coupons_reads_live_coupon_sections():
+    result = await SwiggyOrderService(client=_client_with({"fetch_food_coupons": COUPONS_LIVE})).fetch_coupons("r", "a")
+    assert [c.coupon_code for c in result.coupons] == ["TRYNEW", "FLAT75"]  # applicable first
+    flat = result.coupons[1]
+    assert (flat.title, flat.subtitle, flat.ribbon_text, flat.applicable, flat.section) == (
+        "Flat ₹75 off", "Add ₹120 more to avail", "SAVE ₹75", False, "Best coupon")
+    assert flat.terms == ["Valid once per user", "Cash on delivery"]
+    assert result.filter_applied == "COD only"
+
+
+@pytest.mark.asyncio
+async def test_fetch_coupons_empty_live_reply():
+    raw = {"status_message": "done successfully", "coupon_sections": [],
+           "summary": {"total_coupons": 0, "applicable_coupons": 0, "sections_count": 0, "filter_applied": "COD only"}}
+    result = await SwiggyOrderService(client=_client_with({"fetch_food_coupons": raw})).fetch_coupons("r", "a")
+    assert result.success and result.coupons == [] and result.filter_applied == "COD only"
+
+
+APPLY_OK = {"statusCode": 0, "statusMessage": "CART", "data": {
+    "cart_id": "c1", "pricing": {"item_total": 428, "delivery_fee": 0, "taxes": 81, "coupon_discount": 75, "to_pay": 434},
+    "offers": {"coupon_applied": "FLAT75", "coupon_discount": 75}, "item_count": 1}}
+CART_AFTER_APPLY = {"statusCode": 0, "statusMessage": "CART", "successful": True, "data": {
+    "items": [{"menu_item_id": 1, "name": "Margherita", "quantity": 1, "final_price": 428}],
+    "pricing": {"item_total": 428, "delivery_charge": 0, "delivery_charge_strikeoff": 51, "taxes_and_charges": 81, "to_pay": 434},
+    "offers": {"coupon_applied": "FLAT75", "coupon_discount": 75, "free_delivery_applied": True}}}
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_returns_the_full_cart_with_the_discount():
+    client = _client_with({"apply_food_coupon": APPLY_OK, "get_food_cart": CART_AFTER_APPLY})
+    result = await SwiggyOrderService(client=client).apply_coupon("FLAT75", "a")
+    assert result.success
+    cart = result.cart
+    assert [i.name for i in cart.items] == ["Margherita"]
+    assert (cart.coupon_applied, cart.coupon_discount, cart.coupon_code, cart.total) == (True, 75, "FLAT75", 434)
+    assert (cart.free_delivery, cart.delivery_strikeoff, cart.delivery_charges) == (True, 51, 0)
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_without_a_discount_is_not_applied():
+    raw = {"statusCode": 1, "statusMessage": "Add items worth ₹120 more to apply this coupon",
+           "data": {"offers": {"coupon_applied": "FLAT75", "coupon_discount": 0}}}
+    client = _client_with({"apply_food_coupon": raw})
+    result = await SwiggyOrderService(client=client).apply_coupon("FLAT75", "a")
+    assert result.success is False and result.error == "Add items worth ₹120 more to apply this coupon"
+    assert [c.args[0] for c in client.call_tool.call_args_list] == ["apply_food_coupon"]
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_reads_the_documented_error_envelope():
+    raw = {"success": False, "error": {"message": "Invalid coupon code"}}
+    result = await SwiggyOrderService(client=_client_with({"apply_food_coupon": raw})).apply_coupon("NOPE", "a")
+    assert result.success is False and result.error == "Invalid coupon code"
+
+
+@pytest.mark.asyncio
+async def test_cart_exposes_free_delivery_and_suggested_coupon():
+    raw = {**CART_AFTER_APPLY, "data": {**CART_AFTER_APPLY["data"], "offers": {
+        "coupon_applied": "TRYNEW", "coupon_discount": 0, "free_delivery_applied": True}}}
+    cart = await SwiggyOrderService(client=_client_with({"get_food_cart": raw})).get_cart("a")
+    assert cart.coupon_applied is False and cart.coupon_code is None
+    assert cart.suggested_coupon == "TRYNEW"
+    assert cart.free_delivery and cart.delivery_strikeoff == 51
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_shows_swiggy_reason_for_an_unknown_code():
+    # Live (Oct 2026): an unknown code is an MCP tool error with report-id boilerplate.
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=SwiggyMCPError(
+        "Swiggy tool error: Coupon does not exist\nReport ID: ERR-X\nSomething went wrong. If this persists, quote report ID"
+    ))
+    result = await SwiggyOrderService(client=client).apply_coupon("NOPE", "a")
+    assert result.success is False and result.error == "Coupon does not exist"
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_transport_errors_still_raise():
+    client = SwiggyMCPClient(token="test-token")
+    client.call_tool = AsyncMock(side_effect=SwiggyMCPError("Swiggy transport error: 503", retryable=True))
+    with pytest.raises(SwiggyMCPError):
+        await SwiggyOrderService(client=client).apply_coupon("X", "a")
