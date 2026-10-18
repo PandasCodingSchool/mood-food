@@ -21,6 +21,7 @@ import logging
 import re
 from typing import Any, Optional
 
+from app.lab import trace
 from app.schemas.swiggy import (
     ORDER_VALUE_CAP_INR,
     ApplyCouponResponse,
@@ -29,6 +30,9 @@ from app.schemas.swiggy import (
     ConfirmOrderResponse,
     Coupon,
     CouponsResponse,
+    ItemOptionsResponse,
+    OptionChoice,
+    OptionGroup,
     OrderDetailsResponse,
     OrderSummary,
     OrdersResponse,
@@ -70,7 +74,104 @@ def _normalize_cart_line(raw: dict) -> Optional[CartLine]:
         # Real get_food_cart lines carry per-line totals, not a unit price.
         line_total = _to_float(_first(raw, "final_price", "total", "subtotal"))
         price = line_total / quantity if line_total is not None and quantity else None
-    return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity)
+    # Live lines echo the chosen variant (often just the dish name again) and addons.
+    picked = [
+        str(c["name"]) for key in ("variants", "addons") for c in (raw.get(key) or [])
+        if isinstance(c, dict) and c.get("name") and str(c["name"]) != str(name)
+    ]
+    return CartLine(id=str(iid), name=str(name), price=price, quantity=quantity, customizations=picked)
+
+
+def _update_rejection(raw: Any) -> Optional[tuple[str, list[str]]]:
+    """(message, errorCodes) when update_food_cart refused the items, else None.
+
+    A refused update still comes back isError=False — e.g. {statusCode: 1,
+    successful: false, errorCodes: ["INVALID_ADDON"]} — and leaves the cart empty.
+    """
+    if not isinstance(raw, dict):
+        return None
+    code = raw.get("statusCode")
+    if raw.get("successful") is not False and code in (None, 0):
+        return None
+    codes = [str(c) for c in (raw.get("errorCodes") or [])]
+    message = raw.get("titleMessage") or raw.get("statusMessage") or "Swiggy couldn't add these items."
+    return str(message), codes
+
+
+def _default_addons(row: dict) -> list[dict]:
+    """One pick per required addon group (minAddons > 0): free and in-stock first, in menu order."""
+    picks: list[dict] = []
+    for group in row.get("addons") or []:
+        if not isinstance(group, dict):
+            continue
+        need = int(_to_float(group.get("minAddons")) or 0)
+        gid = _first(group, "groupId", "group_id")
+        if need <= 0 or gid is None:
+            continue
+        choices = [c for c in group.get("choices") or [] if isinstance(c, dict) and _in_stock(c)]
+        choices.sort(key=lambda c: _to_float(c.get("price")) or 0)  # stable: menu order among equals
+        picks += [{"group_id": str(gid), "choice_id": str(c["id"])} for c in choices[:need] if c.get("id") is not None]
+    return picks
+
+
+def _in_stock(choice: dict) -> bool:
+    return choice.get("inStock", 1) not in (0, "0", False)
+
+
+def _option_group(raw: dict, choices_key: str, required: bool) -> Optional[OptionGroup]:
+    gid = _first(raw, "groupId", "group_id")
+    if gid is None:
+        return None
+    choices = [
+        OptionChoice(id=str(c["id"]), name=str(c.get("name") or ""), price=_to_float(c.get("price")),
+                     is_default=bool(c.get("default")))
+        for c in raw.get(choices_key) or [] if isinstance(c, dict) and c.get("id") is not None and _in_stock(c)
+    ]
+    if not choices:
+        return None
+    if required:  # a variant group: exactly one
+        return OptionGroup(id=str(gid), name=str(_first(raw, "name", "groupName", default="")), min=1, max=1, choices=choices)
+    upper = int(_to_float(raw.get("maxAddons")) or 0)
+    return OptionGroup(
+        id=str(gid), name=str(_first(raw, "groupName", "name", default="")),
+        min=int(_to_float(raw.get("minAddons")) or 0),
+        max=upper if upper > 0 else None,  # 0 / -1 = unlimited
+        choices=choices,
+    )
+
+
+def _item_options(row: dict) -> ItemOptionsResponse:
+    """A search_menu row's choices, shaped for the app's picker.
+
+    An item carries EITHER legacy `variations` OR `variantsV2` (each a list of
+    groups with `variations`), plus `addons` groups with min/maxAddons.
+    search_menu lists every addon group for every size; Swiggy only says which
+    apply to the chosen size once the item is in the cart, so size-suffixed
+    groups ("Extra Cheese Medium") are tied to that size by name.
+    """
+    v2 = row.get("variantsV2")
+    legacy = row.get("variations")
+    raw_variants = v2 if isinstance(v2, list) and v2 else legacy if isinstance(legacy, list) else []
+    variant_groups = [g for g in (_option_group(r, "variations", True) for r in raw_variants if isinstance(r, dict)) if g]
+    addon_groups = [g for g in (_option_group(r, "choices", False) for r in row.get("addons") or [] if isinstance(r, dict)) if g]
+    by_name = {g.name.strip().lower(): g for g in addon_groups}
+    variations = [(c.id, c.name.strip().lower()) for g in variant_groups for c in g.choices if c.name.strip()]
+    for g in addon_groups:
+        name = g.name.strip().lower()
+        for vid, vname in variations:
+            if name.endswith(" " + vname):
+                g.only_with_variation = vid
+                generic = by_name.get(name[: -len(vname)].strip())
+                if generic is not None and vid not in generic.hidden_with_variations:
+                    generic.hidden_with_variations.append(vid)
+                break
+    return ItemOptionsResponse(
+        success=True,
+        item_id=str(_first(row, "menu_item_id", "id", default="")) or None,
+        variant_format=("variants_v2" if raw_variants is v2 else "variants") if variant_groups else None,
+        variant_groups=variant_groups,
+        addon_groups=addon_groups,
+    )
 
 
 def _payment_option_groups(options: Any) -> list[str]:
@@ -156,7 +257,9 @@ def _normalize_cart(raw: Any) -> CartResponse:
         coupon_discount = _to_float(_first(applied_raw, "coupon_discount", "couponDiscount"))
         coupon_applied = coupon_discount is not None and coupon_discount > 0
     else:
-        coupon_discount = _to_float(_first(offers, "coupon_discount", "couponDiscount"))
+        # apply_food_coupon also reports it under pricing.
+        coupon_discount = _to_float(_first(offers, "coupon_discount", "couponDiscount",
+                                           default=_first(pricing, "coupon_discount", "couponDiscount")))
         coupon_applied = bool(applied_raw)
     if isinstance(applied_raw, str):
         # Live shape: coupon_applied is the code; a 0 discount means it is only
@@ -173,10 +276,14 @@ def _normalize_cart(raw: Any) -> CartResponse:
         subtotal=_to_float(_first(pricing, "item_total", "itemTotal", default=_first(data, "subtotal", "sub_total"))),
         # A 0 delivery charge is a real value (free delivery), not "missing".
         delivery_charges=_to_float(_first(
-            pricing, "delivery_charge", "deliveryCharge",
+            pricing, "delivery_charge", "deliveryCharge", "delivery_fee",
             default=_first(data, "deliveryCharges", "delivery_charges", "deliveryFee"),
         )),
-        taxes=_to_float(_first(pricing, "taxes_and_charges", "taxesAndCharges")),
+        delivery_strikeoff=_to_float(_first(pricing, "delivery_charge_strikeoff", "deliveryChargeStrikeoff")),
+        free_delivery=bool(_first(offers, "free_delivery_applied", "freeDeliveryApplied", default=False)),
+        coupon_code=applied_raw if isinstance(applied_raw, str) and applied_raw and coupon_discount and coupon_discount > 0 else None,
+        suggested_coupon=applied_raw if isinstance(applied_raw, str) and applied_raw and not (coupon_discount and coupon_discount > 0) else None,
+        taxes=_to_float(_first(pricing, "taxes_and_charges", "taxesAndCharges", "taxes")),
         total=_to_float(_first(pricing, "to_pay", "toPay", default=_first(data, "total", "grandTotal", "finalTotal"))),
         available_payment_methods=[str(p) for p in payment_methods],
         coupon_applied=coupon_applied or (coupon_discount is not None and coupon_discount > 0),
@@ -259,18 +366,68 @@ def _normalize_placed(raw: Any) -> PlaceOrderResponse:
     )
 
 
-def _normalize_coupon(raw: dict) -> Optional[Coupon]:
-    code = _first(raw, "couponCode", "coupon_code", "code")
+def _normalize_coupon(raw: dict, section: Optional[str] = None) -> Optional[Coupon]:
+    # Live cards carry the code as `id`; older/doc shapes as couponCode.
+    code = _first(raw, "couponCode", "coupon_code", "code", "id")
     if code is None:
         return None
+    terms_raw = _first(raw, "termsAndConditions", "terms_and_conditions")
+    terms: list[str] = []
+    if isinstance(terms_raw, dict):  # live: {title, bullet_texts: [...]}
+        terms = [str(t) for t in terms_raw.get("bullet_texts") or [] if t]
+        terms_raw = " ".join(terms) or None
+    applicable = raw.get("applicable")
     return Coupon(
         coupon_code=str(code),
-        discount=_first(raw, "discount"),
-        description=_first(raw, "description"),
+        discount=_str_or_none(_first(raw, "discount")),
+        description=_str_or_none(_first(raw, "description")),
         applicability_status=_first(raw, "applicabilityStatus", "applicability_status"),
         payment_method=_first(raw, "paymentMethod", "payment_method"),
-        terms_and_conditions=_first(raw, "termsAndConditions", "terms_and_conditions"),
+        terms_and_conditions=_str_or_none(terms_raw),
+        title=_str_or_none(raw.get("title")),
+        subtitle=_str_or_none(raw.get("subtitle")),
+        ribbon_text=_str_or_none(raw.get("ribbon_text")),
+        applicable=bool(applicable) if applicable is not None else None,
+        terms=terms,
+        section=section,
     )
+
+
+def _coupon_rows(raw: Any) -> list[tuple[dict, Optional[str]]]:
+    """(coupon, section title) from the live coupon_sections shape, else a flat coupons list."""
+    for d in _walk_dicts(raw, into_lists=False):
+        sections = d.get("coupon_sections")
+        if isinstance(sections, list):
+            return [
+                (c, _str_or_none(s.get("title")))
+                for s in sections if isinstance(s, dict)
+                for c in s.get("coupons") or [] if isinstance(c, dict)
+            ]
+    return [(r, None) for r in _as_list(raw, "coupons", "data") if isinstance(r, dict)]
+
+
+_TOOL_ERROR_PREFIX = "Swiggy tool error: "
+
+
+def _tool_error_reason(message: str) -> Optional[str]:
+    """First line of a Swiggy domain error (not transport/auth), without the report-id boilerplate."""
+    if not message.startswith(_TOOL_ERROR_PREFIX):
+        return None
+    first = message[len(_TOOL_ERROR_PREFIX):].strip().splitlines()
+    return first[0].strip() if first and first[0].strip() else None
+
+
+def _coupon_refusal(raw: Any) -> str:
+    """Swiggy's reason a coupon didn't apply, in a form we can show."""
+    if isinstance(raw, dict):
+        err = raw.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+        for d in _walk_dicts(raw, into_lists=False):
+            msg = _first(d, "titleMessage", "statusMessage", "message")
+            if isinstance(msg, str) and msg.strip() and msg.strip().upper() not in ("CART", "OK", "SUCCESS", "DONE SUCCESSFULLY"):
+                return msg.strip()
+    return "This coupon can't be applied to your cart."
 
 
 def _is_cod_eligible(coupon: Coupon) -> bool:
@@ -340,22 +497,43 @@ class SwiggyOrderService:
         if coupon_code:
             args["couponCode"] = coupon_code
         raw = await self.client.call_tool("fetch_food_coupons", args)
-        rows = _as_list(raw, "coupons", "data")
-        coupons = [c for c in (_normalize_coupon(r) for r in rows) if c is not None]
+        coupons = [c for c in (_normalize_coupon(r, s) for r, s in _coupon_rows(raw)) if c is not None]
+        # Swiggy already filters to COD-valid coupons ("filter_applied": "COD only");
+        # this only drops rows that explicitly say otherwise.
         cod_coupons = [c for c in coupons if _is_cod_eligible(c)]
+        cod_coupons.sort(key=lambda c: c.applicable is False)  # usable ones first, Swiggy order kept
+        summary = next((d["summary"] for d in _walk_dicts(raw, into_lists=False) if isinstance(d.get("summary"), dict)), {})
         logger.info(
-            "fetch_coupons restaurant=%s: %d coupons, %d COD-eligible",
-            restaurant_id, len(coupons), len(cod_coupons),
+            "fetch_coupons restaurant=%s: %d coupons, %d COD-eligible, filter=%s",
+            restaurant_id, len(coupons), len(cod_coupons), summary.get("filter_applied"),
         )
-        return CouponsResponse(success=True, coupons=cod_coupons)
+        return CouponsResponse(success=True, coupons=cod_coupons, filter_applied=_str_or_none(summary.get("filter_applied")))
 
     async def apply_coupon(self, coupon_code: str, address_id: str) -> ApplyCouponResponse:
-        raw = await self.client.call_tool(
-            "apply_food_coupon", {"couponCode": coupon_code, "addressId": address_id}
-        )
-        cart = _normalize_cart(raw)
+        try:
+            raw = await self.client.call_tool(
+                "apply_food_coupon", {"couponCode": coupon_code, "addressId": address_id}
+            )
+        except SwiggyMCPError as exc:
+            # A refused code comes back as a tool error: "Coupon does not exist\nReport ID: …".
+            reason = _tool_error_reason(str(exc))
+            if reason is None:
+                raise
+            logger.info("apply_coupon %s: refused (%s)", coupon_code, reason)
+            return ApplyCouponResponse(success=False, error=reason)
+        applied = _normalize_cart(raw)
+        # Swiggy's rule: a coupon is applied only when coupon_discount > 0. A
+        # refusal may still come back as a "success" with no discount.
+        if not applied.coupon_applied:
+            message = _coupon_refusal(raw)
+            logger.info("apply_coupon %s: not applied (%s)", coupon_code, message)
+            return ApplyCouponResponse(success=False, error=message)
+        # The apply reply is a trimmed cart (no lines, other price keys): read the full one.
+        cart = await self.get_cart(address_id)
         if not cart.coupon_applied:
-            logger.info("apply_coupon %s: applied but no discount detected in response", coupon_code)
+            cart.coupon_applied, cart.coupon_discount = True, applied.coupon_discount
+            cart.total = applied.total if applied.total is not None else cart.total
+        cart.coupon_code = cart.coupon_code or coupon_code
         return ApplyCouponResponse(success=True, cart=cart)
 
     async def get_cart(self, address_id: str, restaurant_name: Optional[str] = None) -> CartResponse:
@@ -386,6 +564,7 @@ class SwiggyOrderService:
         address_id: str,
         cart_items: list[dict],
         restaurant_name: Optional[str] = None,
+        item_names: Optional[dict[str, str]] = None,
     ) -> CartResponse:
         args: dict[str, Any] = {
             "restaurantId": restaurant_id,
@@ -394,10 +573,58 @@ class SwiggyOrderService:
         }
         if restaurant_name:
             args["restaurantName"] = restaurant_name
-        await self.client.call_tool("update_food_cart", args)
+        rejection = _update_rejection(await self.client.call_tool("update_food_cart", args))
+        if rejection and "INVALID_ADDON" in rejection[1]:
+            # Dishes with a required choice (e.g. "Choice of Rice") are dropped
+            # without one. The app has no picker, so pick the defaults and retry once.
+            filled = await self._with_required_addons(restaurant_id, address_id, cart_items, item_names or {})
+            if filled is not None:
+                args["cartItems"] = filled
+                rejection = _update_rejection(await self.client.call_tool("update_food_cart", args))
         # update_food_cart "does not render UI" per the docs — always follow
         # with get_food_cart to get the authoritative totals.
-        return await self.get_cart(address_id, restaurant_name)
+        cart = await self.get_cart(address_id, restaurant_name)
+        if rejection:
+            logger.warning("update_food_cart rejected: %s codes=%s", rejection[0], rejection[1])
+            if not cart.items:
+                cart.success = False
+                cart.error = rejection[0]
+        return cart
+
+    async def _with_required_addons(
+        self, restaurant_id: str, address_id: str, cart_items: list[dict], item_names: dict[str, str]
+    ) -> Optional[list[dict]]:
+        """cart_items with default picks for each item's required addon groups (None if nothing to add)."""
+        filled: list[dict] = []
+        changed = False
+        for item in cart_items:
+            iid = str(item.get("menu_item_id"))
+            name = item_names.get(iid)
+            if item.get("addons") or not name:
+                filled.append(item)
+                continue
+            row = await self._menu_row(restaurant_id, address_id, iid, name)
+            addons = _default_addons(row) if row else []
+            if not addons:
+                logger.info("update_cart: no required addons found for item %s", iid)
+            trace.emit("cart.default_addons", item=iid, name=name, addons=addons)
+            changed = changed or bool(addons)
+            filled.append({**item, "addons": addons} if addons else item)
+        return filled if changed else None
+
+    async def _menu_row(self, restaurant_id: str, address_id: str, item_id: str, name: str) -> Optional[dict]:
+        """The item's full search_menu row (with its variants/addons); search_menu scoped to the restaurant."""
+        raw = await self.client.call_tool(
+            "search_menu", {"query": name, "addressId": address_id, "restaurantIdOfAddedItem": restaurant_id}
+        )
+        return next((d for d in _walk_dicts(raw) if str(_first(d, "menu_item_id", "id", default="")) == item_id), None)
+
+    async def item_options(self, restaurant_id: str, address_id: str, item_id: str, name: str) -> ItemOptionsResponse:
+        """Variant/addon groups for one dish, for the app's choice picker."""
+        row = await self._menu_row(restaurant_id, address_id, item_id, name)
+        if row is None:
+            return ItemOptionsResponse(success=False, item_id=item_id, error="Couldn't load the options for this dish.")
+        return _item_options(row)
 
     async def flush_cart(self) -> None:
         await self.client.call_tool("flush_food_cart", {})

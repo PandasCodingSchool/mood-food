@@ -4,7 +4,7 @@
 // Params: restaurantId, restaurantName, addressId, etaMin?, and dishId/dishName
 // of the recommendation that led here (for signals).
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Image, Linking, Modal, Platform, Pressable, View } from 'react-native';
+import { Image, Linking, Modal, Platform, Pressable, TextInput, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -81,6 +81,9 @@ export default function OrderConfirmScreen() {
   const [cartLoading, setCartLoading] = useState(true);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [applying, setApplying] = useState<string | null>(null);
   // Kept apart from `cart`: a coupon response doesn't carry payment options.
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [paymentId, setPaymentId] = useState<string | null>(null);
@@ -101,6 +104,7 @@ export default function OrderConfirmScreen() {
       setOrderError(null);
       const result = await getCart(addrId, params.restaurantName);
       setCart(result);
+      setAppliedCoupon(result.couponCode ?? null);
       setCapExceeded((result.total ?? 0) >= 1000);
       const options = result.paymentOptions.filter(usableOn);
       setPaymentOptions(options);
@@ -144,18 +148,21 @@ export default function OrderConfirmScreen() {
     await loadCartFor(id);
   };
 
-  const handleApplyCoupon = async (code: string) => {
-    if (!addressId) return;
-    setCartLoading(true);
+  const handleApplyCoupon = async (raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!addressId || !code || applying) return;
+    setApplying(code);
+    setCouponError(null);
     const result = await applyCoupon(code, addressId);
     if (result.success) {
       setCart(result);
-      setAppliedCoupon(code);
+      setAppliedCoupon(result.couponCode ?? code);
       setCapExceeded((result.total ?? 0) >= 1000);
-    } else if (result.error) {
-      setOrderError(result.error);
+      setCouponInput('');
+    } else {
+      setCouponError(result.error || "Couldn't apply this coupon.");
     }
-    setCartLoading(false);
+    setApplying(null);
   };
 
   const subtotal = cart?.subtotal ?? 0;
@@ -163,6 +170,10 @@ export default function OrderConfirmScreen() {
   const discount = cart?.couponDiscount ?? 0;
   const taxes = cart?.taxes ?? 0;
   const total = cart?.total ?? subtotal + delivery + taxes - discount;
+  // Swiggy's own waiver counts as a saving too (e.g. ₹51 delivery → free).
+  const waived = cart?.freeDelivery && delivery === 0 ? cart.deliveryStrikeoff ?? 0 : 0;
+  const savings = discount + waived;
+  const suggested = cart?.suggestedCoupon && !coupons.some((cp) => cp.couponCode === cart.suggestedCoupon) ? cart.suggestedCoupon : null;
   const summary = cart?.items?.length ? cart.items.map((i) => `${i.quantity}× ${i.name}`).join(', ') : restaurantName;
 
   const saveOrderHistory = async (orderId: string | null | undefined) => {
@@ -250,7 +261,7 @@ export default function OrderConfirmScreen() {
 
   const { weather } = useLiveMood();
   const fmt = (n: number) => `₹${Math.round(n)}`;
-  const lines = (cart?.items ?? []).map((i) => ({ key: i.id, name: i.name, qty: i.quantity, total: i.price != null ? fmt(i.price * i.quantity) : '' }));
+  const lines = (cart?.items ?? []).map((i) => ({ key: i.id, name: i.name, note: (i.customizations ?? []).join(', '), qty: i.quantity, total: i.price != null ? fmt(i.price * i.quantity) : '' }));
   const deliveryTxt = delivery === 0 ? 'Included' : fmt(delivery);
   const canPlace = !placing && !cartLoading && !!addressId && lines.length > 0;
 
@@ -292,7 +303,10 @@ export default function OrderConfirmScreen() {
                 <View style={{ height: 32, minWidth: 34, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1, borderColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
                   <Text variant="button13">{`${l.qty}×`}</Text>
                 </View>
-                <Text variant="bodyStrong14" style={{ flex: 1 }} numberOfLines={2}>{l.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyStrong14" numberOfLines={2}>{l.name}</Text>
+                  {l.note ? <Text variant="caption12" tone="ink2" numberOfLines={2} style={{ marginTop: 2 }}>{l.note}</Text> : null}
+                </View>
                 <Text variant="bodyStrong14">{l.total}</Text>
               </View>
             ))
@@ -306,36 +320,85 @@ export default function OrderConfirmScreen() {
           ) : null}
         </Surface>
 
-        {coupons.length > 0 ? (
-          <View style={{ paddingHorizontal: space.gutter, marginTop: 12, gap: 8 }}>
-            {coupons.map((cp) => {
-              const on = appliedCoupon === cp.couponCode;
-              return (
-                <Pressable key={cp.couponCode} onPress={() => !on && handleApplyCoupon(cp.couponCode)} accessibilityRole="button" accessibilityState={{ selected: on }}>
-                  <Surface kind={on ? 'accentSoft' : 'glass'} radius={18} style={{ paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                    <Icon name="sell" size={20} tone="accText" />
-                    <View style={{ flex: 1 }}>
-                      <Text variant="bodyStrong14" tone={on ? 'accText' : 'ink'}>{on ? `${cp.couponCode} applied` : cp.couponCode}</Text>
-                      {cp.description ? <Text variant="caption12" tone="ink2" numberOfLines={2} style={{ marginTop: 2 }}>{cp.description}</Text> : null}
-                    </View>
-                    {!on ? <Text variant="button13" tone="accText">Apply</Text> : <Icon name="check_circle" size={20} tone="accText" filled />}
-                  </Surface>
-                </Pressable>
-              );
-            })}
+        {cart?.items?.length ? (
+          <View style={{ paddingHorizontal: space.gutter, marginTop: 16, gap: 8 }}>
+            <Text variant="title19" style={{ paddingHorizontal: 4 }}>Offers</Text>
+            {suggested && appliedCoupon !== suggested ? (
+              <CouponCard
+                code={suggested}
+                title={`Swiggy's best coupon: ${suggested}`}
+                note="Suggested for this cart"
+                state={applying === suggested ? 'applying' : 'idle'}
+                onApply={() => void handleApplyCoupon(suggested)}
+              />
+            ) : null}
+            {coupons.map((cp) => (
+              <CouponCard
+                key={cp.couponCode}
+                code={cp.couponCode}
+                title={cp.title || cp.couponCode}
+                ribbon={cp.ribbonText}
+                note={[cp.subtitle, cp.description].filter(Boolean).join(' · ')}
+                terms={cp.terms}
+                state={appliedCoupon === cp.couponCode ? 'applied' : applying === cp.couponCode ? 'applying' : cp.applicable === false ? 'blocked' : 'idle'}
+                onApply={() => void handleApplyCoupon(cp.couponCode)}
+              />
+            ))}
+            {appliedCoupon && !coupons.some((cp) => cp.couponCode === appliedCoupon) ? (
+              <CouponCard code={appliedCoupon} title={appliedCoupon} state="applied" onApply={() => undefined} />
+            ) : null}
+            <Surface kind="tint" radius={18} style={{ padding: 6, paddingLeft: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Icon name="sell" size={18} tone="ink2" />
+              <TextInput
+                value={couponInput}
+                onChangeText={(t) => {
+                  setCouponInput(t);
+                  setCouponError(null);
+                }}
+                placeholder="Have a coupon code?"
+                placeholderTextColor={c.ink2}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => void handleApplyCoupon(couponInput)}
+                accessibilityLabel="Coupon code"
+                style={{ flex: 1, height: 40, fontSize: 14, fontFamily: 'Geist_500Medium', color: c.ink }}
+              />
+              <Button
+                label="Apply"
+                size="sm"
+                variant="outline"
+                loading={!!applying && applying === couponInput.trim().toUpperCase()}
+                disabled={!couponInput.trim() || !!applying}
+                onPress={() => void handleApplyCoupon(couponInput)}
+              />
+            </Surface>
+            {couponError ? (
+              <Text variant="caption12" tone="accText" accessibilityLiveRegion="polite" style={{ paddingHorizontal: 4 }}>{couponError}</Text>
+            ) : null}
+            <Text variant="micro12" tone="ink2" style={{ paddingHorizontal: 4 }}>
+              {coupons.length || suggested
+                ? 'Swiggy shares its cash-on-delivery coupons with partner apps. Bank and card offers stay in the Swiggy app.'
+                : 'No Swiggy coupons for this cart right now. Swiggy shares only cash-on-delivery coupons with partner apps; a code from the Swiggy app can still work here.'}
+            </Text>
           </View>
         ) : null}
 
         <Surface kind="solid" radius={24} style={{ marginHorizontal: space.gutter, marginTop: 12, paddingVertical: 14, paddingHorizontal: 16, gap: 9 }}>
           <BillRow label="Item total" value={fmt(subtotal)} />
-          <BillRow label="Delivery" value={deliveryTxt} />
+          <BillRow label="Delivery" value={waived > 0 ? 'Free' : deliveryTxt} was={waived > 0 ? fmt(waived) : undefined} accent={waived > 0} />
           {taxes > 0 ? <BillRow label="Taxes & charges" value={fmt(taxes)} /> : null}
-          {discount > 0 ? <BillRow label={`Coupon (${appliedCoupon})`} value={`−${fmt(discount)}`} accent /> : null}
+          {discount > 0 ? <BillRow label={`Coupon (${cart?.couponCode ?? appliedCoupon})`} value={`−${fmt(discount)}`} accent /> : null}
           <View style={{ height: 1, backgroundColor: c.line, marginVertical: 3 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text variant="bodyStrong16">To pay</Text>
             <Text variant="bodyStrong16">{fmt(total)}</Text>
           </View>
+          {savings > 0 ? (
+            <Surface kind="accentSoft" radius={12} style={{ paddingVertical: 8, paddingHorizontal: 12, marginTop: 2 }}>
+              <Text variant="caption13" tone="accText">{`You save ${fmt(savings)} on this order`}</Text>
+            </Surface>
+          ) : null}
         </Surface>
 
         {paymentOptions.length > 0 ? (
@@ -424,11 +487,53 @@ export default function OrderConfirmScreen() {
   );
 }
 
-function BillRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function BillRow({ label, value, accent, was }: { label: string; value: string; accent?: boolean; was?: string }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
       <Text variant="body13" tone="ink2">{label}</Text>
-      <Text variant="bodyStrong14" style={{ fontSize: 13.5 }} tone={accent ? 'accText' : 'ink'}>{value}</Text>
+      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'baseline' }}>
+        {was ? <Text variant="caption13" tone="ink2" style={{ textDecorationLine: 'line-through' }}>{was}</Text> : null}
+        <Text variant="bodyStrong14" style={{ fontSize: 13.5 }} tone={accent ? 'accText' : 'ink'}>{value}</Text>
+      </View>
     </View>
+  );
+}
+
+function CouponCard({ code, title, ribbon, note, terms, state, onApply }: {
+  code: string;
+  title: string;
+  ribbon?: string | null;
+  note?: string;
+  terms?: string[];
+  state: 'idle' | 'applying' | 'applied' | 'blocked';
+  onApply: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const on = state === 'applied';
+  return (
+    <Surface kind={on ? 'accentSoft' : 'glass'} radius={18} style={{ paddingVertical: 12, paddingHorizontal: 14, opacity: state === 'blocked' ? 0.7 : 1 }}>
+      <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+        <Icon name="sell" size={20} tone="accText" />
+        <View style={{ flex: 1 }}>
+          {ribbon ? <Text variant="micro11" tone="accText">{ribbon}</Text> : null}
+          <Text variant="bodyStrong14" tone={on ? 'accText' : 'ink'}>{on ? `${code} applied` : title}</Text>
+          {title !== code && !on ? <Text variant="micro12" tone="ink2" style={{ marginTop: 1 }}>{`Code ${code}`}</Text> : null}
+          {note ? <Text variant="caption12" tone="ink2" numberOfLines={2} style={{ marginTop: 2 }}>{note}</Text> : null}
+        </View>
+        {on ? (
+          <Icon name="check_circle" size={20} tone="accText" filled />
+        ) : state === 'blocked' ? (
+          <Text variant="micro12" tone="ink2">Not yet</Text>
+        ) : (
+          <Button label="Apply" size="sm" variant="ghost" loading={state === 'applying'} onPress={onApply} accessibilityLabel={`Apply coupon ${code}`} />
+        )}
+      </View>
+      {terms?.length ? (
+        <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ marginTop: 6, marginLeft: 30 }}>
+          <Text variant="micro12" tone="accText">{open ? 'Hide terms' : 'Terms'}</Text>
+          {open ? terms.map((t, i) => <Text key={i} variant="caption12" tone="ink2" style={{ marginTop: 3 }}>{`• ${t}`}</Text>) : null}
+        </Pressable>
+      ) : null}
+    </Surface>
   );
 }
