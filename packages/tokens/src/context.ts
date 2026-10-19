@@ -1,15 +1,15 @@
 // The three context axes that drive the living theme:
 //   time    → base gradient + light/dark
 //   weather → backdrop overrides + ambient effects (rain, fog, sun glow, lightning)
-//   mood    → accent hue (shared lightness/chroma so contrast holds)
+//   mood    → accent hue (shared lightness so contrast holds)
 
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 export type Weather = 'rainy' | 'sunny' | 'cloudy' | 'stormy';
-export type Mood = 'happy' | 'tired' | 'stressed' | 'adventurous';
+export type Mood = 'happy' | 'hungry' | 'tired' | 'stressed' | 'adventurous';
 
 export const TIMES_OF_DAY: TimeOfDay[] = ['morning', 'afternoon', 'evening', 'night'];
 export const WEATHERS: Weather[] = ['rainy', 'sunny', 'cloudy', 'stormy'];
-export const MOODS: Mood[] = ['happy', 'tired', 'stressed', 'adventurous'];
+export const MOODS: Mood[] = ['happy', 'hungry', 'tired', 'stressed', 'adventurous'];
 
 /** CSS-style linear gradient: angle in degrees (0 = to top, 90 = to right). */
 export interface Gradient {
@@ -85,13 +85,18 @@ export interface MoodSpec {
   hue: number;
   /** OKLCH chroma. */
   chroma: number;
+  /** Hue offset of the second gradient stop (acc2); defaults to +28°. */
+  shift?: number;
 }
 
+// Hues are picked for the feeling: sunshine for happy, paprika for hungry,
+// twilight for tired, calming lavender for stressed, electric fuchsia for adventurous.
 export const MOOD_SPECS: Record<Mood, MoodSpec> = {
-  happy: { label: 'Happy', icon: 'sentiment_very_satisfied', hue: 55, chroma: 0.17 },
-  tired: { label: 'Tired', icon: 'bedtime', hue: 72, chroma: 0.12 },
-  stressed: { label: 'Stressed', icon: 'spa', hue: 165, chroma: 0.1 },
-  adventurous: { label: 'Adventurous', icon: 'explore', hue: 355, chroma: 0.18 },
+  happy: { label: 'Happy', icon: 'sentiment_very_satisfied', hue: 85, chroma: 0.16, shift: -32 },
+  hungry: { label: 'Hungry', icon: 'restaurant', hue: 38, chroma: 0.18 },
+  tired: { label: 'Tired', icon: 'bedtime', hue: 262, chroma: 0.085 },
+  stressed: { label: 'Stressed', icon: 'spa', hue: 305, chroma: 0.11, shift: -40 },
+  adventurous: { label: 'Adventurous', icon: 'explore', hue: 350, chroma: 0.19 },
 };
 
 /** Clock hour (0-23) → time-of-day bucket. */

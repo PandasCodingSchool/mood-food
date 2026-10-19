@@ -1,5 +1,5 @@
 /* MoodFood site — styled from @moodfood/tokens. Colour comes from CSS variables
-   set by <ThemeRoot> (lib/theme.ts: the app's evening theme, "tired" accent);
+   set by <ThemeRoot> (lib/theme.ts: the app's evening theme, "happy" gold accent);
    the hero/plum and paper values below are the marketing design's deeper
    variants of that palette. Type mirrors packages/tokens/src/typography.ts. */
 
@@ -11,7 +11,6 @@
   --band: #2a1230;
   --night-ink: #17130f;
   --swiggy: #fc8019;
-  --swiggy-ink: #1a0e05;
   --paper-bg: #f6f1ea;
   --paper-card: #fffcf8;
   --paper-ink: #17130f;
@@ -423,24 +422,14 @@ button {
   letter-spacing: -0.03em;
 }
 
-.brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: #fff;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+
+
+
+/* Transparent wordmark: keep its aspect ratio at whatever width it's given. */
+.brand-logo {
+  display: block;
+  height: auto;
   flex: none;
-}
-
-.brand-mark img {
-  object-fit: contain;
-}
-
-.brand-mark-sm {
-  width: 40px;
-  height: 40px;
 }
 
 .nav-links {
@@ -1129,8 +1118,10 @@ button {
   margin: 0 auto;
   padding: clamp(28px, 5vw, 64px);
   border-radius: 40px;
-  background: var(--swiggy);
-  color: var(--swiggy-ink);
+  /* Warm apricot, like the app's morning backdrop, lit by a Swiggy-orange glow. */
+  background: linear-gradient(150deg, #fff3e6 0%, #ffdcbc 52%, #ffc193 100%);
+  color: var(--paper-ink);
+  border: 1px solid rgba(252, 128, 25, 0.18);
   display: flex;
   flex-wrap: wrap;
   gap: 40px;
@@ -1150,7 +1141,9 @@ button {
   width: 420px;
   height: 420px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--swiggy);
+  filter: blur(120px);
+  opacity: 0.32;
   pointer-events: none;
 }
 
@@ -1173,6 +1166,7 @@ button {
   max-width: 500px;
   font-size: 18px;
   line-height: 1.5;
+  color: var(--paper-body);
   text-wrap: pretty;
 }
 
@@ -1198,7 +1192,10 @@ button {
 .swiggy-points li {
   padding: 20px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 19, 15, 0.06);
+  box-shadow: 0 14px 30px -22px rgba(138, 58, 34, 0.45);
+  backdrop-filter: blur(10px);
   display: flex;
   gap: 16px;
   align-items: flex-start;
@@ -1208,7 +1205,7 @@ button {
   margin: 4px 0 0;
   font-size: 14.5px;
   line-height: 1.45;
-  color: #3d2a1a;
+  color: var(--paper-ink2);
 }
 
 .swiggy-icon {
@@ -1216,8 +1213,9 @@ button {
   height: 46px;
   flex: none;
   border-radius: 14px;
-  background: var(--swiggy-ink);
-  color: var(--swiggy);
+  background: var(--swiggy);
+  color: #fff;
+  box-shadow: 0 8px 18px -8px rgba(252, 128, 25, 0.7);
   display: grid;
   place-items: center;
 }
@@ -1903,14 +1901,6 @@ button {
   gap: 12px;
 }
 
-.footer-name {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
 
 .footer-tag {
   margin: 2px 0 0;

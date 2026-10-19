@@ -7,13 +7,8 @@ export function Footer() {
     <footer className="footer">
       <div className="container footer-top">
         <div className="footer-brand">
-          <span className="brand-mark brand-mark-sm">
-            <Image src="/moodfood-logo.png" alt="" width={38} height={38} />
-          </span>
-          <div>
-            <p className="footer-name">MoodFood</p>
-            <p className="footer-tag">Made in India · Powered by Swiggy</p>
-          </div>
+          <Image src="/moodfood-mark-dark.png" alt="MoodFood" width={66} height={56} className="brand-logo" />
+          <p className="footer-tag">Made in India · Powered by Swiggy</p>
         </div>
         <nav aria-label="Footer" className="footer-links">
           <Link href="/about">About us</Link>

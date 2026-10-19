@@ -15,6 +15,7 @@ Rules enforced here (see https://mcp.swiggy.com/builders/docs/reference/instamar
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
 from app.config import settings
@@ -42,17 +43,27 @@ def _to_float(v: Any) -> Optional[float]:
         return None
 
 
+def _money(v: Any) -> Optional[float]:
+    """Amounts arrive as numbers or display strings ("₹349", "1,099.00")."""
+    if isinstance(v, dict):
+        v = v.get("value")
+    if isinstance(v, str):
+        m = re.search(r"\d[\d,]*(?:\.\d+)?", v)
+        v = m.group(0).replace(",", "") if m else None
+    return _to_float(v)
+
+
 def _normalize_cart_line(raw: dict) -> Optional[InstamartCartLine]:
     spin_id = _first(raw, "spinId", "spin_id", "id")
     if spin_id is None:
         return None
-    price_raw = _first(raw, "price", "offerPrice", "finalPrice")
+    price_raw = _first(raw, "price", "discountedFinalPrice", "offerPrice", "finalPrice", "mrp")
     if isinstance(price_raw, dict):
         price_raw = _first(price_raw, "offerPrice", "mrp")
     return InstamartCartLine(
         spin_id=str(spin_id),
-        name=_first(raw, "name", "displayName"),
-        price=_to_float(price_raw),
+        name=_first(raw, "name", "itemName", "displayName"),
+        price=_money(price_raw),
         quantity=int(_first(raw, "quantity", "qty", default=1) or 1),
     )
 
@@ -68,11 +79,12 @@ def _normalize_cart(raw: Any) -> InstamartCartResponse:
     payment_methods = _first(data, "availablePaymentMethods", "available_payment_methods", default=[])
     if not isinstance(payment_methods, list):
         payment_methods = []
-    total = _to_float(_first(data, "total", "grandTotal", "finalTotal"))
+    bill = data.get("billBreakdown") if isinstance(data.get("billBreakdown"), dict) else {}
+    total = _money(_first(bill, "toPay") or _first(data, "total", "grandTotal", "finalTotal", "cartTotalAmount"))
     return InstamartCartResponse(
         success=True,
         items=lines,
-        subtotal=_to_float(_first(data, "subtotal", "sub_total")),
+        subtotal=_money(_first(data, "subtotal", "sub_total", "cartTotalAmount")),
         total=total,
         available_payment_methods=[str(p) for p in payment_methods],
         below_minimum=total is not None and total < INSTAMART_MIN_CART_INR,

@@ -121,7 +121,7 @@ export function createTheme({ time, weather, mood }: ThemeInput): Theme {
     }
   }
 
-  const { hue: h, chroma: c } = m;
+  const { hue: h, chroma: c, shift = 28 } = m;
   const colors: ThemeColors = {
     ink: dark ? '#F7F2EC' : '#17130F',
     ink2: dark ? 'rgba(247,242,236,0.7)' : 'rgba(23,19,15,0.64)',
@@ -135,7 +135,7 @@ export function createTheme({ time, weather, mood }: ThemeInput): Theme {
     ph1: dark ? 'rgba(255,255,255,0.07)' : 'rgba(23,19,15,0.06)',
     ph2: dark ? 'rgba(255,255,255,0.02)' : 'rgba(23,19,15,0.018)',
     acc: oklch(0.76, c, h),
-    acc2: oklch(0.68, c, h + 28),
+    acc2: oklch(0.68, c, h + shift),
     accSoft: oklch(0.76, c, h, dark ? 0.2 : 0.24),
     accText: dark ? oklch(0.82, c, h) : oklch(0.5, c, h),
     onAcc: palette.onAccent,

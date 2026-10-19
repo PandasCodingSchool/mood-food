@@ -5,8 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Image,
   Alert,
@@ -32,6 +30,8 @@ interface MenuChatProps {
   /** Extra bottom space to keep the input row clear of the cart footer bar, which is
    * absolutely positioned over this screen and would otherwise cover it. */
   bottomInset?: number;
+  /** The parent lifts the chat above the keyboard; we drop the secondary button to make room. */
+  keyboardOpen?: boolean;
 }
 
 // AI "expert recommender" over a restaurant's live menu — stateless server
@@ -40,7 +40,7 @@ interface MenuChatProps {
 // This is the default landing view when browsing a restaurant (see
 // restaurant-menu.tsx) — the item list is a secondary "explore yourself"
 // view reached via onExploreMenu, not the other way around.
-export default function MenuChat({ restaurantId, addressId, dishContext, getItem, onSuggestedItemAdd, onExploreMenu, bottomInset = 0 }: MenuChatProps) {
+export default function MenuChat({ restaurantId, addressId, dishContext, getItem, onSuggestedItemAdd, onExploreMenu, bottomInset = 0, keyboardOpen = false }: MenuChatProps) {
   const { theme } = useTheme();
   const [messages, setMessages] = useState<DisplayMessage[]>([
     {
@@ -120,119 +120,120 @@ export default function MenuChat({ restaurantId, addressId, dishContext, getItem
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, marginBottom: bottomInset }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-          <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}>
-            <Sparkles size={22} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[fw(900), { fontSize: 19, color: theme.text }]}>Captain</Text>
-            <Text style={[fw(700), { fontSize: 12, color: colors.purple }]}>Your personal food expert</Text>
-          </View>
+      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}>
+          <Sparkles size={22} color="#fff" />
         </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[fw(900), { fontSize: 19, color: theme.text }]}>Captain</Text>
+          <Text style={[fw(700), { fontSize: 12, color: colors.purple }]}>Your personal food expert</Text>
+        </View>
+      </View>
 
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{ padding: 24, gap: 14 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.map((m, i) => (
-            <View key={i} style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <View
-                style={{
-                  maxWidth: '85%',
-                  padding: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 16,
-                  backgroundColor: m.role === 'user' ? colors.orange : 'rgba(124,58,237,0.08)',
-                  borderBottomRightRadius: m.role === 'user' ? 4 : 16,
-                  borderBottomLeftRadius: m.role === 'user' ? 16 : 4,
-                }}
-              >
-                <Text style={[fw(600), { fontSize: 14, color: m.role === 'user' ? '#fff' : theme.text, lineHeight: 20 }]}>
-                  {m.content}
-                </Text>
-              </View>
-              {m.suggestedItemIds && m.suggestedItemIds.length > 0 && (
-                <View style={{ gap: 8, marginTop: 8, width: '85%' }}>
-                  {m.suggestedItemIds.map((id) => {
-                    const item = getItem(id);
-                    if (!item) return null;
-                    const added = addedIds.has(id);
-                    return (
-                      <View
-                        key={id}
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ padding: 24, gap: 14 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      >
+        {messages.map((m, i) => (
+          <View key={i} style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <View
+              style={{
+                maxWidth: '85%',
+                padding: 12,
+                paddingHorizontal: 14,
+                borderRadius: 16,
+                backgroundColor: m.role === 'user' ? colors.orange : 'rgba(124,58,237,0.08)',
+                borderBottomRightRadius: m.role === 'user' ? 4 : 16,
+                borderBottomLeftRadius: m.role === 'user' ? 16 : 4,
+              }}
+            >
+              <Text style={[fw(600), { fontSize: 14, color: m.role === 'user' ? '#fff' : theme.text, lineHeight: 20 }]}>
+                {m.content}
+              </Text>
+            </View>
+            {m.suggestedItemIds && m.suggestedItemIds.length > 0 && (
+              <View style={{ gap: 8, marginTop: 8, width: '85%' }}>
+                {m.suggestedItemIds.map((id) => {
+                  const item = getItem(id);
+                  if (!item) return null;
+                  const added = addedIds.has(id);
+                  return (
+                    <View
+                      key={id}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 10,
+                        padding: 8, borderRadius: 14, backgroundColor: theme.card,
+                        borderWidth: 1, borderColor: theme.border,
+                      }}
+                    >
+                      {item.imageUrl ? (
+                        <Image source={{ uri: item.imageUrl }} style={{ width: 48, height: 48, borderRadius: 10 }} resizeMode="cover" />
+                      ) : (
+                        <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 20 }}>🍽️</Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[fw(800), { fontSize: 13, color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                        {item.price != null && (
+                          <Text style={[fw(700), { fontSize: 12, color: colors.orange, marginTop: 1 }]}>₹{item.price.toFixed(0)}</Text>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleAdd(id)}
+                        disabled={added}
                         style={{
-                          flexDirection: 'row', alignItems: 'center', gap: 10,
-                          padding: 8, borderRadius: 14, backgroundColor: theme.card,
-                          borderWidth: 1, borderColor: theme.border,
+                          width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center',
+                          backgroundColor: added ? 'rgba(34,197,94,0.12)' : colors.orange,
                         }}
                       >
-                        {item.imageUrl ? (
-                          <Image source={{ uri: item.imageUrl }} style={{ width: 48, height: 48, borderRadius: 10 }} resizeMode="cover" />
-                        ) : (
-                          <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ fontSize: 20 }}>🍽️</Text>
-                          </View>
-                        )}
-                        <View style={{ flex: 1 }}>
-                          <Text style={[fw(800), { fontSize: 13, color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-                          {item.price != null && (
-                            <Text style={[fw(700), { fontSize: 12, color: colors.orange, marginTop: 1 }]}>₹{item.price.toFixed(0)}</Text>
-                          )}
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => handleAdd(id)}
-                          disabled={added}
-                          style={{
-                            width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center',
-                            backgroundColor: added ? 'rgba(34,197,94,0.12)' : colors.orange,
-                          }}
-                        >
-                          {added ? <Check size={16} color={colors.green} /> : <Plus size={16} color="#fff" />}
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          ))}
-          {sending && (
-            <View style={{ alignItems: 'flex-start' }}>
-              <View style={{ padding: 12, borderRadius: 16, backgroundColor: 'rgba(124,58,237,0.08)' }}>
-                <ActivityIndicator size="small" color={colors.purple} />
+                        {added ? <Check size={16} color={colors.green} /> : <Plus size={16} color="#fff" />}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
               </View>
+            )}
+          </View>
+        ))}
+        {sending && (
+          <View style={{ alignItems: 'flex-start' }}>
+            <View style={{ padding: 12, borderRadius: 16, backgroundColor: 'rgba(124,58,237,0.08)' }}>
+              <ActivityIndicator size="small" color={colors.purple} />
             </View>
-          )}
-        </ScrollView>
+          </View>
+        )}
+      </ScrollView>
 
-        <View style={{ paddingHorizontal: 16 }}>{exploreMenuButton}</View>
+      {keyboardOpen ? null : <View style={{ paddingHorizontal: 16 }}>{exploreMenuButton}</View>}
 
-        <View style={{ flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 24, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'flex-end' }}>
-          <TouchableOpacity
-            onPress={() => Alert.alert('Voice input coming soon')}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}
-          >
-            <Mic size={18} color={theme.text} />
-          </TouchableOpacity>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask about the menu…"
-            placeholderTextColor={theme.muted}
-            multiline
-            style={{ flex: 1, maxHeight: 100, padding: 12, borderRadius: 16, backgroundColor: theme.overlay, fontSize: 14, color: theme.text }}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!input.trim() || sending}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', opacity: !input.trim() || sending ? 0.5 : 1 }}
-          >
-            <Send size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      <View style={{ flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 24, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'flex-end' }}>
+        <TouchableOpacity
+          onPress={() => Alert.alert('Voice input coming soon')}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}
+        >
+          <Mic size={18} color={theme.text} />
+        </TouchableOpacity>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          placeholder="Ask about the menu…"
+          placeholderTextColor={theme.muted}
+          multiline
+          onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250)}
+          style={{ flex: 1, maxHeight: 100, padding: 12, borderRadius: 16, backgroundColor: theme.overlay, fontSize: 14, color: theme.text }}
+        />
+        <TouchableOpacity
+          onPress={handleSend}
+          disabled={!input.trim() || sending}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', opacity: !input.trim() || sending ? 0.5 : 1 }}
+        >
+          <Send size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

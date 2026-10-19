@@ -59,6 +59,8 @@ MOOD_ALIASES: dict[str, set[str]] = {
     "unwell": {"sick"},
     "ill": {"sick"},
     "down": {"sad", "comfort"},
+    "hungry": {"comfort", "happy"},
+    "starving": {"comfort", "happy"},
 }
 
 

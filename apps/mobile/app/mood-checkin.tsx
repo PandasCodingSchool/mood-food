@@ -50,6 +50,7 @@ export default function MoodCheckinScreen() {
       moodFromCheckin({
         energy: levels.energy * 2,
         stress: levels.stress * 2,
+        hunger: levels.hunger * 2,
         social: levels.social * 2,
         occasion: occasion === 'comfort' ? undefined : occasion,
       }),

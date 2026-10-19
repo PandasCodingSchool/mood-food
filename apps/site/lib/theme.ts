@@ -5,8 +5,8 @@ import { createTheme, MOOD_SPECS, oklch, palette, shadow, type Gradient, type Mo
 // so the site and the app share one palette: time of day sets the backdrop,
 // mood sets the accent.
 
-/** The site wears the app's evening theme with the warm "tired" accent. */
-export const DEFAULT_THEME: ThemeInput = { time: 'evening', weather: 'sunny', mood: 'tired' };
+/** The site wears the app's evening theme with the warm "happy" gold accent. */
+export const DEFAULT_THEME: ThemeInput = { time: 'evening', weather: 'sunny', mood: 'happy' };
 
 export const MOOD_OPTIONS = (Object.keys(MOOD_SPECS) as Mood[]).map((id) => ({
   id,

@@ -3,7 +3,7 @@
 // Without it we open on the AI menu chat like v1. The cart is synced to the
 // server-side Swiggy cart (debounced); checkout reads it back in cart mode.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { palette, space } from '@moodfood/tokens';
 import { Button, DishImage, Icon, IconButton, Surface, Text, useTheme } from '@moodfood/ui';
 import { ErrorBlock, LoadingBlock, PoweredBySwiggy } from '../src/components/v2';
 import MenuChat from '../src/components/MenuChat';
-import { getRestaurantMenu, updateCartItems, type MenuItem, type RestaurantMenu } from '../src/services/swiggyOrder';
+import { flushCart, getRestaurantMenu, updateCartItems, type MenuItem, type RestaurantMenu } from '../src/services/swiggyOrder';
 
 const SYNC_DEBOUNCE_MS = 400;
 
@@ -35,6 +35,10 @@ export default function RestaurantMenuScreen() {
   const [view, setView] = useState<'chat' | 'menu'>(params.addInitial === '1' ? 'menu' : 'chat');
   const [section, setSection] = useState(0);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCart = useRef<Record<string, number> | null>(null);
+  const syncChain = useRef<Promise<void>>(Promise.resolve());
+  const [openingCheckout, setOpeningCheckout] = useState(false);
+  const [keyboardH, setKeyboardH] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const sectionY = useRef<number[]>([]);
 
@@ -52,31 +56,51 @@ export default function RestaurantMenuScreen() {
     return map;
   }, [menu]);
 
-  const syncCart = useCallback(
+  // Pushes the full cart to Swiggy; an empty cart flushes it. Pushes are chained
+  // so they land in order, and checkout awaits the chain before reading it back.
+  const pushCart = useCallback(
     (next: Record<string, number>) => {
-      if (syncTimer.current) clearTimeout(syncTimer.current);
-      syncTimer.current = setTimeout(() => {
-        const items = Object.entries(next)
-          .filter(([, q]) => q > 0)
-          .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
-        if (items.length === 0) return;
-        void updateCartItems(params.restaurantId, params.addressId, items, params.restaurantName);
-      }, SYNC_DEBOUNCE_MS);
+      const items = Object.entries(next)
+        .filter(([, q]) => q > 0)
+        .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
+      const push = () =>
+        items.length ? updateCartItems(params.restaurantId, params.addressId, items, params.restaurantName).then(() => undefined) : flushCart();
+      syncChain.current = syncChain.current.then(push, push).catch(() => undefined);
+      return syncChain.current;
     },
     [params.restaurantId, params.addressId, params.restaurantName],
   );
 
-  const changeQty = useCallback(
-    (id: string, delta: number) => {
-      setCart((prev) => {
-        const next = { ...prev, [id]: Math.max(0, (prev[id] || 0) + delta) };
-        if (next[id] === 0) delete next[id];
-        syncCart(next);
-        return next;
-      });
+  const syncCart = useCallback(
+    (next: Record<string, number>) => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      pendingCart.current = next;
+      syncTimer.current = setTimeout(() => {
+        syncTimer.current = null;
+        pendingCart.current = null;
+        void pushCart(next);
+      }, SYNC_DEBOUNCE_MS);
     },
-    [syncCart],
+    [pushCart],
   );
+
+  const changeQty = useCallback((id: string, delta: number) => {
+    setCart((prev) => {
+      const next = { ...prev, [id]: Math.max(0, (prev[id] || 0) + delta) };
+      if (next[id] === 0) delete next[id];
+      return next;
+    });
+  }, []);
+
+  // Sync after commit (not inside the state updater, which may run twice).
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    syncCart(cart);
+  }, [cart, syncCart]);
 
   useEffect(() => {
     load().then((m) => {
@@ -89,6 +113,23 @@ export default function RestaurantMenuScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The chat lives inside this scroll, so lift it above the keyboard ourselves:
+  // pad the content by the keyboard height and keep the input row in view.
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setKeyboardH(e.endCoordinates.height));
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardH(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const chatTyping = view === 'chat' && keyboardH > 0;
+  const pinChat = useCallback(() => {
+    if (chatTyping) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+  }, [chatTyping]);
+  useEffect(pinChat, [pinChat]);
+
   const r = menu?.restaurant;
   const name = r?.name || params.restaurantName || 'Restaurant';
   const sections = useMemo(() => {
@@ -99,7 +140,18 @@ export default function RestaurantMenuScreen() {
   const count = Object.values(cart).reduce((a, b) => a + b, 0);
   const total = Object.entries(cart).reduce((a, [id, q]) => a + (allItems[id]?.price || 0) * q, 0);
 
-  const toCheckout = () =>
+  const toCheckout = async () => {
+    if (openingCheckout) return;
+    setOpeningCheckout(true);
+    // Land any debounced change before checkout reads the server cart back.
+    if (syncTimer.current) {
+      clearTimeout(syncTimer.current);
+      syncTimer.current = null;
+    }
+    const pending = pendingCart.current;
+    pendingCart.current = null;
+    await (pending ? pushCart(pending) : syncChain.current);
+    setOpeningCheckout(false);
     router.push({
       pathname: '/order/confirm',
       params: {
@@ -111,8 +163,9 @@ export default function RestaurantMenuScreen() {
         dishName: params.dishName || '',
       },
     });
+  };
 
-  const cartBar = count > 0 ? (
+  const cartBar = count > 0 && keyboardH === 0 ? (
     <View
       style={{ position: 'absolute', left: 12, right: 12, bottom: Math.max(28, insets.bottom + 12), height: 66, borderRadius: 22, backgroundColor: palette.night, flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 10, boxShadow: '0px 20px 40px -16px rgba(0,0,0,0.6)' }}
     >
@@ -120,14 +173,21 @@ export default function RestaurantMenuScreen() {
         <Text variant="bodyStrong15" color={palette.white}>{`${count} ${count === 1 ? 'item' : 'items'} · ₹${Math.round(total)}`}</Text>
         <Text variant="micro12" color="rgba(255,255,255,0.65)" style={{ marginTop: 2 }}>{r?.etaMin ? `Arrives in about ${r.etaMin} min` : 'Live Swiggy pricing'}</Text>
       </View>
-      <Button label="Checkout" iconRight="arrow_forward" size="md" style={{ height: 46, paddingHorizontal: 16 }} onPress={toCheckout} />
+      <Button label="Checkout" iconRight="arrow_forward" size="md" style={{ height: 46, paddingHorizontal: 16 }} loading={openingCheckout} onPress={() => void toCheckout()} />
     </View>
   ) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.solid }}>
       <StatusBar style="light" />
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }} stickyHeaderIndices={[2]}>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: chatTyping ? keyboardH + 12 : 130 }}
+        stickyHeaderIndices={[2]}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={pinChat}
+      >
         <DishImage uri={r?.imageUrl} caption="restaurant" height={220}>
           <View style={{ position: 'absolute', top: 56, left: 16 }}>
             <IconButton icon="arrow_back" label="Back" variant="photo" onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))} />
@@ -188,7 +248,8 @@ export default function RestaurantMenuScreen() {
               getItem={(id) => allItems[id]}
               onSuggestedItemAdd={(id) => changeQty(id, 1)}
               onExploreMenu={() => setView('menu')}
-              bottomInset={count > 0 ? 128 : 0}
+              bottomInset={count > 0 && !chatTyping ? 128 : 0}
+              keyboardOpen={chatTyping}
             />
           </View>
         ) : (
@@ -204,7 +265,7 @@ export default function RestaurantMenuScreen() {
             </View>
           ))
         )}
-        <PoweredBySwiggy style={{ paddingTop: 28 }} />
+        {chatTyping ? null : <PoweredBySwiggy style={{ paddingTop: 28 }} />}
       </ScrollView>
       {cartBar}
     </View>

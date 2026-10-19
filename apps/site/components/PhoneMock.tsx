@@ -1,6 +1,7 @@
 import { MOOD_SPECS, type Mood } from '@moodfood/tokens';
 import Image from 'next/image';
 import { Icon } from '@/components/Icon';
+import { LiveClock } from '@/components/LiveClock';
 import { PHONE_PICKS } from '@/lib/content';
 import { themeStyle } from '@/lib/theme';
 
@@ -17,14 +18,16 @@ export function PhoneMock({ mood }: { mood: Mood }) {
     >
       <div className="phone-screen">
         <div className="phone-status">
-          <span>7:48</span>
+          <span>
+            <LiveClock period={false} />
+          </span>
           <span className="phone-notch" />
           <Icon name="signal_cellular_alt" size={14} />
         </div>
         <p className="phone-eyebrow">{`${MOOD_SPECS[mood].label} · Rainy · Evening`}</p>
         <p className="phone-title">Picked for right now</p>
         <div className="phone-hero">
-          {/* All four photos stay mounted so switching moods crossfades instead of loading. */}
+          {/* Every mood's photo stays mounted so switching moods crossfades instead of loading. */}
           {Object.values(PHONE_PICKS).map((p) => (
             <Image
               key={p.photo}
