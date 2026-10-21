@@ -12,6 +12,7 @@ MoodFood is a mood-based food recommendation platform that helps users decide wh
 - [onboarding.md](onboarding.md) — setup, local run steps, and developer workflow
 - [gaps.md](gaps.md) — current architecture gaps and missing pieces
 - [mobile-redesign-reference.md](mobile-redesign-reference.md) — full mobile screen map and premium redesign direction
+- [store-launch.md](store-launch.md) — Play Store and App Store launch guide and checklist
 
 ## Product at a Glance
 
