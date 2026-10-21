@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from typing import Any, Optional
 
 from app.lab import trace
@@ -417,6 +418,14 @@ def _tool_error_reason(message: str) -> Optional[str]:
     return first[0].strip() if first and first[0].strip() else None
 
 
+_COUPON_JUNK = re.compile(r"[\s\u200b-\u200d\u2060\ufeff]+")
+
+
+def _clean_coupon_code(code: str) -> str:
+    """A pasted code without spaces, line breaks or invisible characters, upper-cased."""
+    return _COUPON_JUNK.sub("", unicodedata.normalize("NFKC", code or "")).upper()
+
+
 def _coupon_refusal(raw: Any) -> str:
     """Swiggy's reason a coupon didn't apply, in a form we can show."""
     if isinstance(raw, dict):
@@ -510,6 +519,9 @@ class SwiggyOrderService:
         return CouponsResponse(success=True, coupons=cod_coupons, filter_applied=_str_or_none(summary.get("filter_applied")))
 
     async def apply_coupon(self, coupon_code: str, address_id: str) -> ApplyCouponResponse:
+        coupon_code = _clean_coupon_code(coupon_code)
+        if not coupon_code:
+            return ApplyCouponResponse(success=False, error="Enter a coupon code.")
         try:
             raw = await self.client.call_tool(
                 "apply_food_coupon", {"couponCode": coupon_code, "addressId": address_id}
@@ -520,6 +532,13 @@ class SwiggyOrderService:
             if reason is None:
                 raise
             logger.info("apply_coupon %s: refused (%s)", coupon_code, reason)
+            if reason.lower().startswith("coupon does not exist"):
+                # Swiggy's partner checkout only knows the coupons it shares with partner
+                # apps; app-only, bank, card and UPI offers come back as "does not exist".
+                reason = (
+                    f"Swiggy doesn't offer {coupon_code} for orders placed through MoodFood. "
+                    "Offers that need the Swiggy app, a bank card or UPI work only in the Swiggy app."
+                )
             return ApplyCouponResponse(success=False, error=reason)
         applied = _normalize_cart(raw)
         # Swiggy's rule: a coupon is applied only when coupon_discount > 0. A

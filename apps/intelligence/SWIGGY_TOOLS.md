@@ -43,8 +43,9 @@ Status: ✅ wired (Phase 1 discovery, Phase 2 ordering).
 - Wired: `SwiggyOrderService.fetch_coupons` filters to COD-eligible via `_is_cod_eligible`.
 
 ### ✅ apply_food_coupon
-- **In:** `code`. **Out:** updated cart; treat as applied only when `coupon_discount > 0`.
-- Wired: `SwiggyOrderService.apply_coupon`.
+- **In:** `couponCode` (req), `addressId` (req), `cartId` (opt). **Out:** updated cart; treat as applied only when `coupon_discount > 0`.
+- Live (Oct 2026): a code Swiggy doesn't share with partner apps (app-only, bank, card or UPI offers) is a tool error "Coupon does not exist", even if the code works in the Swiggy app.
+- Wired: `SwiggyOrderService.apply_coupon` (cleans pasted codes: spaces, line breaks, zero-width characters).
 
 ### ✅ get_food_cart
 - **In:** `addressId` (req), `restaurantName` (opt)

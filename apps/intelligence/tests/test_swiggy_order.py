@@ -704,7 +704,24 @@ async def test_apply_coupon_shows_swiggy_reason_for_an_unknown_code():
         "Swiggy tool error: Coupon does not exist\nReport ID: ERR-X\nSomething went wrong. If this persists, quote report ID"
     ))
     result = await SwiggyOrderService(client=client).apply_coupon("NOPE", "a")
-    assert result.success is False and result.error == "Coupon does not exist"
+    assert result.success is False
+    assert result.error.startswith("Swiggy doesn't offer NOPE for orders placed through MoodFood.")
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_cleans_a_pasted_code():
+    client = _client_with({"apply_food_coupon": APPLY_OK, "get_food_cart": CART_AFTER_APPLY})
+    result = await SwiggyOrderService(client=client).apply_coupon(" \u200bflat 75\n\ufeff", "a")
+    assert result.success
+    assert client.call_tool.call_args_list[0].args[1] == {"couponCode": "FLAT75", "addressId": "a"}
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_rejects_a_blank_code_without_calling_swiggy():
+    client = _client_with({})
+    result = await SwiggyOrderService(client=client).apply_coupon(" \u200b ", "a")
+    assert result.success is False and result.error == "Enter a coupon code."
+    client.call_tool.assert_not_called()
 
 
 @pytest.mark.asyncio

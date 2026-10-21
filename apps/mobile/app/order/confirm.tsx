@@ -149,7 +149,7 @@ export default function OrderConfirmScreen() {
   };
 
   const handleApplyCoupon = async (raw: string) => {
-    const code = raw.trim().toUpperCase();
+    const code = cleanCouponCode(raw);
     if (!addressId || !code || applying) return;
     setApplying(code);
     setCouponError(null);
@@ -368,8 +368,8 @@ export default function OrderConfirmScreen() {
                 label="Apply"
                 size="sm"
                 variant="outline"
-                loading={!!applying && applying === couponInput.trim().toUpperCase()}
-                disabled={!couponInput.trim() || !!applying}
+                loading={!!applying && applying === cleanCouponCode(couponInput)}
+                disabled={!cleanCouponCode(couponInput) || !!applying}
                 onPress={() => void handleApplyCoupon(couponInput)}
               />
             </Surface>
@@ -379,7 +379,7 @@ export default function OrderConfirmScreen() {
             <Text variant="micro12" tone="ink2" style={{ paddingHorizontal: 4 }}>
               {coupons.length || suggested
                 ? 'Swiggy shares its cash-on-delivery coupons with partner apps. Bank and card offers stay in the Swiggy app.'
-                : 'No Swiggy coupons for this cart right now. Swiggy shares only cash-on-delivery coupons with partner apps; a code from the Swiggy app can still work here.'}
+                : 'No Swiggy coupons for this cart right now. Swiggy shares only its cash-on-delivery coupons with partner apps, so most codes from the Swiggy app work only there.'}
             </Text>
           </View>
         ) : null}
@@ -497,6 +497,11 @@ function BillRow({ label, value, accent, was }: { label: string; value: string; 
       </View>
     </View>
   );
+}
+
+/** A pasted code without spaces, line breaks or invisible characters, upper-cased. */
+function cleanCouponCode(raw: string): string {
+  return raw.normalize('NFKC').replace(/[\s\u200B-\u200D\u2060\uFEFF]+/g, '').toUpperCase();
 }
 
 function CouponCard({ code, title, ribbon, note, terms, state, onApply }: {
