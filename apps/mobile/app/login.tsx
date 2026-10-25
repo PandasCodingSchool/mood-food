@@ -2,8 +2,9 @@
 // forgotten password with an emailed code) is the default. Phone login is
 // SMS OTP only (new numbers add a name inline), offered when the server
 // reports it can send SMS (/auth/methods). Guest mode kept from v1.
-// Success → (new email accounts: verify email) → Swiggy connect (skipped when
-// already linked) → check-in.
+// Success → setup (src/constants/setup.ts): new accounts and guests set taste &
+// allergies (email sign-ups verify first) and connect Swiggy; returning accounts
+// only see Swiggy connect when not linked. Then the check-in.
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -11,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { fontFamily, palette, space } from '@moodfood/tokens';
 import { Button, Icon, Screen, Surface, Text, useTheme } from '@moodfood/ui';
 import { CODE_LENGTH, CodeInput, LogoMark, PoweredBySwiggy, TopBar } from '../src/components/v2';
+import { startSetup } from '../src/constants/setup';
 import {
   continueAsGuest,
   fetchAuthMethods,
@@ -76,7 +78,7 @@ export default function LoginScreen() {
   }, [countdown]);
 
   const afterLogin = (user?: AuthUser | null) => {
-    router.replace(user?.swiggyLinked ? '/home' : { pathname: '/swiggy-connect', params: { onboarding: '1' } });
+    router.replace(user?.swiggyLinked ? '/home' : startSetup('login'));
   };
 
   const run = async (fn: () => Promise<void>, event: string) => {
@@ -128,8 +130,8 @@ export default function LoginScreen() {
       if (emailMode === 'signup') {
         await signup(name.trim(), account, password);
         trackEvent('signup_email_success');
-        // A code was emailed at sign-up; verify, then carry on to Swiggy connect.
-        router.replace({ pathname: '/verify-email', params: { onboarding: '1' } });
+        // A code was emailed at sign-up; verify, then carry on through setup.
+        router.replace(startSetup('email'));
         return;
       }
       const user = emailMode === 'reset' ? await resetPasswordWithEmail(account.email, otp, password) : await loginWithPassword(account, password);
@@ -163,7 +165,8 @@ export default function LoginScreen() {
       try {
         const res = await verifyOtp(phone.trim(), otp, needsName ? name.trim() : undefined);
         trackEvent(res.isNew ? 'signup_otp_success' : 'login_otp_success');
-        afterLogin(res.user);
+        if (res.isNew) router.replace(startSetup('new'));
+        else afterLogin(res.user);
       } catch (e) {
         if ((e as Error & { needsName?: boolean }).needsName) {
           setNeedsName(true);
@@ -185,15 +188,14 @@ export default function LoginScreen() {
 
   const guest = () => {
     trackEvent('guest_continue');
-    // A guest session lets signals, history and quests work; if the server is
-    // unreachable the app still opens (as in v1), just unpersonalised.
+    // A guest session lets signals, history, preferences and Swiggy work, so
+    // guests get the same setup as new accounts. If the server is unreachable
+    // the app still opens (as in v1), just unpersonalised.
     setBusy(true);
     continueAsGuest()
-      .catch(() => null)
-      .finally(() => {
-        setBusy(false);
-        router.replace('/home');
-      });
+      .then(() => router.replace(startSetup('new')))
+      .catch(() => router.replace('/home'))
+      .finally(() => setBusy(false));
   };
 
   const back = () => {

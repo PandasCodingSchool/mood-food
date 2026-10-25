@@ -1,6 +1,6 @@
 // 2.0 Verify email: 6-digit code emailed by the API (sent automatically at
 // email sign-up; sent on open when reached from Settings/Profile).
-// ?onboarding=1 → part of sign-up: "Later" skips, success continues to Swiggy connect.
+// ?onboarding=<flow> → a setup step after email sign-up: "Later" skips, success continues to taste & allergies.
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, type TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { palette, space } from '@moodfood/tokens';
 import { Button, Icon, Screen, Text, useTheme } from '@moodfood/ui';
 import { CODE_LENGTH, CodeInput, LogoTile, TopBar } from '../src/components/v2';
+import { asSetupFlow, nextSetupStep, setupStepLabel } from '../src/constants/setup';
 import { fetchCurrentUser, sendEmailVerification, verifyEmail } from '../src/services/auth';
 import { trackEvent } from '../src/utils/analytics';
 
@@ -16,7 +17,8 @@ const RESEND_AFTER_SEC = 30;
 export default function VerifyEmailScreen() {
   const router = useRouter();
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
-  const isOnboarding = onboarding === '1';
+  const flow = asSetupFlow(onboarding);
+  const isOnboarding = !!flow;
   const { dark } = useTheme();
   const [email, setEmail] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
@@ -56,7 +58,7 @@ export default function VerifyEmailScreen() {
   }, [countdown]);
 
   const done = () => {
-    if (isOnboarding) router.replace({ pathname: '/swiggy-connect', params: { onboarding: '1' } });
+    if (flow) router.replace(nextSetupStep('verify-email', flow));
     else if (router.canGoBack()) router.back();
     else router.replace('/home');
   };
@@ -80,9 +82,9 @@ export default function VerifyEmailScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <Screen keyboardShouldPersistTaps="handled">
-        {isOnboarding ? (
+        {flow ? (
           <View style={{ paddingHorizontal: space.gutter, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="label" tone="ink2">Step 1 of 2</Text>
+            <Text variant="label" tone="ink2">{setupStepLabel('verify-email', flow)}</Text>
             {!verified ? <Button label="Later" variant="glass" size="sm" onPress={done} style={{ height: 34, borderRadius: 17 }} /> : null}
           </View>
         ) : (
