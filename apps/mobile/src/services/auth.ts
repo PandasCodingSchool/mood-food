@@ -14,15 +14,39 @@ export interface AuthUser {
   emailVerified?: boolean;
 }
 
-async function postJson(path: string, body?: unknown, withSession = true) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: withSession ? await getHeaders() : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Something went wrong");
+const OFFLINE = "Can't reach MoodFood right now. Check your connection and try again.";
+
+/**
+ * fetch + JSON with readable errors: no connection, and replies that aren't
+ * the API's JSON (a captive portal or a wrong API URL), would otherwise surface
+ * as "Network request failed" / "JSON Parse error: Unexpected character: <".
+ */
+async function request(path: string, init: RequestInit, fallback: string) {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, init);
+  } catch {
+    throw new Error(OFFLINE);
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data) {
+    const err = new Error(data?.error || fallback) as Error & { data?: Record<string, unknown> };
+    err.data = data ?? undefined;
+    throw err;
+  }
   return data;
+}
+
+async function postJson(path: string, body?: unknown, withSession = true, fallback = "Something went wrong") {
+  return request(
+    path,
+    {
+      method: "POST",
+      headers: withSession ? await getHeaders() : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    fallback,
+  );
 }
 
 /** Emails the signed-in user a 6-digit code for their email address. */
@@ -62,17 +86,7 @@ export async function fetchAuthMethods(): Promise<{ email: boolean; otp: boolean
 }
 
 export async function login(account: AccountId, password: string): Promise<AuthUser> {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...account, password }),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || "Login failed");
-  }
-
+  const data = await postJson("/auth/login", { ...account, password }, false, "Login failed");
   await setSessionId(data.user.sessionId);
   return data.user;
 }
@@ -83,17 +97,7 @@ export async function signup(
   password: string,
 ): Promise<AuthUser> {
   // Sends the current session so a guest account is upgraded in place (keeps its data).
-  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
-    method: "POST",
-    headers: await getHeaders(),
-    body: JSON.stringify({ name, ...account, password }),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || "Sign up failed");
-  }
-
+  const data = await postJson("/auth/signup", { name, ...account, password }, true, "Sign up failed");
   await setSessionId(data.user.sessionId);
   return data.user;
 }
@@ -119,16 +123,7 @@ export interface VerifyOtpResult {
 }
 
 export async function requestOtp(phone: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE_URL}/auth/otp/send`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone }),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || "Failed to send OTP");
-  }
-  return data;
+  return postJson("/auth/otp/send", { phone }, false, "Failed to send OTP");
 }
 
 export async function verifyOtp(
@@ -136,17 +131,12 @@ export async function verifyOtp(
   otp: string,
   name?: string,
 ): Promise<VerifyOtpResult> {
-  const res = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
-    method: "POST",
-    headers: await getHeaders(),
-    body: JSON.stringify({ phone, otp, name }),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    const err = new Error(data.error || "Verification failed") as Error & {
-      needsName?: boolean;
-    };
-    err.needsName = !!data.needsName;
+  let data;
+  try {
+    data = await postJson("/auth/otp/verify", { phone, otp, name }, true, "Verification failed");
+  } catch (e) {
+    const err = e as Error & { needsName?: boolean; data?: { needsName?: boolean } };
+    err.needsName = !!err.data?.needsName;
     throw err;
   }
   if (data.user?.sessionId) {
@@ -157,14 +147,7 @@ export async function verifyOtp(
 
 /** Anonymous account so personalised features work before sign-up. */
 export async function continueAsGuest(): Promise<AuthUser> {
-  const res = await fetch(`${API_BASE_URL}/auth/guest`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || "Could not start a guest session");
-  }
+  const data = await postJson("/auth/guest", undefined, false, "Could not start a guest session");
   await setSessionId(data.user.sessionId);
   return data.user;
 }

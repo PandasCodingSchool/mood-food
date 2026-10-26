@@ -2,7 +2,7 @@
 // return), saves the first address for ordering, supports unlinking.
 // Swiggy tokens last 5 days with no refresh, so a linked account shows its
 // expiry and offers a reconnect in the last day.
-// ?onboarding=1 → "Step 2 of 2" with "Later", continuing to the check-in.
+// ?onboarding=<flow> → the last setup step, with "Later", continuing to the check-in.
 import { useEffect, useState } from 'react';
 import { AppState, Linking, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { palette, space } from '@moodfood/tokens';
 import { Button, Icon, Screen, Surface, Text, useTheme, type IconName } from '@moodfood/ui';
 import { LogoTile, PoweredBySwiggy, TopBar } from '../src/components/v2';
+import { asSetupFlow, nextSetupStep, setupStepLabel } from '../src/constants/setup';
 import { fetchCurrentUser } from '../src/services/auth';
 import { fetchAddresses, saveAddressId } from '../src/services/aiRecommendations';
 import { getHeaders } from '../src/services/apiBase';
@@ -30,7 +31,8 @@ const formatExpiry = (iso: string) =>
 export default function SwiggyConnectScreen() {
   const router = useRouter();
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
-  const isOnboarding = onboarding === '1';
+  const flow = asSetupFlow(onboarding);
+  const isOnboarding = !!flow;
   const { colors, dark } = useTheme();
   const [linked, setLinked] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function SwiggyConnectScreen() {
   const expiringSoon = linked && !!expiresAt && new Date(expiresAt).getTime() - Date.now() < EXPIRING_SOON_MS;
 
   const done = () => {
-    if (isOnboarding) router.replace({ pathname: '/mood-checkin', params: { next: '/recommendations' } });
+    if (flow) router.replace(nextSetupStep('swiggy-connect', flow));
     else if (router.canGoBack()) router.back();
     else router.replace('/home');
   };
@@ -97,9 +99,9 @@ export default function SwiggyConnectScreen() {
     <View style={{ flex: 1 }}>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <Screen>
-        {isOnboarding ? (
+        {flow ? (
           <View style={{ paddingHorizontal: space.gutter, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="label" tone="ink2">Step 2 of 2</Text>
+            <Text variant="label" tone="ink2">{setupStepLabel('swiggy-connect', flow)}</Text>
             <Button label="Later" variant="glass" size="sm" onPress={done} style={{ height: 34, borderRadius: 17 }} />
           </View>
         ) : (
