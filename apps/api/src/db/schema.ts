@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
+  date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -63,6 +65,256 @@ export const authSessions = pgTable(
   },
   (t) => [index('idx_auth_sessions_user').on(t.userId)],
 );
+
+// ── KitchenCircle ─────────────────────────────────────────────────────────
+
+export const kitchenCircleMemberRole = pgEnum('kitchen_circle_member_role', ['owner', 'member', 'cook']);
+export const kitchenCircleSlotState = pgEnum('kitchen_circle_slot_state', [
+  'blank', 'planned', 'locked', 'leftovers', 'no_cook', 'household_out',
+]);
+export const kitchenCircleAttendanceStatus = pgEnum('kitchen_circle_attendance_status', ['attending', 'absent']);
+export const kitchenCircleRuleStrength = pgEnum('kitchen_circle_rule_strength', ['hard', 'preference', 'contextual']);
+export const kitchenCirclePreferenceStrength = pgEnum('kitchen_circle_preference_strength', ['cannot_eat', 'never_plan', 'prefer_less', 'favourite']);
+export const kitchenCircleReaction = pgEnum('kitchen_circle_reaction', ['looks_good', 'not_for_me']);
+export const kitchenCircleRecipeSource = pgEnum('kitchen_circle_recipe_source', ['catalog', 'household', 'ai_draft']);
+export const kitchenCircleGroceryScope = pgEnum('kitchen_circle_grocery_scope', ['week', 'day']);
+export const kitchenCircleGroceryStatus = pgEnum('kitchen_circle_grocery_status', ['draft', 'finalized', 'discarded']);
+export const kitchenCircleGroceryLineKind = pgEnum('kitchen_circle_grocery_line_kind', ['recipe', 'pantry', 'optional', 'manual']);
+export const kitchenCircleGroceryLineStatus = pgEnum('kitchen_circle_grocery_line_status', ['buy', 'skipped', 'already_have']);
+
+/** A solo or shared household which owns its KitchenCircle plans and rules. */
+export const households = pgTable('households', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  defaultServings: integer('default_servings').notNull().default(1),
+  timezone: varchar('timezone', { length: 64 }).notNull().default('Asia/Kolkata'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_households_owner').on(t.ownerUserId)]);
+
+/** Membership is deliberately separate from the owner column for portable household permissions. */
+export const householdMembers = pgTable('household_members', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: kitchenCircleMemberRole('role').notNull().default('member'),
+  language: varchar('language', { length: 20 }).notNull().default('en'),
+  joinedAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.userId] }), index('idx_household_members_user').on(t.userId)]);
+
+/** Private, member-authored planning preferences; never exposes private MoodFood history. */
+export const memberFoodPreferences = pgTable('member_food_preferences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  strength: kitchenCirclePreferenceStrength('strength').notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  value: varchar('value', { length: 255 }).notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [unique().on(t.householdId, t.userId, t.strength, t.category, t.value), index('idx_member_food_preferences_member').on(t.householdId, t.userId)]);
+
+/** Account-bound invitations; public cook links intentionally use a separate Phase 8 model. */
+export const householdInvites = pgTable('household_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  invitedByUserId: uuid('invited_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  email: varchar('email', { length: 255 }).notNull(),
+  role: kitchenCircleMemberRole('role').notNull().default('member'),
+  token: uuid('token').notNull().defaultRandom().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [index('idx_household_invites_household').on(t.householdId), index('idx_household_invites_email').on(t.email)]);
+
+/** Explicit recurring constraints; one-off slot changes remain in planner activity. */
+export const householdRules = pgTable('household_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  createdByUserId: uuid('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  weekday: integer('weekday'),
+  strength: kitchenCircleRuleStrength('strength').notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  constraint: jsonb('constraint').$type<Record<string, unknown>>().notNull(),
+  active: boolean('active').notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_household_rules_household').on(t.householdId)]);
+
+/** Stable recipe identity; executable ingredients and method live in immutable versions. */
+export const recipes = pgTable('recipes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: varchar('title', { length: 255 }).notNull(),
+  source: kitchenCircleRecipeSource('source').notNull().default('catalog'),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+});
+export const recipeVersions = pgTable('recipe_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  recipeId: uuid('recipe_id').notNull().references(() => recipes.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  defaultServings: integer('default_servings').notNull(),
+  ingredients: jsonb('ingredients').$type<Array<{ name: string; canonicalName?: string; quantity: number; unit: string; optional?: boolean }>>().notNull(),
+  steps: jsonb('steps').$type<string[]>().notNull(),
+  prepMinutes: integer('prep_minutes'),
+  cookMinutes: integer('cook_minutes'),
+  cuisine: varchar('cuisine', { length: 50 }),
+  effort: varchar('effort', { length: 20 }),
+  freshnessClass: varchar('freshness_class', { length: 20 }),
+  dietaryTags: jsonb('dietary_tags').$type<string[]>().notNull().default([]),
+  allergens: jsonb('allergens').$type<string[]>().notNull().default([]),
+  /** Who asserted the dietary/allergen tags: `catalog` (curated), `household` (self-declared), or `ai` (unverified). */
+  dietaryProvenance: varchar('dietary_provenance', { length: 20 }).notNull().default('household'),
+  substitutions: jsonb('substitutions').$type<Array<{ ingredient: string; alternatives: string[] }>>().notNull().default([]),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [unique().on(t.recipeId, t.version)]);
+export const householdRecipes = pgTable('household_recipes', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  recipeId: uuid('recipe_id').notNull().references(() => recipes.id, { onDelete: 'cascade' }),
+  private: boolean('private').notNull().default(true),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.recipeId] })]);
+
+/** One plan per household per Monday–Sunday calendar week. */
+export const mealPlans = pgTable('meal_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  startsOn: date('starts_on', { mode: 'string' }).notNull(),
+  weekEnd: date('week_end', { mode: 'string' }).notNull(),
+  version: integer('version').notNull().default(1),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [unique().on(t.householdId, t.weekStart), index('idx_meal_plans_household_week').on(t.householdId, t.weekStart)]);
+
+/** One shared daily meal decision, optionally bound to an immutable recipe version. */
+export const mealSlots = pgTable('meal_slots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  planId: uuid('plan_id').notNull().references(() => mealPlans.id, { onDelete: 'cascade' }),
+  plannedFor: date('planned_for', { mode: 'string' }).notNull(),
+  state: kitchenCircleSlotState('state').notNull().default('blank'),
+  mealTitle: varchar('meal_title', { length: 255 }),
+  recipeVersionId: uuid('recipe_version_id').references(() => recipeVersions.id, { onDelete: 'set null' }),
+  servings: integer('servings').notNull(),
+  notes: text('notes'),
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  lockedByUserId: uuid('locked_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [unique().on(t.planId, t.plannedFor), index('idx_meal_slots_plan_day').on(t.planId, t.plannedFor)]);
+
+/** A member's lightweight response to a proposed or unlocked meal. */
+export const slotReactions = pgTable('slot_reactions', {
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reaction: kitchenCircleReaction('reaction').notNull(),
+  reason: varchar('reason', { length: 500 }),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.slotId, t.userId] })]);
+
+/** Each member controls their own attendance for a planned household meal. Missing means attending by default. */
+export const slotAttendance = pgTable('slot_attendance', {
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: kitchenCircleAttendanceStatus('status').notNull(),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.slotId, t.userId] }), index('idx_slot_attendance_user').on(t.userId)]);
+
+/** Household overrides on top of the built-in staple list (`DEFAULT_PANTRY`): add a staple or remove a default. */
+export const householdPantryDefaults = pgTable('household_pantry_defaults', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  canonicalName: varchar('canonical_name', { length: 120 }).notNull(),
+  inPantry: boolean('in_pantry').notNull(),
+  updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.canonicalName] })]);
+
+/**
+ * A grocery requirement computed once from bound recipe versions. Later plan edits never rewrite it;
+ * drafts accept manual line edits, finalized snapshots are fully immutable.
+ */
+export const grocerySnapshots = pgTable('grocery_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').notNull().references(() => mealPlans.id, { onDelete: 'cascade' }),
+  scope: kitchenCircleGroceryScope('scope').notNull(),
+  scopeDate: date('scope_date', { mode: 'string' }),
+  referenceDate: date('reference_date', { mode: 'string' }).notNull(),
+  status: kitchenCircleGroceryStatus('status').notNull().default('draft'),
+  /** `split` separates buy-now from buy-later perishables; `all_now` orders everything anyway. */
+  freshnessMode: varchar('freshness_mode', { length: 10 }).notNull().default('split'),
+  budgetPaise: integer('budget_paise'),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+  finalizedByUserId: uuid('finalized_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_grocery_snapshots_household').on(t.householdId, t.createdAt.desc()), index('idx_grocery_snapshots_plan').on(t.planId)]);
+
+/** One aggregate ingredient requirement with a full day/recipe source trace. */
+export const grocerySnapshotLines = pgTable('grocery_snapshot_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  snapshotId: uuid('snapshot_id').notNull().references(() => grocerySnapshots.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+  canonicalName: varchar('canonical_name', { length: 120 }).notNull(),
+  displayName: varchar('display_name', { length: 120 }).notNull(),
+  dimension: varchar('dimension', { length: 10 }),
+  baseQuantity: doublePrecision('base_quantity'),
+  quantity: doublePrecision('quantity'),
+  unit: varchar('unit', { length: 20 }),
+  originalQuantity: doublePrecision('original_quantity'),
+  originalUnit: varchar('original_unit', { length: 20 }),
+  kind: kitchenCircleGroceryLineKind('kind').notNull(),
+  status: kitchenCircleGroceryLineStatus('status').notNull(),
+  required: boolean('required').notNull(),
+  freshnessGroup: varchar('freshness_group', { length: 10 }).notNull().default('buy_now'),
+  unitConflict: boolean('unit_conflict').notNull().default(false),
+  firstNeededOn: date('first_needed_on', { mode: 'string' }),
+  sources: jsonb('sources').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  manuallyChanged: boolean('manually_changed').notNull().default(false),
+  productNote: varchar('product_note', { length: 255 }),
+  estimatedPricePaise: integer('estimated_price_paise'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_grocery_snapshot_lines_snapshot').on(t.snapshotId, t.position)]);
+
+/**
+ * Which plan days a snapshot buys for. At most one active, non-override coverage per day prevents
+ * buying the same meal twice; discarding a draft releases its coverage.
+ */
+export const groceryCoverage = pgTable('grocery_coverage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  snapshotId: uuid('snapshot_id').notNull().references(() => grocerySnapshots.id, { onDelete: 'cascade' }),
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  plannedFor: date('planned_for', { mode: 'string' }).notNull(),
+  /** The version and servings bought for; compared with the live slot to detect later plan changes. */
+  recipeVersionId: uuid('recipe_version_id').notNull(),
+  servings: integer('servings').notNull(),
+  override: boolean('override').notNull().default(false),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [
+  index('idx_grocery_coverage_snapshot').on(t.snapshotId),
+  uniqueIndex('uq_grocery_coverage_active_slot').on(t.slotId).where(sql`${t.override} = false and ${t.releasedAt} is null`),
+]);
+
+/** Records material plan changes so collaboration remains understandable and auditable. */
+export const plannerActivities = pgTable('planner_activities', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').references(() => mealPlans.id, { onDelete: 'cascade' }),
+  slotId: uuid('slot_id').references(() => mealSlots.id, { onDelete: 'cascade' }),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  eventType: varchar('event_type', { length: 100 }).notNull(),
+  before: jsonb('before').$type<Record<string, unknown>>(),
+  after: jsonb('after').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [index('idx_planner_activities_household').on(t.householdId, t.createdAt.desc())]);
 
 // ── Profile data ──────────────────────────────────────────────────────────
 

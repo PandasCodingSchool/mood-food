@@ -326,6 +326,233 @@ describe('quests & groups', () => {
   });
 });
 
+describe('KitchenCircle', () => {
+  it('creates a solo current-week household, edits a slot, locks it, and protects it from edits', async () => {
+    const { token } = await signup('KitchenCircle User');
+    const created = await call('POST', '/kitchen-circle/households', {
+      token,
+      body: { name: 'Flat 12', defaultServings: 3, startsOn: '2026-10-28', timezone: 'Asia/Kolkata' },
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    assert.equal(created.data.household.name, 'Flat 12');
+    assert.equal(created.data.plan.weekStart, '2026-10-26');
+    assert.equal(created.data.plan.weekEnd, '2026-11-01');
+    assert.equal(created.data.plan.slots.length, 5);
+    assert.ok(created.data.plan.slots.every((slot: { servings: number; state: string }) => slot.servings === 3 && slot.state === 'blank'));
+
+    const householdId = created.data.household.id;
+    const inviteeEmail = `kitchen${rand()}@example.com`;
+    const inviteeSignup = await call('POST', '/auth/signup', { body: { name: 'KitchenCircle Cook', email: inviteeEmail, password: 'secret123' } });
+    assert.equal(inviteeSignup.status, 201, JSON.stringify(inviteeSignup.data));
+    const invite = await call('POST', `/kitchen-circle/households/${householdId}/invites`, { token, body: { email: inviteeEmail, role: 'cook' } });
+    assert.equal(invite.status, 201, JSON.stringify(invite.data));
+    assert.equal(invite.data.invite.email, inviteeEmail);
+    const accepted = await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: inviteeSignup.data.session.token });
+    assert.equal(accepted.status, 201, JSON.stringify(accepted.data));
+    assert.equal(accepted.data.role, 'cook');
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/plans/next`, { token: inviteeSignup.data.session.token, body: { referenceDate: '2026-10-28' } })).status, 403);
+
+    const recipe = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token, body: { title: 'Lemon Rice', defaultServings: 3, ingredients: [{ name: 'rice', quantity: 2, unit: 'cup' }], steps: ['Cook and temper rice.'] } });
+    assert.equal(recipe.status, 201, JSON.stringify(recipe.data));
+
+    const next = await call('POST', `/kitchen-circle/households/${householdId}/plans/next`, { token, body: { referenceDate: '2026-10-28' } });
+    assert.equal(next.status, 201, JSON.stringify(next.data));
+    assert.equal(next.data.plan.weekStart, '2026-11-02');
+    assert.equal(next.data.plan.weekEnd, '2026-11-08');
+    assert.equal(next.data.plan.slots.length, 7);
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/plans/next`, { token, body: { referenceDate: '2026-10-28' } })).data.plan.id, next.data.plan.id);
+
+    const loaded = await call('GET', `/kitchen-circle/households/${householdId}/plans?weekStart=2026-10-26`, { token });
+    assert.equal(loaded.status, 200);
+    const slot = loaded.data.plan.slots[0];
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}/recipe`, { token, body: { recipeVersionId: recipe.data.version.id } })).status, 200);
+    const eligibility = await call('GET', `/kitchen-circle/slots/${slot.id}/grocery-eligibility`, { token });
+    assert.equal(eligibility.status, 200);
+    assert.equal(eligibility.data.eligible, true);
+    const attendance = await call('PATCH', `/kitchen-circle/slots/${slot.id}/attendance`, { token: inviteeSignup.data.session.token, body: { status: 'absent' } });
+    assert.equal(attendance.status, 200, JSON.stringify(attendance.data));
+    assert.equal(attendance.data.attendance.status, 'absent');
+    const edited = await call('PATCH', `/kitchen-circle/slots/${slot.id}`, {
+      token,
+      body: { state: 'planned', mealTitle: 'Dal Makhani', servings: 4, notes: 'Use pantry masalas' },
+    });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.data.slot.mealTitle, 'Dal Makhani');
+    assert.equal(edited.data.slot.servings, 4);
+
+    assert.equal((await call('POST', `/kitchen-circle/slots/${slot.id}/lock`, { token })).status, 201);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}`, { token, body: { mealTitle: 'Paneer Bhurji' } })).status, 409);
+    assert.equal((await call('POST', `/kitchen-circle/slots/${slot.id}/unlock`, { token })).status, 201);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}`, { token, body: { mealTitle: 'Paneer Bhurji' } })).status, 200);
+
+    const activities = await call('GET', `/kitchen-circle/households/${householdId}/activities`, { token });
+    assert.equal(activities.status, 200);
+    assert.deepEqual(activities.data.activities.map((a: { eventType: string }) => a.eventType).slice(0, 4), ['slot_updated', 'slot_unlocked', 'slot_locked', 'slot_updated']);
+  });
+
+  it('keeps recipes structured, private, reviewable, and version-stable', async () => {
+    const owner = await signup('Recipe Owner');
+    const outsider = await signup('Other Household');
+    const mine = await call('POST', '/kitchen-circle/households', { token: owner.token, body: { name: 'Recipe Home', defaultServings: 2, startsOn: '2026-10-26' } });
+    const theirs = await call('POST', '/kitchen-circle/households', { token: outsider.token, body: { name: 'Next Door', defaultServings: 2, startsOn: '2026-10-26' } });
+    const householdId = mine.data.household.id;
+    const otherHouseholdId = theirs.data.household.id;
+    const slot = mine.data.plan.slots[0];
+    const otherSlot = theirs.data.plan.slots[0];
+
+    // Catalog is browsable and searchable by every household.
+    const catalog = await call('GET', `/kitchen-circle/households/${householdId}/recipes?source=catalog`, { token: owner.token });
+    assert.equal(catalog.status, 200, JSON.stringify(catalog.data));
+    assert.ok(catalog.data.recipes.length >= 5);
+    assert.ok(catalog.data.recipes.every((r: { source: string; currentVersion: { groceryReady: boolean } }) => r.source === 'catalog' && r.currentVersion.groceryReady));
+    const dal = (await call('GET', `/kitchen-circle/households/${householdId}/recipes?q=dal`, { token: owner.token })).data.recipes;
+    assert.ok(dal.some((r: { title: string }) => r.title === 'Dal Tadka'));
+
+    // Incomplete or ambiguous ingredient data cannot become a usable recipe.
+    const ambiguous = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token: owner.token, body: { title: 'Mystery Curry', defaultServings: 2, ingredients: [{ name: 'masala', quantity: 1, unit: 'to taste' }], steps: ['Cook.'] } });
+    assert.equal(ambiguous.status, 422);
+    assert.ok(ambiguous.data.issues.length > 0);
+
+    const created = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, {
+      token: owner.token,
+      body: { title: 'Masala Khichdi', defaultServings: 2, ingredients: [{ name: 'Rice', quantity: 0.5, unit: 'cups' }, { name: 'moong dal', quantity: 100, unit: 'gms' }, { name: 'salt', quantity: 1, unit: 'to taste', optional: true }], steps: ['Pressure-cook rice and dal together.'], effort: 'easy', dietaryTags: ['vegetarian'] },
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    assert.deepEqual(created.data.version.ingredients.map((i: { canonicalName: string; unit: string }) => `${i.canonicalName}:${i.unit}`), ['rice:cup', 'moong dal:g', 'salt:to taste']);
+    const recipeId = created.data.recipe.id;
+    const v1 = created.data.version.id;
+
+    // A household recipe is never visible to, or selectable by, another household.
+    const outsiderList = (await call('GET', `/kitchen-circle/households/${otherHouseholdId}/recipes?q=khichdi`, { token: outsider.token })).data.recipes;
+    assert.equal(outsiderList.length, 0);
+    assert.equal((await call('GET', `/kitchen-circle/households/${otherHouseholdId}/recipes/${recipeId}`, { token: outsider.token })).status, 404);
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/recipes`, { token: outsider.token })).status, 403);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${otherSlot.id}/recipe`, { token: outsider.token, body: { recipeVersionId: v1 } })).status, 404);
+
+    // A selected slot keeps its original version after the recipe is edited.
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}/recipe`, { token: owner.token, body: { recipeVersionId: v1 } })).status, 200);
+    const v2 = await call('POST', `/kitchen-circle/households/${householdId}/recipes/${recipeId}/versions`, { token: owner.token, body: { defaultServings: 4, ingredients: [{ name: 'rice', quantity: 1, unit: 'cup' }, { name: 'moong dal', quantity: 200, unit: 'g' }], steps: ['Cook for 4.'] } });
+    assert.equal(v2.status, 201, JSON.stringify(v2.data));
+    assert.equal(v2.data.version.version, 2);
+    const plan = await call('GET', `/kitchen-circle/households/${householdId}/plans?weekStart=2026-10-26`, { token: owner.token });
+    const bound = plan.data.plan.slots.find((s: { id: string }) => s.id === slot.id);
+    assert.equal(bound.recipeVersionId, v1);
+    assert.deepEqual(bound.recipe, { recipeId, source: 'household', version: 1 });
+    const detail = await call('GET', `/kitchen-circle/households/${householdId}/recipes/${recipeId}`, { token: owner.token });
+    assert.deepEqual(detail.data.recipe.versions.map((v: { version: number }) => v.version), [2, 1]);
+    assert.equal(detail.data.recipe.versions[1].defaultServings, 2);
+
+    // Unreviewed AI drafts are labelled, unusable, and become household recipes only after approval.
+    const draft = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token: owner.token, body: { title: 'AI Pulao', draft: true, defaultServings: 2, ingredients: [{ name: 'rice', quantity: 1, unit: 'handful' }], steps: ['Cook.'] } });
+    assert.equal(draft.status, 201, JSON.stringify(draft.data));
+    assert.equal(draft.data.recipe.source, 'ai_draft');
+    assert.equal(draft.data.version.groceryReady, false);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}/recipe`, { token: owner.token, body: { recipeVersionId: draft.data.version.id } })).status, 422);
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/recipe-versions/${draft.data.version.id}/approve`, { token: owner.token })).status, 422);
+    const fixed = await call('POST', `/kitchen-circle/households/${householdId}/recipes/${draft.data.recipe.id}/versions`, { token: owner.token, body: { defaultServings: 2, ingredients: [{ name: 'rice', quantity: 1, unit: 'cup' }], steps: ['Cook.'] } });
+    assert.equal(fixed.data.version.approvedAt, null);
+    const approved = await call('POST', `/kitchen-circle/households/${householdId}/recipe-versions/${fixed.data.version.id}/approve`, { token: owner.token });
+    assert.equal(approved.status, 201, JSON.stringify(approved.data));
+    assert.equal(approved.data.version.groceryReady, true);
+    const reviewed = (await call('GET', `/kitchen-circle/households/${householdId}/recipes/${draft.data.recipe.id}`, { token: owner.token })).data.recipe;
+    assert.equal(reviewed.source, 'household');
+
+    // Catalog recipes are directly usable but cannot be edited by a household.
+    const dalTadka = dal.find((r: { title: string }) => r.title === 'Dal Tadka');
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/recipes/${dalTadka.id}/versions`, { token: owner.token, body: { defaultServings: 2, ingredients: [{ name: 'dal', quantity: 1, unit: 'cup' }], steps: ['x'] } })).status, 403);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}/recipe`, { token: owner.token, body: { recipeVersionId: dalTadka.currentVersion.id } })).status, 200);
+    assert.equal((await call('GET', `/kitchen-circle/slots/${slot.id}/grocery-eligibility`, { token: owner.token })).data.eligible, true);
+
+    // Typing a different meal by hand drops the recipe binding, so grocery planning cannot use a stale recipe.
+    const retitled = await call('PATCH', `/kitchen-circle/slots/${slot.id}`, { token: owner.token, body: { mealTitle: 'Takeaway thali' } });
+    assert.equal(retitled.data.slot.recipeVersionId, null);
+    assert.equal((await call('GET', `/kitchen-circle/slots/${slot.id}/grocery-eligibility`, { token: owner.token })).data.eligible, false);
+  });
+
+  it('builds a deduplicated, source-traced weekly grocery list with pantry, coverage, and immutable snapshots', async () => {
+    const owner = await signup('Grocery Owner');
+    const outsider = await signup('Grocery Outsider');
+    const token = owner.token;
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'Grocery Home', defaultServings: 2, startsOn: '2026-11-02' } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const householdId = created.data.household.id;
+    const plan = created.data.plan;
+    const [mon, tue, wed, thu] = plan.slots;
+    const recipe = async (title: string, ingredients: unknown[]) => {
+      const r = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token, body: { title, defaultServings: 2, ingredients, steps: ['Cook.'] } });
+      assert.equal(r.status, 201, JSON.stringify(r.data));
+      return r.data.version.id as string;
+    };
+    const curry = await recipe('Chicken Curry Test', [{ name: 'chicken', quantity: 500, unit: 'g' }, { name: 'onions', quantity: 2, unit: 'piece' }, { name: 'salt', quantity: 1, unit: 'tsp' }]);
+    const pulao = await recipe('Chicken Pulao Test', [{ name: 'chicken', quantity: 0.75, unit: 'kg' }, { name: 'onion', quantity: 1, unit: 'pcs' }, { name: 'spring onion', quantity: 1, unit: 'bunch' }]);
+    const tikka = await recipe('Chicken Tikka Test', [{ name: 'Chicken', quantity: 400, unit: 'gms' }]);
+    for (const [slot, versionId] of [[mon, curry], [tue, pulao], [wed, tikka]] as const) {
+      assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}/recipe`, { token, body: { recipeVersionId: versionId } })).status, 200);
+    }
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${thu.id}`, { token, body: { state: 'leftovers' } })).status, 200);
+
+    // Aggregation, unit conversion, dedupe, distinctions, pantry, and source trace.
+    const first = await call('POST', `/kitchen-circle/households/${householdId}/grocery-lists`, { token, body: { planId: plan.id, scope: 'week', referenceDate: '2026-11-02' } });
+    assert.equal(first.status, 201, JSON.stringify(first.data));
+    const listId = first.data.snapshot.id;
+    const line = (lines: Array<{ canonicalName: string }>, name: string) => lines.find((l) => l.canonicalName === name) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const chicken = line(first.data.lines, 'chicken');
+    assert.deepEqual([chicken.quantity, chicken.unit, chicken.kind, chicken.status], [1.65, 'kg', 'recipe', 'buy']);
+    assert.deepEqual(chicken.sources.map((s: { plannedFor: string; recipeTitle: string }) => `${s.plannedFor}:${s.recipeTitle}`), ['2026-11-02:Chicken Curry Test', '2026-11-03:Chicken Pulao Test', '2026-11-04:Chicken Tikka Test']);
+    assert.equal(chicken.sources.reduce((sum: number, s: { baseQuantity: number }) => sum + s.baseQuantity, 0), chicken.baseQuantity);
+    assert.deepEqual([line(first.data.lines, 'onion').quantity, line(first.data.lines, 'onion').unit], [3, 'piece']);
+    assert.ok(line(first.data.lines, 'spring onion'));
+    assert.deepEqual([line(first.data.lines, 'salt').kind, line(first.data.lines, 'salt').status], ['pantry', 'already_have']);
+    assert.deepEqual(first.data.coverage.map((c: { plannedFor: string }) => c.plannedFor), ['2026-11-02', '2026-11-03', '2026-11-04']);
+    assert.ok(first.data.excluded.some((e: { plannedFor: string; reason: string }) => e.plannedFor === '2026-11-05' && e.reason === 'No cooking planned.'));
+
+    // No duplicate day coverage without an explicit override.
+    const again = await call('POST', `/kitchen-circle/households/${householdId}/grocery-lists`, { token, body: { planId: plan.id, scope: 'week', referenceDate: '2026-11-02' } });
+    assert.equal(again.status, 409);
+    assert.equal(again.data.conflicts.length, 3);
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/grocery-lists`, { token, body: { planId: plan.id, scope: 'day', date: '2026-11-02', referenceDate: '2026-11-02' } })).status, 409);
+    const pantry = await call('PUT', `/kitchen-circle/households/${householdId}/pantry`, { token, body: { name: 'Salt', inPantry: false } });
+    assert.equal(pantry.status, 200, JSON.stringify(pantry.data));
+    assert.ok(!pantry.data.pantry.items.includes('salt'));
+    const extraDay = await call('POST', `/kitchen-circle/households/${householdId}/grocery-lists`, { token, body: { planId: plan.id, scope: 'day', date: '2026-11-02', referenceDate: '2026-11-02', override: true } });
+    assert.equal(extraDay.status, 201, JSON.stringify(extraDay.data));
+    assert.equal(line(extraDay.data.lines, 'salt').kind, 'recipe');
+    assert.equal(extraDay.data.coverage[0].override, true);
+
+    // A plan edit never rewrites an existing list; it is surfaced as a plan change instead.
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${mon.id}`, { token, body: { servings: 6 } })).status, 200);
+    const afterEdit = await call('GET', `/kitchen-circle/grocery-lists/${listId}`, { token });
+    assert.equal(line(afterEdit.data.lines, 'chicken').quantity, 1.65);
+    assert.deepEqual(afterEdit.data.planChanges.map((c: { plannedFor: string }) => c.plannedFor), ['2026-11-02']);
+
+    // Manual controls: skip warns for required items, quantity edits keep the original, manual adds are labelled.
+    const skipped = await call('PATCH', `/kitchen-circle/grocery-lists/${listId}/lines/${chicken.id}`, { token, body: { status: 'skipped' } });
+    assert.equal(skipped.status, 200, JSON.stringify(skipped.data));
+    assert.match(skipped.data.warning, /required for Chicken Curry Test \(2026-11-02\)/);
+    const onionId = line(first.data.lines, 'onion').id;
+    const changed = await call('PATCH', `/kitchen-circle/grocery-lists/${listId}/lines/${onionId}`, { token, body: { quantity: 4, estimatedPricePaise: 6_000 } });
+    assert.deepEqual([changed.data.line.quantity, changed.data.line.originalQuantity, changed.data.line.manuallyChanged], [4, 3, true]);
+    const manual = await call('POST', `/kitchen-circle/grocery-lists/${listId}/lines`, { token, body: { name: 'Bread', quantity: 1, unit: 'piece' } });
+    assert.equal(manual.status, 201, JSON.stringify(manual.data));
+    assert.equal(manual.data.line.kind, 'manual');
+    const budgeted = await call('PATCH', `/kitchen-circle/grocery-lists/${listId}`, { token, body: { budgetPaise: 5_000 } });
+    assert.deepEqual([budgeted.data.totals.skippedRequired, budgeted.data.totals.estimatedTotalPaise, budgeted.data.totals.overBudget], [1, 6_000, true]);
+    assert.equal((await call('GET', `/kitchen-circle/grocery-lists/${listId}`, { token: outsider.token })).status, 403);
+
+    // Discarding a draft releases its days; a new list reflects the edited plan; finalized lists are frozen.
+    assert.equal((await call('POST', `/kitchen-circle/grocery-lists/${listId}/discard`, { token })).status, 201);
+    const fresh = await call('POST', `/kitchen-circle/households/${householdId}/grocery-lists`, { token, body: { planId: plan.id, scope: 'week', referenceDate: '2026-11-02' } });
+    assert.equal(fresh.status, 201, JSON.stringify(fresh.data));
+    assert.equal(line(fresh.data.lines, 'chicken').quantity, 2.65);
+    const finalized = await call('POST', `/kitchen-circle/grocery-lists/${fresh.data.snapshot.id}/finalize`, { token });
+    assert.equal(finalized.data.snapshot.status, 'finalized');
+    assert.equal((await call('PATCH', `/kitchen-circle/grocery-lists/${fresh.data.snapshot.id}/lines/${line(fresh.data.lines, 'chicken').id}`, { token, body: { status: 'skipped' } })).status, 409);
+    assert.equal((await call('POST', `/kitchen-circle/grocery-lists/${fresh.data.snapshot.id}/discard`, { token })).status, 409);
+    const lists = await call('GET', `/kitchen-circle/households/${householdId}/grocery-lists?planId=${plan.id}`, { token });
+    assert.deepEqual(lists.data.lists.map((l: { status: string }) => l.status).sort(), ['discarded', 'draft', 'finalized']);
+  });
+});
+
 describe('public & admin', () => {
   it('waitlist + analytics', async () => {
     const before = (await call('GET', '/waitlist/count')).data.count;

@@ -21,3 +21,6 @@ docs/design/marketing-website
 
 # Internal deep-dive docs on the intelligence (local only)
 intelligence_docs/
+
+# Local native build tree (the app lives in apps/mobile)
+mobile/

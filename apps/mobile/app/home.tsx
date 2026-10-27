@@ -145,6 +145,7 @@ export default function HomeScreen() {
   const openGame = (g: (typeof GAMES)[number]) => (g.comingSoon ? toast(`${g.title} is coming soon`) : router.push(g.route as never));
 
   const quick: Array<{ icon: IconName; label: string; go: () => void }> = [
+    { icon: 'groups', label: 'KitchenCircle', go: () => router.push('/kitchen-circle' as never) },
     { icon: 'bolt', label: 'Quick pick', go: () => router.push('/games/wheel') },
     { icon: 'sentiment_satisfied', label: 'All my matches', go: () => router.replace('/recommendations') },
     ...(profile?.mode === 'mind_reader' ? [{ icon: 'auto_awesome' as IconName, label: 'Read my mind', go: () => router.push('/mind-reader') }] : []),

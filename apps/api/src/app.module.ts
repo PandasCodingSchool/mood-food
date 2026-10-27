@@ -8,6 +8,7 @@ import { RateLimitGuard } from './common/rate-limit.js';
 import { CoreModule } from './core/core.module.js';
 import { DiyModule } from './diy/diy.module.js';
 import { IntelligenceModule } from './intelligence/intelligence.service.js';
+import { KitchenCircleModule } from './kitchen-circle/kitchen-circle.module.js';
 import { MiscModule } from './misc/misc.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfileModule } from './profile/profile.module.js';
@@ -21,6 +22,7 @@ import { SwiggyModule } from './swiggy/swiggy.module.js';
   imports: [
     CoreModule,
     IntelligenceModule,
+    KitchenCircleModule,
     AuthModule,
     ProfileModule,
     NotificationsModule,

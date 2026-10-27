@@ -36,6 +36,76 @@
       "when": 1791457669460,
       "tag": "0004_instamart_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793088079819,
+      "tag": "0005_magenta_colonel_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793090270342,
+      "tag": "0006_stormy_echo",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793090462708,
+      "tag": "0007_flimsy_vision",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793090651794,
+      "tag": "0008_plain_stepford_cuckoos",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793091478443,
+      "tag": "0009_faithful_wolf_cub",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793092044419,
+      "tag": "0010_chilly_talon",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793092746270,
+      "tag": "0011_tan_ozymandias",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793100020084,
+      "tag": "0012_kitchen_circle_recipe_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793100020682,
+      "tag": "0013_kitchen_circle_catalog_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793101075332,
+      "tag": "0014_kitchen_circle_grocery",
+      "breakpoints": true
     }
   ]
 }
