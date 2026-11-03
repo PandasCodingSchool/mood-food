@@ -79,6 +79,11 @@ export interface Theme {
     orbs: [string, string];
     orbOpacity: number;
   };
+  /**
+   * Optional font-family remap applied by `Text` (e.g. a sub-brand swapping the body face).
+   * Keys are token families such as `Geist_400Regular`; unset means the default faces.
+   */
+  fonts?: Partial<Record<string, string>>;
 }
 
 export interface ThemeInput {

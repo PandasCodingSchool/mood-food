@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { Controller, Get, HttpCode, Inject, Logger, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Logger, Post, Query, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
 import { CurrentUser, Public } from '../auth/auth.guard.js';
@@ -12,6 +12,11 @@ import { SWIGGY_AUTH_BASE as AUTH_BASE, SwiggyTokensService } from './swiggy-tok
 
 const STATE_TTL_SEC = 10 * 60;
 const CLIENT_TTL_SEC = 24 * 60 * 60;
+
+/** Which app started the link: the callback page names it. One Swiggy link per user serves both. */
+type LinkingApp = 'moodfood' | 'kitchen-circle';
+const APP_NAMES: Record<LinkingApp, string> = { moodfood: 'MoodFood', 'kitchen-circle': 'KitchenCircle' };
+const linkingApp = (v: unknown): LinkingApp => (v === 'kitchen-circle' ? 'kitchen-circle' : 'moodfood');
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -52,13 +57,13 @@ export class SwiggyOAuthController {
 
   @Post('initiate')
   @HttpCode(200)
-  async initiate(@CurrentUser() user: AuthUser) {
+  async initiate(@CurrentUser() user: AuthUser, @Body() body?: { app?: string }) {
     try {
       const clientId = await this.clientId();
       const verifier = randomBytes(32).toString('base64url');
       const challenge = createHash('sha256').update(verifier).digest('base64url');
       const state = randomUUID();
-      await this.redis.set(`swiggy:state:${state}`, JSON.stringify({ userId: user.id, verifier }), 'EX', STATE_TTL_SEC);
+      await this.redis.set(`swiggy:state:${state}`, JSON.stringify({ userId: user.id, verifier, app: linkingApp(body?.app) }), 'EX', STATE_TTL_SEC);
       const params = new URLSearchParams({
         response_type: 'code',
         client_id: clientId,
@@ -78,15 +83,18 @@ export class SwiggyOAuthController {
   @Public()
   @Get('callback')
   async callback(@Query() q: Record<string, string | undefined>, @Res() reply: FastifyReply) {
+    let app: LinkingApp = 'moodfood';
     const page = (status: 'success' | 'error', message = '', code = 200) =>
-      reply.status(code).type('text/html').send(this.callbackHtml(status, message));
+      reply.status(code).type('text/html').send(this.callbackHtml(status, message, app));
     try {
       if (q.error) return page('error', q.error_description || q.error, 400);
       if (!q.code || !q.state) return page('error', 'Missing code or state', 400);
       const stateKey = `swiggy:state:${q.state}`;
       const raw = await this.redis.getdel(stateKey);
       if (!raw) return page('error', 'Invalid or expired state', 400);
-      const { userId, verifier } = JSON.parse(raw) as { userId: string; verifier: string };
+      const state = JSON.parse(raw) as { userId: string; verifier: string; app?: string };
+      const { userId, verifier } = state;
+      app = linkingApp(state.app);
 
       const res = await fetch(`${AUTH_BASE}/auth/token`, {
         method: 'POST',
@@ -137,9 +145,9 @@ export class SwiggyOAuthController {
     return { success: true };
   }
 
-  private callbackHtml(status: 'success' | 'error', message: string) {
+  private callbackHtml(status: 'success' | 'error', message: string, app: LinkingApp) {
     const ok = status === 'success';
-    const payload = JSON.stringify({ type: 'swiggy-oauth', status, message }).replace(/</g, '\\u003c');
+    const payload = JSON.stringify({ type: 'swiggy-oauth', status, message, app }).replace(/</g, '\\u003c');
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -158,7 +166,7 @@ export class SwiggyOAuthController {
   <div class="card">
     <div class="icon">${ok ? '✅' : '❌'}</div>
     <h1>Swiggy ${ok ? 'Connected' : 'Connection Failed'}</h1>
-    <p>${ok ? 'You can close this tab and return to MoodFood.' : escapeHtml(message)}</p>
+    <p>${ok ? `You can close this tab and return to ${APP_NAMES[app]}.` : escapeHtml(message)}</p>
   </div>
   <script>window.opener?.postMessage(${payload}, ${JSON.stringify(this.env.FRONTEND_ORIGIN)});</script>
 </body>

@@ -211,7 +211,8 @@ def test_jev_switch_is_per_request(lab_client):
 # --- Swiggy read-only guard ----------------------------------------------------------------
 
 WRITE_TOOLS = ["update_food_cart", "get_food_cart", "track_food_order", "flush_food_cart", "apply_food_coupon", "place_food_order", "confirm_order",
-               "create_address", "delete_address", "update_cart", "clear_cart", "some_new_tool"]
+               "create_address", "delete_address", "update_cart", "clear_cart", "checkout", "get_cart", "apply_coupon",
+               "check_payment_status", "some_new_tool"]
 
 
 @pytest.mark.parametrize("tool", WRITE_TOOLS)
@@ -267,3 +268,37 @@ def test_food_graph_summary(lab_client):
     assert s["mapping_cache"]["items"] >= 1 and s["mapping_cache"]["recent"][0]["dish"] == "Dal Makhani"
     full = lab_client.get("/api/lab/catalog", params={"limit": 1000, "full": "true"}).json()
     assert full["total"] == s["dishes"] and "sensory" in full["dishes"][0]
+
+
+async def test_swiggy_read_only_allows_instamart_search_but_never_cart_or_checkout(monkeypatch):
+    """KitchenCircle's live read-only check: SWIGGY_READ_ONLY=true lets product search and addresses through only."""
+    from unittest.mock import AsyncMock
+
+    from app.services import swiggy_mcp
+
+    async def fake(self, name, arguments):
+        return {"ok": name}
+
+    monkeypatch.setattr(swiggy_mcp.SwiggyMCPClient, "_call_tool", fake)
+    monkeypatch.setattr(settings, "lab_enabled", False)
+    monkeypatch.setattr(settings, "swiggy_read_only", True)
+    client = swiggy_mcp.SwiggyMCPClient(token="tok")
+    for tool in ("search_products", "get_addresses"):
+        assert await client.call_tool(tool, {}) == {"ok": tool}
+    network = AsyncMock(side_effect=AssertionError("must not reach Swiggy"))
+    monkeypatch.setattr(client, "_call_once", network, raising=False)
+    for tool in ("update_cart", "checkout", "get_cart", "clear_cart"):
+        with pytest.raises(swiggy_mcp.SwiggyWriteBlockedError):
+            await client.call_tool(tool, {})
+    network.assert_not_called()
+
+
+def test_kitchen_circle_lab_routes_return_results_with_trace(lab_client):
+    from lab import kitchen_circle_fixtures as fx
+
+    res = lab_client.post("/api/lab/kitchen-circle/autofill", json={"members": fx.HOUSEHOLDS["Solo, no restrictions"], "slots": fx.week(blank=2), "recipes": fx.RECIPES}).json()
+    assert len(res["result"]["proposals"]) == 2 and any(e["kind"] == "kitchen_circle.autofill.pick" for e in res["trace"])
+    cart = lab_client.post("/api/lab/kitchen-circle/cart", json={"provider": "fixture", "lines": fx.CART_SCENARIOS["Plan example: 1.65 kg chicken, 300 g packs only"]}).json()
+    assert cart["result"]["lines"][0]["product"]["packs"][0]["count"] == 6
+    cook = lab_client.post("/api/lab/kitchen-circle/translate", json={"language": "hi", "meals": [fx.COOK_MEAL], "allow_llm": False}).json()
+    assert cook["result"]["status"] == "fallback"

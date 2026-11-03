@@ -202,10 +202,14 @@ export interface TabBarProps {
   onCenterPress: () => void;
   centerIcon?: IconName;
   centerLabel?: string;
+  /** Middle button fill and icon colour; default is the theme accent. */
+  centerColor?: string;
+  centerIconColor?: string;
 }
 
-export function TabBar({ tabs, active, onTabPress, onCenterPress, centerIcon = 'mood', centerLabel = 'Mood check-in' }: TabBarProps) {
+export function TabBar({ tabs, active, onTabPress, onCenterPress, centerIcon = 'mood', centerLabel = 'Mood check-in', centerColor, centerIconColor }: TabBarProps) {
   const { colors } = useTheme();
+  const fill = centerColor ?? colors.acc;
   const insets = useSafeAreaInsets();
   const tab = (t: TabItem) => {
     const on = t.key === active;
@@ -255,14 +259,14 @@ export function TabBar({ tabs, active, onTabPress, onCenterPress, centerIcon = '
             height: 62,
             marginTop: -36,
             borderRadius: 22,
-            backgroundColor: colors.acc,
+            backgroundColor: fill,
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: `0px 14px 28px -10px ${colors.acc}, 0px 0px 0px 5px ${colors.solid}`,
+            boxShadow: `0px 14px 28px -10px ${fill}, 0px 0px 0px 5px ${colors.solid}`,
             transform: [{ scale: pressed ? 0.95 : 1 }],
           })}
         >
-          <Icon name={centerIcon} size={30} color={colors.onAcc} />
+          <Icon name={centerIcon} size={30} color={centerIconColor ?? colors.onAcc} />
         </Pressable>
       </View>
       {tabs.slice(2).map(tab)}

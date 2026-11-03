@@ -41,7 +41,12 @@
       "expo-status-bar",
       "expo-font",
       "expo-secure-store",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "KitchenCircle uses the microphone so you can tell your household chat what to cook, by voice."
+        }
+      ],
       "expo-notifications",
       "expo-sharing",
       [
@@ -49,7 +54,8 @@
         {
           "locationWhenInUsePermission": "MoodFood uses your location to check the local weather, so picks and the app theme match the rain or sun outside."
         }
-      ]
+      ],
+      "expo-image"
     ],
     "extra": {
       "router": {},

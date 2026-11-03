@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 // End-to-end smoke suite against a running API (real Postgres + Redis).
 //   docker compose up -d && pnpm --filter @moodfood/api dev
 //   API_URL=http://localhost:3001 SYNC_KEY=... pnpm --filter @moodfood/api test:e2e
@@ -424,7 +425,7 @@ describe('KitchenCircle', () => {
 
     // A household recipe is never visible to, or selectable by, another household.
     const outsiderList = (await call('GET', `/kitchen-circle/households/${otherHouseholdId}/recipes?q=khichdi`, { token: outsider.token })).data.recipes;
-    assert.equal(outsiderList.length, 0);
+    assert.ok(outsiderList.every((r: { source: string }) => r.source === 'catalog'), JSON.stringify(outsiderList));
     assert.equal((await call('GET', `/kitchen-circle/households/${otherHouseholdId}/recipes/${recipeId}`, { token: outsider.token })).status, 404);
     assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/recipes`, { token: outsider.token })).status, 403);
     assert.equal((await call('PATCH', `/kitchen-circle/slots/${otherSlot.id}/recipe`, { token: outsider.token, body: { recipeVersionId: v1 } })).status, 404);
@@ -550,6 +551,600 @@ describe('KitchenCircle', () => {
     assert.equal((await call('POST', `/kitchen-circle/grocery-lists/${fresh.data.snapshot.id}/discard`, { token })).status, 409);
     const lists = await call('GET', `/kitchen-circle/households/${householdId}/grocery-lists?planId=${plan.id}`, { token });
     assert.deepEqual(lists.data.lists.map((l: { status: string }) => l.status).sort(), ['discarded', 'draft', 'finalized']);
+  });
+});
+
+describe('KitchenCircle auto-fill', () => {
+  // Needs the intelligence service (the planner lives there). Skipped when it is offline unless E2E_REQUIRE_INTELLIGENCE=1.
+  it('proposes only open days, honours diets, swaps and regenerates, and applies only what is accepted', async (t) => {
+    const owner = await signup('Autofill Owner');
+    const outsider = await signup('Autofill Outsider');
+    const token = owner.token;
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'Autofill Home', defaultServings: 2, startsOn: '2026-11-09' } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const householdId = created.data.household.id;
+    const plan = created.data.plan;
+    const slots = plan.slots as Array<{ id: string; plannedFor: string }>;
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/preferences`, { token, body: { strength: 'cannot_eat', category: 'diet', value: 'vegetarian' } })).status, 201);
+    const khichdi = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token, body: { title: 'Masala Khichdi', defaultServings: 2, ingredients: [{ name: 'rice', quantity: 0.5, unit: 'cup' }, { name: 'moong dal', quantity: 0.5, unit: 'cup' }], steps: ['Pressure-cook.'], effort: 'easy', dietaryTags: ['vegetarian'] } });
+    assert.equal(khichdi.status, 201, JSON.stringify(khichdi.data));
+    const dal = (await call('GET', `/kitchen-circle/households/${householdId}/recipes?q=Dal%20Tadka`, { token })).data.recipes[0];
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slots[0].id}/recipe`, { token, body: { recipeVersionId: dal.currentVersion.id } })).status, 200);
+    assert.equal((await call('POST', `/kitchen-circle/slots/${slots[0].id}/lock`, { token })).status, 201);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${slots[2].id}`, { token, body: { state: 'leftovers' } })).status, 200);
+
+    const first = await call('POST', `/kitchen-circle/plans/${plan.id}/autofill`, { token, body: {} });
+    if (first.status === 503 && process.env.E2E_REQUIRE_INTELLIGENCE !== '1') { t.skip('intelligence service offline'); return; }
+    assert.equal(first.status, 201, JSON.stringify(first.data));
+    const proposal = first.data.proposal;
+    const proposedDays = proposal.items.map((i: { plannedFor: string }) => i.plannedFor);
+    assert.deepEqual(proposedDays, ['2026-11-10', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15']);
+    const titles = proposal.items.map((i: { title: string }) => i.title);
+    assert.ok(titles.every((title: string) => !['Chicken Curry', 'Egg Curry', 'Dal Tadka'].includes(title)), titles.join(','));
+    assert.equal(new Set(titles).size, titles.length);
+    assert.ok(proposal.items.every((i: { reasons: string[] }) => i.reasons.length > 0));
+
+    // Proposing never changes the plan.
+    const untouched = await call('GET', `/kitchen-circle/households/${householdId}/plans?weekStart=2026-11-09`, { token });
+    assert.ok(untouched.data.plan.slots.filter((s: { state: string }) => s.state === 'blank').length === 5);
+    assert.equal((await call('POST', `/kitchen-circle/plans/${plan.id}/autofill`, { token: outsider.token, body: {} })).status, 403);
+
+    // Swap one proposed day: a different recipe, and the old one is remembered.
+    const target = proposal.items[0];
+    const swapped = await call('POST', `/kitchen-circle/slots/${target.slotId}/swap`, { token, body: { proposalId: proposal.id } });
+    assert.equal(swapped.status, 201, JSON.stringify(swapped.data));
+    assert.notEqual(swapped.data.item.recipeId, target.recipeId);
+    assert.ok(swapped.data.item.excludedRecipeIds.includes(target.recipeId));
+
+    // Regenerate supersedes the old proposal.
+    const regenerated = await call('POST', `/kitchen-circle/plans/${plan.id}/autofill`, { token, body: { regenerate: true } });
+    assert.equal(regenerated.status, 201, JSON.stringify(regenerated.data));
+    assert.equal((await call('POST', `/kitchen-circle/plans/${plan.id}/proposals/${proposal.id}/apply`, { token, body: {} })).status, 409);
+    const fresh = regenerated.data.proposal;
+    assert.equal((await call('GET', `/kitchen-circle/plans/${plan.id}/proposals/latest`, { token })).data.proposal.id, fresh.id);
+
+    // A day edited after the proposal is never overwritten; servings edits apply.
+    const edited = fresh.items.find((i: { plannedFor: string }) => i.plannedFor === '2026-11-12');
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${edited.slotId}`, { token, body: { state: 'planned', mealTitle: 'Pizza night' } })).status, 200);
+    const tuesday = fresh.items.find((i: { plannedFor: string }) => i.plannedFor === '2026-11-10');
+    const applied = await call('POST', `/kitchen-circle/plans/${plan.id}/proposals/${fresh.id}/apply`, { token, body: { servings: { [tuesday.id]: 5 } } });
+    assert.equal(applied.status, 201, JSON.stringify(applied.data));
+    assert.equal(applied.data.applied.length, 4);
+    assert.deepEqual(applied.data.stale.map((s: { plannedFor: string }) => s.plannedFor), ['2026-11-12']);
+    assert.equal(applied.data.proposal.status, 'applied');
+    const after = (await call('GET', `/kitchen-circle/households/${householdId}/plans?weekStart=2026-11-09`, { token })).data.plan.slots;
+    const day = (date: string) => after.find((s: { plannedFor: string }) => s.plannedFor === date);
+    assert.deepEqual([day('2026-11-10').state, day('2026-11-10').mealTitle, day('2026-11-10').servings], ['planned', tuesday.title, 5]);
+    assert.equal(day('2026-11-12').mealTitle, 'Pizza night');
+    assert.equal(day('2026-11-09').state, 'locked');
+
+    // Read-only alternatives for a planned day exclude its current recipe.
+    const options = await call('POST', `/kitchen-circle/slots/${day('2026-11-10').id}/swap`, { token, body: {} });
+    assert.equal(options.status, 201, JSON.stringify(options.data));
+    assert.ok(options.data.options.length > 0 && options.data.options.every((o: { title: string }) => o.title !== tuesday.title));
+
+    // No open days → nothing to propose; clearing a day and discarding leaves the plan as it was.
+    assert.equal((await call('POST', `/kitchen-circle/plans/${plan.id}/autofill`, { token, body: {} })).status, 422);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${day('2026-11-15').id}`, { token, body: { state: 'blank', mealTitle: null } })).status, 200);
+    const again = await call('POST', `/kitchen-circle/plans/${plan.id}/autofill`, { token, body: {} });
+    assert.equal(again.data.proposal.items.length, 1);
+    assert.equal((await call('POST', `/kitchen-circle/plans/${plan.id}/proposals/${again.data.proposal.id}/discard`, { token })).status, 201);
+    assert.equal((await call('GET', `/kitchen-circle/plans/${plan.id}/proposals/latest`, { token })).data.proposal, null);
+  });
+});
+
+describe('KitchenCircle shared chat', () => {
+  it('turns messages into audited action cards that respect clarification, confirmation, and permissions', async (t) => {
+    const owner = await signup('Chat Owner');
+    const token = owner.token;
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'Chat Home', defaultServings: 2, startsOn: '2026-11-09' } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const householdId = created.data.household.id;
+    const planId = created.data.plan.id;
+    const join = async (role: 'member' | 'cook') => {
+      const email = `chat-${role}-${rand()}@example.com`;
+      const account = await call('POST', '/auth/signup', { body: { name: `Chat ${role}`, email, password: 'secret123' } });
+      const invite = await call('POST', `/kitchen-circle/households/${householdId}/invites`, { token, body: { email, role } });
+      assert.equal((await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: account.data.session.token })).status, 201);
+      return account.data.session.token as string;
+    };
+    const member = await join('member');
+    const cook = await join('cook');
+    const say = (body: string, as = token) => call('POST', `/kitchen-circle/households/${householdId}/chat`, { token: as, body: { planId, body } });
+    const slots = async () => (await call('GET', `/kitchen-circle/households/${householdId}/plans?weekStart=2026-11-09`, { token })).data.plan.slots as Array<{ id: string; plannedFor: string; state: string; mealTitle: string | null; servings: number }>;
+    const day = async (date: string) => (await slots()).find((s) => s.plannedFor === date)!;
+
+    // Clear low-risk edit → applied and logged.
+    const leftovers = await say('Leftovers on Tuesday');
+    if (leftovers.status === 201 && leftovers.data.source === 'none' && process.env.E2E_REQUIRE_INTELLIGENCE !== '1') { t.skip('intelligence service offline'); return; }
+    assert.equal(leftovers.status, 201, JSON.stringify(leftovers.data));
+    assert.deepEqual(leftovers.data.actions.map((a: { actionType: string; status: string }) => `${a.actionType}:${a.status}`), ['SET_DAY_STATUS:applied']);
+    assert.equal((await day('2026-11-10')).state, 'leftovers');
+    assert.match(leftovers.data.assistant.body, /^Done: Leftovers on Tuesday/);
+
+    // Ambiguous shared instruction in a multi-member household → clarification only the sender can answer.
+    const out = await say('We are going out Friday');
+    const question = out.data.actions[0];
+    assert.equal(question.status, 'needs_clarification');
+    assert.deepEqual(question.clarification.options.map((o: { label: string }) => o.label), ['Everyone is out', 'Only me']);
+    assert.equal((await day('2026-11-13')).state, 'blank');
+    assert.equal((await call('POST', `/kitchen-circle/chat/actions/${question.id}/clarify`, { token: member, body: { optionIndex: 0 } })).status, 403);
+    const answered = await call('POST', `/kitchen-circle/chat/actions/${question.id}/clarify`, { token, body: { optionIndex: 0 } });
+    assert.equal(answered.status, 201, JSON.stringify(answered.data));
+    assert.equal((await day('2026-11-13')).state, 'household_out');
+
+    // Meal with a catalog recipe and servings — sent with a client id, so its live steps can be followed.
+    const meal = await call('POST', `/kitchen-circle/households/${householdId}/chat`, { token, body: { planId, body: 'make dal tadka on wednesday for 4 people', clientId: 'e2e-progress-1' } });
+    const progress = await call('GET', `/kitchen-circle/households/${householdId}/chat/progress/e2e-progress-1`, { token });
+    assert.equal(progress.status, 200, JSON.stringify(progress.data));
+    assert.equal(progress.data.done, true);
+    assert.ok(progress.data.events.some((e: { text: string }) => /allergies/.test(e.text)), JSON.stringify(progress.data.events));
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/chat/progress/e2e-progress-1`, { token: cook })).status, 403);
+    assert.equal(meal.data.actions[0].status, 'applied', JSON.stringify(meal.data));
+    assert.deepEqual([(await day('2026-11-11')).mealTitle, (await day('2026-11-11')).servings], ['Dal Tadka', 4]);
+
+    // Locked-day change → confirmation; any member may confirm and the day stays locked.
+    const wednesday = await day('2026-11-11');
+    assert.equal((await call('POST', `/kitchen-circle/slots/${wednesday.id}/lock`, { token })).status, 201);
+    const locked = await say('make poha on wednesday');
+    const pending = locked.data.actions[0];
+    assert.deepEqual([pending.status, pending.policy], ['needs_confirmation', 'locked_day']);
+    assert.equal((await day('2026-11-11')).mealTitle, 'Dal Tadka');
+    const confirmed = await call('POST', `/kitchen-circle/chat/actions/${pending.id}/confirm`, { token: member });
+    assert.equal(confirmed.data.action.status, 'confirmed', JSON.stringify(confirmed.data));
+    assert.deepEqual([(await day('2026-11-11')).mealTitle, (await day('2026-11-11')).state], ['Poha', 'locked']);
+    assert.equal((await call('POST', `/kitchen-circle/chat/actions/${pending.id}/confirm`, { token })).status, 409);
+
+    // A pending card expires if the day changes before it is confirmed.
+    const unlock = (await say('unlock wednesday')).data.actions[0];
+    assert.equal(unlock.status, 'needs_confirmation');
+    assert.equal((await call('POST', `/kitchen-circle/slots/${wednesday.id}/unlock`, { token })).status, 201);
+    assert.equal((await call('POST', `/kitchen-circle/chat/actions/${unlock.id}/confirm`, { token })).data.action.status, 'expired');
+
+    // Bulk week change → every day waits for review.
+    const bulk = await say('no cooking all week');
+    assert.ok(bulk.data.actions.length >= 3);
+    assert.ok(bulk.data.actions.every((a: { status: string; policy: string }) => a.status === 'needs_confirmation' && a.policy === 'bulk_change'));
+    assert.equal((await day('2026-11-14')).state, 'blank');
+    assert.equal((await call('POST', `/kitchen-circle/chat/actions/${bulk.data.actions[0].id}/reject`, { token })).data.action.status, 'rejected');
+
+    // Recurring rule and grocery list need confirmation; auto-fill only creates a proposal.
+    const rule = (await say('every Monday vegetarian')).data.actions[0];
+    assert.deepEqual([rule.status, rule.policy], ['needs_confirmation', 'recurring_rule']);
+    assert.equal((await call('POST', `/kitchen-circle/chat/actions/${rule.id}/confirm`, { token })).data.action.status, 'confirmed');
+    const rules = (await call('GET', `/kitchen-circle/households/${householdId}/rules`, { token })).data.rules;
+    assert.ok(rules.some((r: { weekday: number; constraint: { diet?: string } }) => r.weekday === 0 && r.constraint.diet === 'vegetarian'));
+    const grocery = (await say('make a grocery list')).data.actions[0];
+    assert.deepEqual([grocery.status, grocery.policy], ['needs_confirmation', 'order_action']);
+    // Asking again while that card is still waiting doesn't create a second one.
+    assert.equal((await say('make a grocery list')).data.actions.length, 0);
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/grocery-lists?planId=${planId}`, { token })).data.lists.length, 0);
+    const fill = (await say('fill the rest of the week')).data.actions[0];
+    assert.equal(fill.status, 'applied', JSON.stringify(fill));
+    assert.ok(fill.result.proposalId);
+    assert.equal((await day('2026-11-14')).state, 'blank');
+
+    // Voice notes: validated, members only; without a model key it says so plainly instead of guessing.
+    const clip = Buffer.from('\u0000\u0000\u0000\u0018ftypM4A ' + 'x'.repeat(64)).toString('base64');
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/chat/voice`, { token, body: { planId, audio: clip, mimeType: 'image/png' } })).status, 400);
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/chat/voice`, { token: cook, body: { planId, audio: clip, mimeType: 'audio/m4a' } })).status, 403);
+    const voice = await call('POST', `/kitchen-circle/households/${householdId}/chat/voice`, { token, body: { planId, audio: clip, mimeType: 'audio/m4a', clientId: 'e2e-voice-1' } });
+    assert.ok([503, 422].includes(voice.status), JSON.stringify(voice.data));
+    const heard = await call('GET', `/kitchen-circle/households/${householdId}/chat/progress/e2e-voice-1`, { token });
+    assert.equal(heard.data.done, true);
+    assert.equal(heard.data.events[0].text, 'Listening to your message');
+
+    // Cooks never see or use the chat; members see the full audited history.
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/chat?planId=${planId}`, { token: cook })).status, 403);
+    assert.equal((await say('lock friday', cook)).status, 403);
+    const history = await call('GET', `/kitchen-circle/households/${householdId}/chat?planId=${planId}`, { token: member });
+    assert.equal(history.status, 200);
+    assert.ok(history.data.messages.some((m: { role: string; authorName: string }) => m.role === 'member' && m.authorName === 'Chat Owner'));
+    assert.ok(history.data.messages.some((m: { body: string }) => /^Confirmed: Poha on Wednesday \(instead of Dal Tadka\) — Chat member/.test(m.body)));
+    assert.ok(history.data.messages.flatMap((m: { actions: unknown[] }) => m.actions).length >= 10);
+  });
+});
+
+describe('KitchenCircle AI recipes and dish impact', () => {
+  const catalogV2 = JSON.parse(readFileSync(new URL('../src/kitchen-circle/catalog/catalog-recipes.json', import.meta.url), 'utf8')) as { recipes: Array<{ title: string; version_id: string }> };
+  const versionOf = (title: string) => catalogV2.recipes.find((r) => r.title === title)!.version_id;
+
+  it('ships the expanded catalog, previews the impact of a swap, and offers AI for unknown dishes', async (t) => {
+    const { token } = await signup('AI Recipe Owner');
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'AI Home', defaultServings: 4, startsOn: '2026-11-16' } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const householdId = created.data.household.id;
+    const planId = created.data.plan.id;
+    const slots = created.data.plan.slots as Array<{ id: string; plannedFor: string }>;
+
+    // Catalog v2 is seeded and searchable.
+    const browse = await call('GET', `/kitchen-circle/households/${householdId}/recipes?source=catalog`, { token });
+    assert.ok(browse.data.recipes.length >= 70, `catalog has ${browse.data.recipes.length}`);
+    assert.ok((await call('GET', `/kitchen-circle/households/${householdId}/recipes?q=rajma`, { token })).data.recipes.some((r: { title: string }) => r.title === 'Rajma Chawal'));
+
+    // Swapping Dal Tadka for Rajma Chawal: what's added, what's reused, what's no longer needed.
+    const monday = slots[0];
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${monday.id}/recipe`, { token, body: { recipeVersionId: 'c1a00000-0000-4000-8000-000000000101' } })).status, 200);
+    const swap = await call('POST', `/kitchen-circle/slots/${monday.id}/impact`, { token, body: { recipeVersionId: versionOf('Rajma Chawal') } });
+    if (swap.status === 201 && process.env.E2E_REQUIRE_INTELLIGENCE !== '1' && swap.data.impact.warnings.some((w: string) => /Couldn’t check/.test(w))) { t.skip('intelligence service offline'); return; }
+    assert.equal(swap.status, 201, JSON.stringify(swap.data));
+    const impact = swap.data.impact;
+    assert.equal(impact.safe, true);
+    assert.equal(impact.replaces, 'Dal Tadka');
+    assert.ok(impact.adds.some((l: { name: string }) => /rajma/i.test(l.name)), JSON.stringify(impact.adds));
+    assert.ok(impact.noLongerNeeded.some((l: { name: string }) => /toor dal/i.test(l.name)), JSON.stringify(impact.noLongerNeeded));
+    assert.ok(impact.summary.length > 0);
+
+    // A household peanut allergy makes Lemon Rice unsafe — phrased without naming anyone.
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/preferences`, { token, body: { strength: 'cannot_eat', category: 'allergy', value: 'peanut' } })).status, 201);
+    const unsafe = (await call('POST', `/kitchen-circle/slots/${slots[1].id}/impact`, { token, body: { recipeVersionId: versionOf('Lemon Rice') } })).data.impact;
+    assert.equal(unsafe.safe, false, JSON.stringify(unsafe));
+    assert.match(unsafe.warnings[0], /Not safe for everyone/);
+    assert.doesNotMatch(unsafe.warnings.join(' '), /AI Recipe Owner|peanut/i);
+
+    // Without a model key the AI writer degrades to a clear 503, never a half-made recipe.
+    const gen = await call('POST', `/kitchen-circle/households/${householdId}/recipes/generate`, { token, body: { dish: 'Thalipeeth' } });
+    assert.equal(gen.status, 503, JSON.stringify(gen.data));
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/recipes?source=ai_draft`, { token })).data.recipes.length, 0);
+
+    // An unknown dish in chat → one question with answers (AI recipe, close matches, or a plain note); the card doesn't repeat it.
+    const asked = await call('POST', `/kitchen-circle/households/${householdId}/chat`, { token, body: { planId, body: 'make thalipeeth on wednesday' } });
+    assert.equal(asked.status, 201, JSON.stringify(asked.data));
+    const card = asked.data.actions[0];
+    assert.equal(card.status, 'needs_clarification');
+    const labels = card.clarification.options.map((o: { label: string }) => o.label);
+    assert.match(labels[0], /^Write a recipe for Thalipeeth \(AI\)$/i);
+    assert.ok(labels.some((l: string) => /^Just write/.test(l)), labels.join(' | '));
+    assert.equal(asked.data.assistant.body, card.clarification.question);
+
+    // Picking "AI" without a model key fails gracefully on the card; picking the plain note plans the title.
+    const ai = await call('POST', `/kitchen-circle/chat/actions/${card.id}/clarify`, { token, body: { optionIndex: 0 } });
+    assert.ok(ai.status < 500, JSON.stringify(ai.data));
+    const history = (await call('GET', `/kitchen-circle/households/${householdId}/chat?planId=${planId}`, { token })).data.messages;
+    const recipeCard = history.flatMap((m: { actions: Array<{ actionType: string; status: string }> }) => m.actions).find((a: { actionType: string }) => a.actionType === 'CREATE_RECIPE');
+    assert.equal(recipeCard?.status, 'failed', JSON.stringify(recipeCard));
+
+    // The reported bug: "chicken tacos" must never become Chicken 65 just because both mention chicken.
+    const tacos = await call('POST', `/kitchen-circle/households/${householdId}/chat`, { token, body: { planId, body: 'Can we do chicken tacos on thursday?' } });
+    assert.equal(tacos.data.actions[0].status, 'needs_clarification', JSON.stringify(tacos.data));
+    assert.match(tacos.data.actions[0].clarification.options[0].label, /^Write a recipe for Chicken Tacos \(AI\)$/);
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/plans?weekStart=2026-11-16`, { token })).data.plan.slots[3].mealTitle, null);
+  });
+});
+
+describe('KitchenCircle cart', () => {
+  it('builds a pack-optimized sample cart members can review while live writes stay owner-only and flag-gated', async (t) => {
+    const owner = await signup('Cart Owner');
+    const token = owner.token;
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'Cart Home', defaultServings: 2, startsOn: '2026-11-16' } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const householdId = created.data.household.id;
+    const plan = created.data.plan;
+    const join = async (role: 'member' | 'cook') => {
+      const email = `cart-${role}-${rand()}@example.com`;
+      const account = await call('POST', '/auth/signup', { body: { name: `Cart ${role}`, email, password: 'secret123' } });
+      const invite = await call('POST', `/kitchen-circle/households/${householdId}/invites`, { token, body: { email, role } });
+      assert.equal((await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: account.data.session.token })).status, 201);
+      return account.data.session.token as string;
+    };
+    const member = await join('member');
+    const cook = await join('cook');
+    const recipe = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token, body: { title: 'Cart Chicken', defaultServings: 2, ingredients: [{ name: 'chicken', quantity: 0.55, unit: 'kg' }, { name: 'onion', quantity: 1, unit: 'piece' }], steps: ['Cook.'] } });
+    for (const slot of plan.slots.slice(0, 3)) {
+      assert.equal((await call('PATCH', `/kitchen-circle/slots/${slot.id}/recipe`, { token, body: { recipeVersionId: recipe.data.version.id } })).status, 200);
+    }
+    const list = await call('POST', `/kitchen-circle/households/${householdId}/grocery-lists`, { token, body: { planId: plan.id, scope: 'week', referenceDate: '2026-11-16' } });
+    assert.equal(list.status, 201, JSON.stringify(list.data));
+    const listId = list.data.snapshot.id;
+
+    // Members can build a read-only preview; with flags off it uses the labelled sample catalogue.
+    const preview = await call('POST', `/kitchen-circle/grocery-lists/${listId}/cart`, { token: member, body: {} });
+    if (preview.status === 503 && process.env.E2E_REQUIRE_INTELLIGENCE !== '1') { t.skip('intelligence service offline'); return; }
+    assert.equal(preview.status, 201, JSON.stringify(preview.data));
+    const cart = preview.data.cart;
+    assert.deepEqual([cart.provider, cart.status, cart.addressId], ['fixture', 'preview', null]);
+    const chicken = cart.lines.find((l: { name: string }) => l.name === 'chicken');
+    assert.deepEqual(chicken.product.packs.map((p: { label: string; count: number }) => `${p.count} x ${p.label}`), ['6 x 300 g']);
+    assert.deepEqual([chicken.required, chicken.product.purchased, chicken.product.surplus], ['1.65 kg', '1.8 kg', '150 g']);
+    assert.match(chicken.explanation, /Need 1\.65 kg; 6 × 300 g = 1\.8 kg \(150 g extra\)/);
+    assert.ok(cart.items.some((i: { quantity: number }) => i.quantity === 6));
+    assert.ok(cart.warnings.some((w: string) => w.startsWith('Sample catalogue')));
+    assert.equal(cart.totals.over_cap, true);
+    assert.deepEqual([preview.data.capabilities.liveGrocery, preview.data.capabilities.liveWrites, preview.data.capabilities.role], [false, false, 'member']);
+
+    // Cooks never see carts or prices.
+    assert.equal((await call('GET', `/kitchen-circle/grocery-lists/${listId}/cart`, { token: cook })).status, 403);
+    assert.equal((await call('POST', `/kitchen-circle/grocery-lists/${listId}/cart`, { token: cook, body: {} })).status, 403);
+
+    // Only the owner may touch the live cart, and only when the rollout flags allow it.
+    assert.equal((await call('POST', `/kitchen-circle/carts/${cart.id}/write`, { token: member })).status, 403);
+    assert.equal((await call('POST', `/kitchen-circle/carts/${cart.id}/write`, { token })).status, 409);
+    assert.equal((await call('POST', `/kitchen-circle/carts/${cart.id}/checkout`, { token, body: { confirm: true, expectedTotal: 1000 } })).status, 409);
+    assert.equal((await call('POST', `/kitchen-circle/carts/${cart.id}/checkout`, { token, body: { confirm: false, expectedTotal: 1000 } })).status, 400);
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/delivery-addresses`, { token })).status, 409);
+    assert.equal((await call('PUT', `/kitchen-circle/households/${householdId}/delivery-address`, { token: member, body: { addressId: 'a1', label: 'Home' } })).status, 403);
+    assert.equal((await call('PUT', `/kitchen-circle/households/${householdId}/delivery-address`, { token, body: { addressId: 'a1', label: 'Home' } })).status, 200);
+    // Still sample: live matching is off even with an address set.
+    const again = await call('POST', `/kitchen-circle/grocery-lists/${listId}/cart`, { token, body: { scope: 'all' } });
+    assert.equal(again.data.cart.provider, 'fixture');
+    assert.deepEqual(again.data.capabilities.address, { id: 'a1', label: 'Home' });
+    const latest = await call('GET', `/kitchen-circle/grocery-lists/${listId}/cart`, { token: member });
+    assert.equal(latest.data.cart.id, again.data.cart.id);
+    const activities = (await call('GET', `/kitchen-circle/households/${householdId}/activities`, { token })).data.activities.map((a: { eventType: string }) => a.eventType);
+    assert.ok(activities.includes('cart_previewed') && activities.includes('delivery_address_set'));
+    assert.ok(!activities.includes('cart_written') && !activities.includes('order_placed'));
+  });
+});
+
+describe('KitchenCircle cook, notifications, feedback & metrics', () => {
+  it('shares a sanitised cook view, notifies members by their settings, records feedback, and reports metrics', async () => {
+    const indiaToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const today = indiaToday();
+    const owner = await signup('Cook Owner');
+    const token = owner.token;
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'Cook Home', defaultServings: 4, startsOn: today } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const householdId = created.data.household.id;
+    const plan = created.data.plan;
+    const todaySlot = plan.slots[0];
+    const join = async (role: 'member' | 'cook') => {
+      const email = `cookflow-${role}-${rand()}@example.com`;
+      const account = await call('POST', '/auth/signup', { body: { name: `Cook ${role}`, email, password: 'secret123' } });
+      const invite = await call('POST', `/kitchen-circle/households/${householdId}/invites`, { token, body: { email, role } });
+      assert.equal((await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: account.data.session.token })).status, 201);
+      return account.data.session.token as string;
+    };
+    await call('POST', '/kitchen-circle/lab/notify-tick', { body: {} }); // start the notifier cursor from here
+    const member = await join('member');
+    const cook = await join('cook');
+    const recipe = await call('POST', `/kitchen-circle/households/${householdId}/recipes`, { token, body: { title: 'Rajma Chawal', defaultServings: 2, ingredients: [{ name: 'rajma', quantity: 150, unit: 'g' }, { name: 'rice', quantity: 1, unit: 'cup' }, { name: 'salt', quantity: 1, unit: 'to taste', optional: true }], steps: ['Soak rajma for 8 hours.', 'Pressure-cook for 6 whistles.'] } });
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${todaySlot.id}/recipe`, { token, body: { recipeVersionId: recipe.data.version.id } })).status, 200);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${todaySlot.id}`, { token, body: { notes: 'Gate code 4321, pay cook on Friday' } })).status, 200);
+
+    // Cook links: owners/members create; cooks cannot. The public view is token-only and sanitised.
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/cook-links`, { token: cook, body: { planId: plan.id } })).status, 403);
+    const link = await call('POST', `/kitchen-circle/households/${householdId}/cook-links`, { token: member, body: { planId: plan.id, slotId: todaySlot.id, language: 'hi' } });
+    assert.equal(link.status, 201, JSON.stringify(link.data));
+    assert.match(link.data.path, /^\/cook\/[A-Za-z0-9_-]{30,}$/);
+    assert.equal(link.data.link.tokenHash, undefined);
+    const cookToken = link.data.path.split('/').pop();
+    const view = await call('GET', `/kitchen-circle/cook/${cookToken}`);
+    assert.equal(view.status, 200, JSON.stringify(view.data));
+    const [day] = view.data.view.days;
+    assert.deepEqual([day.date, day.title, day.servings, day.cooking], [today, 'Rajma Chawal', 4, true]);
+    assert.deepEqual(day.ingredients.map((i: { name: string; quantity: number | null; unit: string }) => `${i.quantity} ${i.unit} ${i.name}`), ['300 g rajma', '2 cup rice', 'null to taste salt']);
+    assert.ok(['fallback', 'ok', 'partial'].includes(view.data.view.translation));
+    const raw = JSON.stringify(view.data);
+    for (const secret of ['Gate code', 'price', 'paise', 'address', 'chat', 'Cook Owner', 'email', 'preferences']) assert.ok(!raw.includes(secret), `cook view leaked ${secret}`);
+    const english = await call('GET', `/kitchen-circle/cook/${cookToken}?language=en`);
+    assert.equal(english.data.view.translation, 'not_needed');
+    assert.equal((await call('GET', `/kitchen-circle/households/${householdId}/cook-week`, { token: cook })).status, 200);
+    // Read-aloud: only parts of this link's own view; bad requests are rejected; no model key → a plain 503.
+    const speak = (body: unknown, as?: string) => as
+      ? call('POST', `/kitchen-circle/households/${householdId}/cook-week/speech`, { token: as, body })
+      : call('POST', `/kitchen-circle/cook/${cookToken}/speech`, { body });
+    assert.equal((await speak({ date: todaySlot.plannedFor, part: 'recipe' })).status, 400);
+    assert.equal((await speak({ date: '2030-01-01', part: 'ingredients' })).status, 404);
+    assert.equal((await speak({ date: todaySlot.plannedFor, part: 'step', index: 39 })).status, 404);
+    assert.ok([201, 503].includes((await speak({ date: todaySlot.plannedFor, part: 'ingredients' })).status));
+    assert.ok([201, 503].includes((await speak({ date: todaySlot.plannedFor, part: 'step', index: 0 }, cook)).status));
+    assert.equal((await call('GET', '/kitchen-circle/speech/not-a-key')).status, 400);
+    assert.equal((await call('GET', `/kitchen-circle/speech/${'0'.repeat(64)}`)).status, 404);
+    assert.equal((await call('POST', `/kitchen-circle/cook-links/${link.data.link.id}/revoke`, { token })).data.link.active, false);
+    assert.equal((await speak({ date: todaySlot.plannedFor, part: 'ingredients' })).status, 404);
+    assert.equal((await call('GET', `/kitchen-circle/cook/${cookToken}`)).status, 404);
+    assert.equal((await call('GET', '/kitchen-circle/cook/not-a-real-token-but-long-enough')).status, 404);
+
+    // Feedback: only once the day has come; it informs planning and never edits the plan.
+    const future = plan.slots.find((s: { plannedFor: string }) => s.plannedFor > today);
+    if (future) assert.equal((await call('POST', `/kitchen-circle/slots/${future.id}/feedback`, { token, body: { outcome: 'loved' } })).status, 422);
+    assert.equal((await call('POST', `/kitchen-circle/slots/${todaySlot.id}/feedback`, { token: member, body: { outcome: 'loved' } })).status, 201);
+    const fb = await call('GET', `/kitchen-circle/plans/${plan.id}/feedback`, { token: member });
+    assert.deepEqual(fb.data.days.find((d: { slotId: string }) => d.slotId === todaySlot.id), { slotId: todaySlot.id, mine: 'loved', counts: { loved: 1 } });
+
+    // Notifications: others are told about changes (cooks included for day changes), never the actor; settings are respected.
+    await call('POST', '/kitchen-circle/lab/notify-tick', { body: {} });
+    const types = async (as: string) => ((await call('GET', '/user/notifications', { token: as })).data.notifications ?? []).map((n: { type: string }) => n.type);
+    assert.ok((await types(member)).includes('planner_day_changed'));
+    // The cook hears about today's/tomorrow's changes as the new menu itself; other days as the usual alert.
+    assert.ok((await types(cook)).some((t: string) => t === 'planner_cook_menu' || t === 'planner_day_changed'));
+    assert.ok(!(await types(token)).includes('planner_day_changed'));
+    assert.equal((await call('PUT', `/kitchen-circle/households/${householdId}/my-settings`, { token: member, body: { notifyChanges: false } })).status, 200);
+    assert.equal((await call('POST', `/kitchen-circle/slots/${todaySlot.id}/lock`, { token })).status, 201);
+    await call('POST', '/kitchen-circle/lab/notify-tick', { body: {} });
+    assert.ok(!(await types(member)).includes('planner_locked_changed'));
+    // Scheduled: the Saturday nudge to plan next week and the opt-in today's-meal reminder.
+    const saturday = new Date(`${today}T05:30:00Z`);
+    saturday.setUTCDate(saturday.getUTCDate() + ((6 - saturday.getUTCDay() + 7) % 7));
+    await call('POST', '/kitchen-circle/lab/notify-tick', { body: { now: saturday.toISOString() } });
+    assert.ok((await types(token)).includes('planner_weekend_nudge'));
+    assert.equal((await call('PUT', `/kitchen-circle/households/${householdId}/my-settings`, { token, body: { notifyTodayMeal: true, cookLanguage: 'ta' } })).data.settings.cookLanguage, 'ta');
+    await call('POST', '/kitchen-circle/lab/notify-tick', { body: { now: `${today}T04:30:00.000Z` } });
+    const todayNote = ((await call('GET', '/user/notifications', { token })).data.notifications ?? []).find((n: { type: string }) => n.type === 'planner_today_meal');
+    assert.equal(todayNote?.title, 'Today: Rajma Chawal');
+
+    // Observability and Planner Lab hooks.
+    const metrics = await call('GET', '/kitchen-circle/admin/metrics?days=7', { headers: { Authorization: `Basic ${Buffer.from(ADMIN).toString('base64')}` } });
+    assert.equal(metrics.status, 200, JSON.stringify(metrics.data));
+    assert.ok(metrics.data.metrics.cook.linksCreated >= 1 && metrics.data.metrics.plannedDayCompletion.loved >= 1 && metrics.data.metrics.notifications.sent >= 1);
+    assert.equal((await call('GET', '/kitchen-circle/admin/metrics', { token })).status, 401);
+    const previews = await call('GET', '/kitchen-circle/lab/notification-previews');
+    assert.equal(previews.data.previews.length, 8); // incl. the cook menu
+    const aggregate = await call('POST', '/kitchen-circle/lab/aggregate', { body: { referenceDate: today, slots: [
+      { slotId: 'a', plannedFor: today, servings: 4, recipeId: 'r', recipeTitle: 'Test', recipeVersionId: 'v', defaultServings: 2, ingredients: [{ name: 'onions', quantity: 2, unit: 'piece' }] },
+    ] } });
+    assert.equal(aggregate.data.lines[0].quantity, 4);
+  });
+});
+
+describe('KitchenCircle cook menu', () => {
+  it('sends a day\'s menu to the designated cook, with owner settings and role checks', async () => {
+    const { token } = await signup('Menu Owner');
+    const created = await call('POST', '/kitchen-circle/households', { token, body: { name: 'Menu Home', defaultServings: 4, startsOn: '2026-11-30' } });
+    const householdId = created.data.household.id;
+    const day = created.data.plan.slots[0] as { id: string; plannedFor: string };
+    assert.equal(created.data.household.cookAutoSend, true);
+
+    // No cook yet → a clear message, nothing sent.
+    const none = await call('POST', `/kitchen-circle/households/${householdId}/cook/send-menu`, { token, body: { date: day.plannedFor } });
+    assert.equal(none.status, 409, JSON.stringify(none.data));
+
+    const join = async (role: 'member' | 'cook', name: string) => {
+      const email = `menu-${role}-${rand()}@example.com`;
+      const account = await call('POST', '/auth/signup', { body: { name, email, password: 'secret123' } });
+      const invite = await call('POST', `/kitchen-circle/households/${householdId}/invites`, { token, body: { email, role } });
+      await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: account.data.session.token });
+      return { token: account.data.session.token as string, id: account.data.user?.id ?? account.data.session.userId };
+    };
+    const member = await join('member', 'Menu Member');
+    const cook = await join('cook', 'Lata Cook');
+    const members = (await call('GET', `/kitchen-circle/households/${householdId}/members`, { token })).data.members as Array<{ userId: string; role: string }>;
+    const cookId = members.find((m) => m.role === 'cook')!.userId;
+    const memberId = members.find((m) => m.role === 'member')!.userId;
+
+    // Only a cook can be the designated cook; only the owner sets it.
+    assert.equal((await call('PATCH', `/kitchen-circle/households/${householdId}`, { token, body: { designatedCookUserId: memberId } })).status, 422);
+    assert.equal((await call('PATCH', `/kitchen-circle/households/${householdId}`, { token: member.token, body: { cookAutoSend: false } })).status, 403);
+    const set = await call('PATCH', `/kitchen-circle/households/${householdId}`, { token, body: { designatedCookUserId: cookId, cookAutoSend: false } });
+    assert.deepEqual([set.data.household.designatedCookUserId, set.data.household.cookAutoSend], [cookId, false]);
+
+    // Plan Dal Tadka, then a member sends the day to the cook (works even with auto-send off).
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${day.id}/recipe`, { token, body: { recipeVersionId: 'c1a00000-0000-4000-8000-000000000101' } })).status, 200);
+    const sent = await call('POST', `/kitchen-circle/households/${householdId}/cook/send-menu`, { token: member.token, body: { date: day.plannedFor } });
+    assert.equal(sent.status, 201, JSON.stringify(sent.data));
+    assert.equal(sent.data.cook, 'Lata');
+    assert.match(sent.data.body, /Dal Tadka for 4\. The recipe is ready in your language/);
+    const inbox = (await call('GET', '/user/notifications', { token: cook.token })).data.notifications as Array<{ type: string; title: string }>;
+    assert.ok(inbox.some((n) => n.type === 'planner_cook_menu' && /Dal Tadka/.test(n.title)), JSON.stringify(inbox));
+
+    // Cooks receive the menu; they can't send it.
+    assert.equal((await call('POST', `/kitchen-circle/households/${householdId}/cook/send-menu`, { token: cook.token, body: { date: day.plannedFor } })).status, 403);
+  });
+});
+
+describe('KitchenCircle permissions and household management', () => {
+  async function household(name: string, startsOn = '2026-11-23') {
+    const owner = await signup(`${name} Owner`);
+    const created = await call('POST', '/kitchen-circle/households', { token: owner.token, body: { name, defaultServings: 3, startsOn } });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const join = async (role: 'member' | 'cook') => {
+      const email = `${role}-${rand()}@example.com`;
+      const account = await call('POST', '/auth/signup', { body: { name: `${name} ${role}`, email, password: 'secret123' } });
+      const invite = await call('POST', `/kitchen-circle/households/${created.data.household.id}/invites`, { token: owner.token, body: { email, role } });
+      assert.equal(invite.status, 201, JSON.stringify(invite.data));
+      assert.equal((await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: account.data.session.token })).status, 201);
+      return { token: account.data.session.token as string, id: account.data.user.id as string };
+    };
+    return { owner, householdId: created.data.household.id as string, plan: created.data.plan, join };
+  }
+
+  it('enforces the owner / member / cook / outsider permission matrix', async () => {
+    const h = await household('Matrix');
+    const member = await h.join('member');
+    const cook = await h.join('cook');
+    const outsider = await signup('Matrix Outsider');
+    const roles = { owner: h.owner.token, member: member.token, cook: cook.token, outsider: outsider.token } as const;
+    const slot = h.plan.slots[0];
+    const expect = async (label: string, method: string, path: (role: string) => string, body: (role: string) => unknown, statuses: Record<keyof typeof roles, number>) => {
+      for (const [role, token] of Object.entries(roles)) {
+        const res = await call(method, path(role), { token, body: body(role) });
+        assert.equal(res.status, statuses[role as keyof typeof roles], `${label} as ${role}: ${JSON.stringify(res.data)}`);
+      }
+    };
+    const hid = h.householdId;
+    await expect('read plan', 'GET', () => `/kitchen-circle/households/${hid}/plans?weekStart=${h.plan.weekStart}`, () => undefined, { owner: 200, member: 200, cook: 200, outsider: 403 });
+    await expect('edit a day', 'PATCH', () => `/kitchen-circle/slots/${slot.id}`, (r) => r === 'outsider' ? { servings: 2 } : { servings: 2 }, { owner: 200, member: 200, cook: 403, outsider: 403 });
+    await expect('members list', 'GET', () => `/kitchen-circle/households/${hid}/members`, () => undefined, { owner: 200, member: 200, cook: 200, outsider: 403 });
+    await expect('household settings', 'PATCH', () => `/kitchen-circle/households/${hid}`, () => ({ defaultServings: 3 }), { owner: 200, member: 403, cook: 403, outsider: 403 });
+    await expect('invite list', 'GET', () => `/kitchen-circle/households/${hid}/invites`, () => undefined, { owner: 200, member: 403, cook: 403, outsider: 403 });
+    await expect('send invite', 'POST', () => `/kitchen-circle/households/${hid}/invites`, (r) => ({ email: `matrix-${r}-${rand()}@example.com` }), { owner: 201, member: 403, cook: 403, outsider: 403 });
+    await expect('create rule', 'POST', () => `/kitchen-circle/households/${hid}/rules`, () => ({ weekday: 6, strength: 'preference', category: 'effort', constraint: { effort: ['easy'] } }), { owner: 201, member: 201, cook: 403, outsider: 403 });
+    await expect('own attendance', 'PATCH', () => `/kitchen-circle/slots/${slot.id}/attendance`, () => ({ status: 'attending' }), { owner: 200, member: 200, cook: 200, outsider: 403 });
+    await expect('chat', 'GET', () => `/kitchen-circle/households/${hid}/chat`, () => undefined, { owner: 200, member: 200, cook: 403, outsider: 403 });
+    await expect('cook link', 'GET', () => `/kitchen-circle/households/${hid}/cook-links`, () => undefined, { owner: 200, member: 200, cook: 403, outsider: 403 });
+    await expect('cook week', 'GET', () => `/kitchen-circle/households/${hid}/cook-week`, () => undefined, { owner: 200, member: 200, cook: 200, outsider: 403 });
+    await expect('recipes', 'GET', () => `/kitchen-circle/households/${hid}/recipes`, () => undefined, { owner: 200, member: 200, cook: 200, outsider: 403 });
+    await expect('cart capabilities', 'GET', () => `/kitchen-circle/households/${hid}/cart-capabilities`, () => undefined, { owner: 200, member: 200, cook: 403, outsider: 403 });
+    await expect('auto-fill', 'GET', () => `/kitchen-circle/plans/${h.plan.id}/proposals/latest`, () => undefined, { owner: 200, member: 200, cook: 200, outsider: 403 });
+    await expect('lock a day', 'POST', () => `/kitchen-circle/slots/${slot.id}/lock`, () => undefined, { owner: 201, member: 201, cook: 403, outsider: 403 });
+    assert.equal((await call('GET', '/kitchen-circle/status')).data.enabled, true);
+  });
+
+  it('manages invitations by phone, members, private preferences, attendance and week-scoped rules', async (t) => {
+    const h = await household('Manage', '2026-11-23');
+    const hid = h.householdId;
+    const owner = h.owner.token;
+
+    // Phone invitation: accepted by the account with that phone, whatever formatting the owner typed.
+    const invitee = await signup('Phone Invitee');
+    const local = invitee.phone;
+    const invite = await call('POST', `/kitchen-circle/households/${hid}/invites`, { token: owner, body: { phone: `+91 ${local.slice(0, 5)} ${local.slice(5)}`, role: 'member' } });
+    assert.equal(invite.status, 201, JSON.stringify(invite.data));
+    assert.match(invite.data.invite.path, /^\/kitchen-circle\/join\//);
+    assert.equal((await call('POST', `/kitchen-circle/households/${hid}/invites`, { token: owner, body: { phone: local } })).status, 409);
+    const other = await signup('Wrong Phone');
+    assert.equal((await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: other.token })).status, 403);
+    const resent = await call('POST', `/kitchen-circle/invites/${invite.data.invite.id}/resend`, { token: owner });
+    assert.notEqual(resent.data.invite.token, invite.data.invite.token);
+    assert.equal((await call('POST', `/kitchen-circle/invites/${invite.data.invite.token}/accept`, { token: invitee.token })).status, 404);
+    assert.equal((await call('POST', `/kitchen-circle/invites/${resent.data.invite.token}/accept`, { token: invitee.token })).status, 201);
+    assert.equal((await call('POST', `/kitchen-circle/households/${hid}/invites`, { token: owner, body: { phone: local } })).status, 409);
+    const revoked = await call('POST', `/kitchen-circle/households/${hid}/invites`, { token: owner, body: { email: `revoke-${rand()}@example.com`, role: 'cook' } });
+    assert.equal((await call('POST', `/kitchen-circle/invites/${revoked.data.invite.id}/revoke`, { token: owner })).status, 201);
+    const invites = (await call('GET', `/kitchen-circle/households/${hid}/invites`, { token: owner })).data.invites;
+    assert.deepEqual(invites.map((i: { status: string }) => i.status).sort(), ['accepted', 'revoked']);
+    assert.ok(invites.every((i: { token?: string }) => i.token === undefined));
+
+    // Household settings and members (names and roles only).
+    assert.equal((await call('PATCH', `/kitchen-circle/households/${hid}`, { token: owner, body: { name: 'Manage Home', defaultServings: 5 } })).data.household.defaultServings, 5);
+    const members = (await call('GET', `/kitchen-circle/households/${hid}/members`, { token: invitee.token })).data.members;
+    assert.deepEqual(members.map((m: { role: string }) => m.role), ['owner', 'member']);
+    assert.ok(members.every((m: Record<string, unknown>) => Object.keys(m).sort().join() === 'joinedAt,name,role,userId,you'));
+
+    // Preferences are private to their author.
+    const pref = await call('POST', `/kitchen-circle/households/${hid}/preferences`, { token: invitee.token, body: { strength: 'cannot_eat', category: 'allergen', value: 'peanuts' } });
+    assert.equal(pref.status, 201);
+    assert.equal((await call('GET', `/kitchen-circle/households/${hid}/preferences/mine`, { token: invitee.token })).data.preferences.length, 1);
+    assert.equal((await call('GET', `/kitchen-circle/households/${hid}/preferences/mine`, { token: owner })).data.preferences.length, 0);
+    assert.equal((await call('DELETE', `/kitchen-circle/households/${hid}/preferences/${pref.data.preference.id}`, { token: owner })).status, 404);
+
+    // Attendance, recurring absence and reactions in the per-day summary.
+    const [mon, tue, wed] = h.plan.slots;
+    const inviteeId = members.find((m: { role: string }) => m.role === 'member').userId;
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${mon.id}/attendance`, { token: invitee.token, body: { status: 'absent' } })).status, 200);
+    assert.equal((await call('POST', `/kitchen-circle/households/${hid}/rules`, { token: owner, body: { weekday: 1, strength: 'hard', category: 'absence', constraint: { user_id: inviteeId } } })).status, 201);
+    assert.equal((await call('PATCH', `/kitchen-circle/slots/${wed.id}/reaction`, { token: invitee.token, body: { reaction: 'not_for_me' } })).status, 200);
+    const people = (await call('GET', `/kitchen-circle/plans/${h.plan.id}/people`, { token: invitee.token })).data.days;
+    const day = (id: string) => people.find((d: { slotId: string }) => d.slotId === id);
+    assert.deepEqual([day(mon.id).eating, day(mon.id).people, day(mon.id).mine], [1, 2, 'absent']);
+    assert.deepEqual([day(tue.id).eating, day(tue.id).mine], [1, 'absent']); // recurring Tuesday absence
+    assert.deepEqual(day(wed.id).reactions, { looksGood: 0, notForMe: 1, mine: 'not_for_me' });
+
+    // Members can leave; the owner can't; the owner can remove.
+    assert.equal((await call('DELETE', `/kitchen-circle/households/${hid}/members/${members[0].userId}`, { token: owner })).status, 409);
+    assert.equal((await call('DELETE', `/kitchen-circle/households/${hid}/members/${inviteeId}`, { token: invitee.token })).status, 200);
+    assert.equal((await call('GET', `/kitchen-circle/households/${hid}/members`, { token: invitee.token })).status, 403);
+
+    // “Just this week” rules apply only to their week (needs the planner).
+    const thisWeekRule = await call('POST', `/kitchen-circle/households/${hid}/rules`, { token: owner, body: { weekday: 0, strength: 'hard', category: 'cuisine', constraint: { cuisine: 'Thai' }, appliesToWeekStart: h.plan.weekStart } });
+    assert.equal(thisWeekRule.data.rule.appliesToWeekStart, h.plan.weekStart);
+    const now = await call('POST', `/kitchen-circle/plans/${h.plan.id}/autofill`, { token: owner, body: {} });
+    if (now.status === 503 && process.env.E2E_REQUIRE_INTELLIGENCE !== '1') { t.skip('intelligence service offline'); return; }
+    assert.ok(now.data.proposal.unfilled.some((u: { plannedFor: string }) => u.plannedFor === mon.plannedFor));
+    const next = await call('POST', `/kitchen-circle/households/${hid}/plans/next`, { token: owner, body: { referenceDate: '2026-11-23' } });
+    const later = await call('POST', `/kitchen-circle/plans/${next.data.plan.id}/autofill`, { token: owner, body: {} });
+    assert.ok(later.data.proposal.items.some((i: { plannedFor: string }) => i.plannedFor === '2026-11-30'));
+
+    // Chat: “Just this week” stores a week-scoped rule after confirmation.
+    const asked = await call('POST', `/kitchen-circle/households/${hid}/chat`, { token: owner, body: { planId: h.plan.id, body: 'vegetarian on Friday' } });
+    const card = asked.data.actions[0];
+    assert.equal(card.status, 'needs_clarification');
+    const answered = await call('POST', `/kitchen-circle/chat/actions/${card.id}/clarify`, { token: owner, body: { optionIndex: 1 } });
+    const pending = answered.data.actions[0];
+    assert.equal(pending.status, 'needs_confirmation');
+    assert.equal((await call('POST', `/kitchen-circle/chat/actions/${pending.id}/confirm`, { token: owner })).data.action.status, 'confirmed');
+    const rules = (await call('GET', `/kitchen-circle/households/${hid}/rules`, { token: owner })).data.rules;
+    assert.ok(rules.some((r: { weekday: number; appliesToWeekStart: string | null; constraint: { diet?: string } }) => r.weekday === 4 && r.constraint.diet === 'vegetarian' && r.appliesToWeekStart === h.plan.weekStart));
   });
 });
 

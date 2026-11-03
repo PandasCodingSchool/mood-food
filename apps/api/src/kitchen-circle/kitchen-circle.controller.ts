@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/auth.guard.js';
 import type { AuthUser } from '../auth/auth.types.js';
+import { KitchenCircleEnabledGuard } from './feature.guard.js';
 import { parseDateOnly } from './calendar.js';
 import { KitchenCircleService } from './kitchen-circle.service.js';
 
@@ -33,9 +34,13 @@ const updateSlotBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'No changes supplied');
 const planQuery = z.object({ weekStart: dateOnly });
-const createInviteBody = z.object({ email: z.email().trim().toLowerCase(), role: z.enum(['member', 'cook']).default('member') });
+const createInviteBody = z.object({ email: z.email().trim().toLowerCase().optional(), phone: z.string().trim().min(6).max(20).optional(), role: z.enum(['member', 'cook']).default('member') })
+  .refine((b) => Boolean(b.email) !== Boolean(b.phone), 'Invite by email or by phone number');
 const attendanceBody = z.object({ status: z.enum(['attending', 'absent']) });
-const ruleBody = z.object({ weekday: z.number().int().min(0).max(6).optional(), strength: z.enum(['hard', 'preference', 'contextual']), category: z.string().trim().min(1).max(50), constraint: z.record(z.string(), z.unknown()) });
+const ruleBody = z.object({ appliesToWeekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), weekday: z.number().int().min(0).max(6).optional(), strength: z.enum(['hard', 'preference', 'contextual']), category: z.string().trim().min(1).max(50), constraint: z.record(z.string(), z.unknown()) });
+const ruleUpdateBody = z
+  .object({ active: z.boolean().optional(), weekday: z.number().int().min(0).max(6).nullable().optional(), strength: z.enum(['hard', 'preference', 'contextual']).optional(), constraint: z.record(z.string(), z.unknown()).optional() })
+  .refine((body) => Object.keys(body).length > 0, 'No changes supplied');
 const preferenceBody = z.object({ strength: z.enum(['cannot_eat', 'never_plan', 'prefer_less', 'favourite']), category: z.string().trim().min(1).max(50), value: z.string().trim().min(1).max(255) });
 const reactionBody = z.object({ reaction: z.enum(['looks_good', 'not_for_me']), reason: z.string().trim().min(1).max(500).optional() });
 const recipeIngredient = z.object({ name: z.string().trim().min(1).max(120), canonicalName: z.string().trim().min(1).max(120).optional(), quantity: z.number().positive().max(100_000), unit: z.string().trim().min(1).max(30), optional: z.boolean().optional() });
@@ -57,6 +62,7 @@ const recipeBody = recipeVersionBody.extend({ title: z.string().trim().min(1).ma
 const recipeQuery = z.object({ q: z.string().trim().max(100).optional(), source: z.enum(['catalog', 'household', 'ai_draft']).optional() });
 const selectRecipeBody = z.object({ recipeVersionId: z.uuid() });
 
+@UseGuards(KitchenCircleEnabledGuard)
 @Controller('kitchen-circle')
 export class KitchenCircleController {
   constructor(private readonly kitchenCircle: KitchenCircleService) {}
@@ -79,6 +85,16 @@ export class KitchenCircleController {
   @Post('households/:id/rules')
   async createRule(@CurrentUser() user: AuthUser, @Param('id', { schema: householdId }) id: string, @Body({ schema: ruleBody }) body: z.infer<typeof ruleBody>) {
     return { success: true, rule: await this.kitchenCircle.createRule(user.id, id, body) };
+  }
+
+  @Patch('households/:id/rules/:ruleId')
+  async updateRule(
+    @CurrentUser() user: AuthUser,
+    @Param('id', { schema: householdId }) id: string,
+    @Param('ruleId', { schema: z.uuid() }) ruleId: string,
+    @Body({ schema: ruleUpdateBody }) body: z.infer<typeof ruleUpdateBody>,
+  ) {
+    return { success: true, rule: await this.kitchenCircle.updateRule(user.id, id, ruleId, body) };
   }
 
   @Post('households/:id/invites')

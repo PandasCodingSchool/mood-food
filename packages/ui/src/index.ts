@@ -1,4 +1,4 @@
-export { MoodThemeProvider, useTheme, type MoodThemeProviderProps } from './theme';
+export { MoodThemeProvider, ThemeOverride, useTheme, type MoodThemeProviderProps } from './theme';
 export { moodfoodFonts } from './fonts';
 export { glyphs, type IconName } from './glyphs';
 export { Text, Icon, useToneColor, type TextProps, type IconProps, type Tone } from './Text';

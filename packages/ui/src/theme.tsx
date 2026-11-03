@@ -19,6 +19,14 @@ export function MoodThemeProvider({ time, weather, mood, children }: MoodThemePr
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 
+/**
+ * Replaces the theme for a subtree (e.g. the KitchenCircle sub-brand). Components keep reading `useTheme()`,
+ * so they re-skin without changes; everything outside the subtree keeps the living MoodFood theme.
+ */
+export function ThemeOverride({ theme, children }: { theme: Theme; children: ReactNode }) {
+  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
+}
+
 export function useTheme(): Theme {
   const theme = useContext(ThemeContext);
   if (!theme) throw new Error('useTheme must be used inside <MoodThemeProvider>');

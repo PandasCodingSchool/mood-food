@@ -24,10 +24,14 @@ export interface TextProps extends RNTextProps {
 
 export function Text({ variant = 'body15', tone = 'ink', color, align, style, ...rest }: TextProps) {
   const toneColor = useToneColor(tone);
+  const { fonts } = useTheme();
+  const base = textStyles[variant] as TextStyle;
+  // Only themes that remap fonts (sub-brands) change the family; the default theme renders exactly as before.
+  const family = fonts && base.fontFamily ? fonts[base.fontFamily] : undefined;
   return (
     <RNText
       {...rest}
-      style={[textStyles[variant] as TextStyle, { color: color ?? toneColor, textAlign: align }, style]}
+      style={[base, family ? { fontFamily: family } : null, { color: color ?? toneColor, textAlign: align }, style]}
     />
   );
 }

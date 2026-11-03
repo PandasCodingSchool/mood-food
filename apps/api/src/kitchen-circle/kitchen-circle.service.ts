@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { fail } from '../common/http.js';
-import { DB, type Database } from '../core/tokens.js';
+import { normalizePhone } from '../auth/phone.js';
+import type { Env } from '../config/env.js';
+import { DB, type Database, ENV } from '../core/tokens.js';
 import { householdInvites, householdMembers, householdRecipes, householdRules, households, mealPlans, mealSlots, memberFoodPreferences, plannerActivities, recipes, recipeVersions, slotAttendance, slotReactions, users } from '../db/schema.js';
 import { nextWeekPeriod, periodForStart, type PlanPeriod } from './calendar.js';
 import { PlannerProfileAdapter } from './planner-profile.adapter.js';
@@ -41,13 +43,21 @@ export interface RecipeInput {
 }
 
 export interface CreateInviteInput {
-  email: string;
+  /** Exactly one of email or phone. Phones are normalised the same way sign-up phones are. */
+  email?: string;
+  phone?: string;
   role: Exclude<HouseholdRole, 'owner'>;
 }
 
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+
 @Injectable()
 export class KitchenCircleService {
-  constructor(@Inject(DB) private readonly db: Database, private readonly profileAdapter: PlannerProfileAdapter) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
+    private readonly profileAdapter: PlannerProfileAdapter,
+  ) {}
 
   private async membership(householdId: string, userId: string) {
     const [member] = await this.db
@@ -157,20 +167,32 @@ export class KitchenCircleService {
   async createInvite(userId: string, householdId: string, input: CreateInviteInput) {
     const member = await this.membership(householdId, userId);
     if (member.role !== 'owner') fail(403, 'Only the household owner can send invitations.');
-    const email = input.email.trim().toLowerCase();
+    const email = input.email?.trim().toLowerCase() || null;
+    const phone = input.phone ? normalizePhone(input.phone, this.env.DEFAULT_PHONE_REGION) : null;
+    if (input.phone && !phone) fail(400, 'Enter a valid phone number.');
+    if (!email === !phone) fail(400, 'Invite by email or by phone number.');
+    // Already in the household?
+    const [existing] = await this.db.select({ id: users.id }).from(users)
+      .innerJoin(householdMembers, and(eq(householdMembers.userId, users.id), eq(householdMembers.householdId, householdId)))
+      .where(email ? sql`lower(${users.email}) = ${email}` : eq(users.phone, phone!)).limit(1);
+    if (existing) fail(409, 'That person is already in this KitchenCircle.');
+    const [pending] = await this.db.select().from(householdInvites)
+      .where(and(eq(householdInvites.householdId, householdId), email ? eq(householdInvites.email, email) : eq(householdInvites.phone, phone!),
+        isNull(householdInvites.acceptedAt), isNull(householdInvites.revokedAt), gt(householdInvites.expiresAt, new Date()))).limit(1);
+    if (pending) fail(409, 'There is already a pending invitation. Resend it instead.', { inviteId: pending.id });
     const [invite] = await this.db.insert(householdInvites).values({
-      householdId, invitedByUserId: userId, email, role: input.role,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000),
+      householdId, invitedByUserId: userId, email, phone, role: input.role, expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     }).returning();
-    await this.activity({ householdId, actorUserId: userId, eventType: 'invite_created', after: { email, role: input.role, inviteId: invite.id } });
-    return invite;
+    await this.activity({ householdId, actorUserId: userId, eventType: 'invite_created', after: { email, phone, role: input.role, inviteId: invite.id } });
+    return { ...invite, path: `/kitchen-circle/join/${invite.token}`, url: `${this.env.FRONTEND_ORIGIN.replace(/\/$/, '')}/kitchen-circle/join/${invite.token}` };
   }
 
   async acceptInvite(userId: string, token: string) {
     const [invite] = await this.db.select().from(householdInvites).where(eq(householdInvites.token, token)).limit(1);
     if (!invite || invite.revokedAt || invite.acceptedAt || invite.expiresAt <= new Date()) fail(404, 'KitchenCircle invitation is invalid or expired.');
-    const [user] = await this.db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-    if (!user?.email || user.email.toLowerCase() !== invite.email) fail(403, 'Sign in with the email address that received this invitation.');
+    const [user] = await this.db.select({ email: users.email, phone: users.phone }).from(users).where(eq(users.id, userId)).limit(1);
+    if (invite.email && user?.email?.toLowerCase() !== invite.email) fail(403, 'Sign in with the email address that received this invitation.');
+    if (invite.phone && user?.phone !== invite.phone) fail(403, 'Sign in with the phone number that received this invitation.');
     await this.db.transaction(async (tx) => {
       await tx.insert(householdMembers).values({ householdId: invite.householdId, userId, role: invite.role }).onConflictDoNothing();
       await tx.update(householdInvites).set({ acceptedAt: new Date(), acceptedByUserId: userId }).where(eq(householdInvites.id, invite.id));
@@ -181,12 +203,26 @@ export class KitchenCircleService {
     return { householdId: invite.householdId, role: invite.role };
   }
 
-  async createRule(userId: string, householdId: string, input: { weekday?: number; strength: 'hard' | 'preference' | 'contextual'; category: string; constraint: Record<string, unknown> }) {
+  /** `appliesToWeekStart` (a Monday) makes the rule apply to that week only; omitted, it recurs every week. */
+  async createRule(userId: string, householdId: string, input: { weekday?: number; strength: 'hard' | 'preference' | 'contextual'; category: string; constraint: Record<string, unknown>; appliesToWeekStart?: string | null }) {
     const member = await this.membership(householdId, userId);
     if (member.role === 'cook') fail(403, 'Cook members cannot change household rules.');
     const [rule] = await this.db.insert(householdRules).values({ householdId, createdByUserId: userId, ...input }).returning();
     await this.activity({ householdId, actorUserId: userId, eventType: 'rule_created', after: { ruleId: rule.id, ...input } });
     return rule;
+  }
+
+  async updateRule(userId: string, householdId: string, ruleId: string, input: { active?: boolean; weekday?: number | null; strength?: 'hard' | 'preference' | 'contextual'; constraint?: Record<string, unknown> }) {
+    const member = await this.membership(householdId, userId);
+    if (member.role === 'cook') fail(403, 'Cook members cannot change household rules.');
+    const [rule] = await this.db.select().from(householdRules).where(and(eq(householdRules.id, ruleId), eq(householdRules.householdId, householdId))).limit(1);
+    if (!rule) fail(404, 'Household rule not found.');
+    const [updated] = await this.db.update(householdRules).set({ ...input, updatedAt: new Date() }).where(eq(householdRules.id, ruleId)).returning();
+    await this.activity({
+      householdId, actorUserId: userId, eventType: 'rule_updated',
+      before: { active: rule.active, weekday: rule.weekday, strength: rule.strength, constraint: rule.constraint }, after: { ruleId, ...input },
+    });
+    return updated;
   }
 
   async getRules(userId: string, householdId: string) {

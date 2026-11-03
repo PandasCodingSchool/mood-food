@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/auth.guard.js';
 import type { AuthUser } from '../auth/auth.types.js';
+import { KitchenCircleEnabledGuard } from './feature.guard.js';
 import { parseDateOnly } from './calendar.js';
 import { GroceryService } from './grocery.service.js';
 
@@ -48,6 +49,7 @@ const pantryBody = z.object({ name: z.string().trim().min(1).max(120), inPantry:
 const listQuery = z.object({ planId: z.uuid().optional() });
 
 /** Phase 4 grocery requirements. Read-only with respect to any grocery provider: nothing here writes to Instamart. */
+@UseGuards(KitchenCircleEnabledGuard)
 @Controller('kitchen-circle')
 export class GroceryController {
   constructor(private readonly groceries: GroceryService) {}

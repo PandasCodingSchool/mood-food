@@ -95,3 +95,27 @@ class LabClient:
 
     def evals(self) -> dict:
         return self._call("POST", "/api/lab/evals")
+
+    # --- KitchenCircle Planner Lab (fixtures by default; no provider writes) ---------------
+    def kc_autofill(self, body: dict) -> dict:
+        return self._call("POST", "/api/lab/kitchen-circle/autofill", json=body)
+
+    def kc_chat(self, body: dict) -> dict:
+        return self._call("POST", "/api/lab/kitchen-circle/chat", json=body)
+
+    def kc_cart(self, body: dict) -> dict:
+        return self._call("POST", "/api/lab/kitchen-circle/cart", json=body)
+
+    def kc_translate(self, body: dict) -> dict:
+        return self._call("POST", "/api/lab/kitchen-circle/translate", json=body)
+
+    # Grocery aggregation, chat policy and notification copy live in the Node API: dev-only routes there.
+    def node(self, method: str, path: str, *, json: Any = None) -> Any:
+        base = os.getenv("LAB_NODE_API_URL", "http://localhost:3001/api").rstrip("/")
+        try:
+            res = httpx.request(method, base + path, json=json, timeout=20.0)
+        except httpx.HTTPError as exc:
+            raise LabError(f"Can't reach the MoodFood API at {base} ({type(exc).__name__}). Start it with `pnpm --filter @moodfood/api dev`.") from exc
+        if res.status_code >= 400:
+            raise LabError(f"{res.status_code}: {res.text[:200]}")
+        return res.json()

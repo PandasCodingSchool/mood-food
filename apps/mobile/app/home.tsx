@@ -8,6 +8,8 @@ import { StatusBar } from 'expo-status-bar';
 import { WEATHER_SPECS, palette, space } from '@moodfood/tokens';
 import { Button, Icon, IconButton, IconTile, Screen, SectionHeader, Surface, Text, useTheme, useToast, type IconName } from '@moodfood/ui';
 import { AppTabBar, ErrorBlock, LoadingBlock, LogoPill, PoweredBySwiggy } from '../src/components/v2';
+import { kitchenCircleEnabled } from '../src/features/kitchen-circle/api';
+import { ModeSwitch } from '../src/features/kitchen-circle/components';
 import { HeroPick, QuickChip, RailCard } from '../src/components/v2/RecCards';
 import PostMealPrompt from '../src/components/PostMealPrompt';
 import NostalgiaPrompt from '../src/components/NostalgiaPrompt';
@@ -56,6 +58,9 @@ export default function HomeScreen() {
   // Mood picks wait for "Suggested for you" so the hero doesn't paint one dish and swap to another.
   const [suggestDone, setSuggestDone] = useState(false);
   const loadedFor = useRef<string | null>(null);
+  // KitchenCircle can be switched off server-side; then MoodFood shows no switch at all.
+  const [kcEnabled, setKcEnabled] = useState(false);
+  useEffect(() => { void kitchenCircleEnabled().then(setKcEnabled); }, []);
 
   useEffect(() => {
     trackEvent('landing_page_viewed');
@@ -145,7 +150,6 @@ export default function HomeScreen() {
   const openGame = (g: (typeof GAMES)[number]) => (g.comingSoon ? toast(`${g.title} is coming soon`) : router.push(g.route as never));
 
   const quick: Array<{ icon: IconName; label: string; go: () => void }> = [
-    { icon: 'groups', label: 'KitchenCircle', go: () => router.push('/kitchen-circle' as never) },
     { icon: 'bolt', label: 'Quick pick', go: () => router.push('/games/wheel') },
     { icon: 'sentiment_satisfied', label: 'All my matches', go: () => router.replace('/recommendations') },
     ...(profile?.mode === 'mind_reader' ? [{ icon: 'auto_awesome' as IconName, label: 'Read my mind', go: () => router.push('/mind-reader') }] : []),
@@ -190,7 +194,9 @@ export default function HomeScreen() {
 
         {liveOrder ? <LiveOrderBanner order={liveOrder} onPress={() => router.push({ pathname: '/order/track', params: { orderId: liveOrder.orderId } })} /> : null}
 
-        <View style={{ paddingHorizontal: space.page, paddingTop: 24 }}>
+        {kcEnabled ? <ModeSwitch value="moodfood" onChange={() => router.push('/kitchen-circle' as never)} style={{ paddingHorizontal: space.gutter, paddingTop: 18 }} /> : null}
+
+        <View style={{ paddingHorizontal: space.page, paddingTop: 18 }}>
           <Text variant="body15" tone="ink2">{t.greet(name)}</Text>
           <Text variant="display40" style={{ marginTop: 6 }} accessibilityRole="header">{t.hero}</Text>
           <Pressable

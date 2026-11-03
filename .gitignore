@@ -23,4 +23,4 @@ docs/design/marketing-website
 intelligence_docs/
 
 # Local native build tree (the app lives in apps/mobile)
-mobile/
+/mobile/
