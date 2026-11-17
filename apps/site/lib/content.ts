@@ -96,6 +96,7 @@ export const FAQ: Array<{ q: string; a: string }> = [
   { q: 'Do I need a Swiggy account?', a: 'Only to order in the app. Recommendations, games and recipes work without one, and you can link Swiggy any time.' },
   { q: 'What happens to my mood data?', a: 'It stays on your account and is only used to improve your picks. We never sell it, and deleting your account from Settings erases it.' },
   { q: 'Is it free?', a: 'Yes. You only pay for the food you order, at the usual Swiggy prices.' },
+  { q: 'What is KitchenCircle?', a: 'The home-cooking side of MoodFood. Plan the week’s meals with your family and your cook, get one grocery list, and send the cook the menu in their language. It comes with early access.' },
   { q: 'When can I get the app?', a: "MoodFood is coming soon to iPhone and Android. The first 100 people on the list get free early access before launch, and we'll email you the moment yours is ready." },
   { q: 'Where does it work?', a: 'In India, wherever Swiggy delivers.' },
 ];
