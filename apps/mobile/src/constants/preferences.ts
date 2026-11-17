@@ -15,6 +15,7 @@ export const ALLERGIES = [
   { id: 'dairy', label: 'Dairy' },
   { id: 'shellfish', label: 'Shellfish' },
   { id: 'eggs', label: 'Eggs' },
+  { id: 'gluten', label: 'Gluten' },
   { id: 'soy', label: 'Soy' },
 ];
 

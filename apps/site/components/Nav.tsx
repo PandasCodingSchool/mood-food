@@ -4,18 +4,20 @@ import Link from 'next/link';
 const HOME_LINKS = [
   { href: '#how', label: 'How it works' },
   { href: '#games', label: 'Games' },
+  { href: '/kitchen-circle', label: 'KitchenCircle' },
   { href: '#swiggy', label: 'Swiggy' },
   { href: '/about', label: 'About' },
 ];
 
 const PAGE_LINKS = [
   { href: '/', label: 'Home' },
+  { href: '/kitchen-circle', label: 'KitchenCircle' },
   { href: '/about', label: 'About' },
   { href: '/privacy', label: 'Privacy' },
 ];
 
 /** Sits inside each page's dark header. `current` underlines the active page. */
-export function Nav({ current, cta = true }: { current?: 'home' | 'about' | 'privacy'; cta?: boolean }) {
+export function Nav({ current, cta = true }: { current?: 'home' | 'about' | 'privacy' | 'kitchen-circle'; cta?: boolean }) {
   const links = current === 'home' ? HOME_LINKS : PAGE_LINKS;
   const here = current && current !== 'home' ? `/${current}` : null;
   return (

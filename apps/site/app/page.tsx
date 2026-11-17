@@ -2,6 +2,7 @@ import { hueTile } from '@moodfood/tokens';
 import Image from 'next/image';
 import { EarlyAccessPill, SpotsMeter, SpotsText } from '@/components/EarlyAccess';
 import { HeroDemo } from '@/components/HeroDemo';
+import { KitchenCircleTeaser } from '@/components/KitchenCircle';
 import { Icon } from '@/components/Icon';
 import { LiveClock } from '@/components/LiveClock';
 import { Nav } from '@/components/Nav';
@@ -141,6 +142,8 @@ export default function Home() {
             </ul>
           </div>
         </section>
+
+        <KitchenCircleTeaser />
 
         <section id="swiggy" className="swiggy-wrap">
           <div className="swiggy-panel">

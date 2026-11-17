@@ -12,6 +12,7 @@ export function Footer() {
         </div>
         <nav aria-label="Footer" className="footer-links">
           <Link href="/about">About us</Link>
+          <Link href="/kitchen-circle">KitchenCircle</Link>
           <Link href="/privacy">Privacy policy</Link>
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </nav>

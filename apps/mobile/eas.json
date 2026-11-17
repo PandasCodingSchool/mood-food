@@ -7,7 +7,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.staging.moodfood.fun/api",
+        "EXPO_PUBLIC_API_URL": "https://api.moodfood.fun/api",
         "EXPO_PUBLIC_SWIGGY_LIVE": "true"
       }
     },
