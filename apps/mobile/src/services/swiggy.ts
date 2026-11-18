@@ -121,11 +121,12 @@ export async function openSwiggyApp(restaurantId?: string | null, dishName?: str
   await Linking.openURL(base);
 }
 
-/** Initiate Swiggy OAuth — returns the authUrl to open in the browser. */
-export async function initiateSwiggyOAuth(headers: Record<string, string>): Promise<string> {
+/** Initiate Swiggy OAuth — returns the authUrl to open in the browser. `app` only changes the wording of Swiggy's return page. */
+export async function initiateSwiggyOAuth(headers: Record<string, string>, app: 'moodfood' | 'kitchen-circle' = 'moodfood'): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/swiggy/oauth/initiate`, {
     method: 'POST',
-    headers,
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app }),
   });
   if (!res.ok) throw new Error('Failed to start Swiggy connection');
   const data = await res.json();

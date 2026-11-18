@@ -54,6 +54,14 @@ export const envSchema = z.object({
 
   // Swiggy OAuth
   SWIGGY_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  // Master switch: false hides KitchenCircle (routes 404, mobile entry hidden, jobs idle) without affecting MoodFood.
+  KITCHEN_CIRCLE_ENABLED: bool.default(true),
+  // KitchenCircle Phase 7 rollout gates. Off: carts use the sample catalogue and nothing is written to Instamart.
+  // LIVE_GROCERY: read-only Instamart product matching with the owner's account. LIVE_WRITES: owner cart writes + checkout.
+  KITCHEN_CIRCLE_LIVE_GROCERY_ENABLED: bool.default(false),
+  KITCHEN_CIRCLE_LIVE_WRITES_ENABLED: bool.default(false),
+  // Off: KitchenCircle never reads the member's MoodFood profile (standalone extraction readiness).
+  KITCHEN_CIRCLE_MOODFOOD_PROFILE_ENABLED: bool.default(true),
   SWIGGY_OAUTH_REDIRECT_URI: z.string().default('https://moodfood.fun/api/swiggy/oauth/callback'),
   FRONTEND_ORIGIN: z.string().default('https://moodfood.fun'),
 

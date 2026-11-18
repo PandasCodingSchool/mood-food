@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
+    "@expo-google-fonts/figtree": "^0.4.1",
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
     "@expo-google-fonts/material-symbols-rounded": "^0.4.60",
@@ -20,6 +21,7 @@
     "expo-dev-client": "~57.0.9",
     "expo-font": "~57.0.0",
     "expo-haptics": "~57.0.1",
+    "expo-image": "~57.0.5",
     "expo-image-picker": "~57.0.7",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.3",

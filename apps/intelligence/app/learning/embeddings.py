@@ -35,7 +35,7 @@ _dish_ids: list[str] = []
 _anchor_cache: Optional[dict[str, list[float]]] = None
 # When the store had no matrix, don't re-query it on every request.
 _EMPTY_RECHECK_S = 60.0
-_empty_checked_at: float = 0.0
+_empty_checked_at: Optional[float] = None  # monotonic time of the last empty read; None = never
 
 
 def dish_sentence(d: DishRecord) -> str:
@@ -117,7 +117,7 @@ def load_dish_matrix() -> tuple[Optional[np.ndarray], list[str]]:
     global _matrix, _dish_ids, _empty_checked_at
     if _matrix is not None:
         return _matrix, _dish_ids
-    if time.monotonic() - _empty_checked_at < _EMPTY_RECHECK_S:
+    if _empty_checked_at is not None and time.monotonic() - _empty_checked_at < _EMPTY_RECHECK_S:
         return None, []
     rows = store.fetchall(
         "SELECT dish_id, dishes_hash, embedding FROM dish_embeddings WHERE model_version = ? ORDER BY dish_id",

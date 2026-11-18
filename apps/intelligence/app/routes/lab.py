@@ -384,3 +384,51 @@ async def lab_suggest(body: LabSuggestRequest) -> dict:
                                    address_id=body.swiggy_address_id, refresh=body.refresh)
     result["success_metrics"] = await run_in_threadpool(metrics.compute, body.user_id)
     return _traced(result, events, t0)
+
+
+# --- KitchenCircle Planner Lab (fixtures by default; no provider writes) -------------------------
+
+@router.post("/kitchen-circle/autofill")
+async def kitchen_circle_autofill_lab(body: dict) -> dict:
+    from app.kitchen_circle.planner import autofill
+    from app.kitchen_circle.schemas import AutofillRequest
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        result = autofill(AutofillRequest.model_validate(body))
+    return _traced(result.model_dump(mode="json"), events, t0)
+
+
+@router.post("/kitchen-circle/chat")
+async def kitchen_circle_chat_lab(body: dict) -> dict:
+    from app.kitchen_circle.chat import interpret
+    from app.kitchen_circle.chat_schemas import InterpretRequest
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        result = await interpret(InterpretRequest.model_validate(body))
+    return _traced(result.model_dump(mode="json"), events, t0)
+
+
+@router.post("/kitchen-circle/cart")
+async def kitchen_circle_cart_lab(body: dict, request: Request) -> dict:
+    """Fixture catalogue unless `provider` is instamart — lab mode keeps Swiggy read-only, so only search runs."""
+    from app.kitchen_circle.cart import build_preview
+    from app.kitchen_circle.cart_schemas import CartPreviewRequest
+    from app.kitchen_circle.grocery_provider import provider_for
+
+    req = CartPreviewRequest.model_validate(body)
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        result = await build_preview(req, provider_for(req.provider, request.headers.get("x-swiggy-user-token")))
+    return _traced(result.model_dump(mode="json"), events, t0)
+
+
+@router.post("/kitchen-circle/translate")
+async def kitchen_circle_translate_lab(body: dict) -> dict:
+    from app.kitchen_circle.translate import TranslateRequest, translate
+
+    t0 = time.perf_counter()
+    with trace.collect() as events:
+        result = await translate(TranslateRequest.model_validate(body))
+    return _traced(result.model_dump(mode="json"), events, t0)

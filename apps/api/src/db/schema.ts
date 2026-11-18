@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
+  date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -63,6 +65,435 @@ export const authSessions = pgTable(
   },
   (t) => [index('idx_auth_sessions_user').on(t.userId)],
 );
+
+// ── KitchenCircle ─────────────────────────────────────────────────────────
+
+export const kitchenCircleMemberRole = pgEnum('kitchen_circle_member_role', ['owner', 'member', 'cook']);
+export const kitchenCircleSlotState = pgEnum('kitchen_circle_slot_state', [
+  'blank', 'planned', 'locked', 'leftovers', 'no_cook', 'household_out',
+]);
+export const kitchenCircleAttendanceStatus = pgEnum('kitchen_circle_attendance_status', ['attending', 'absent']);
+export const kitchenCircleRuleStrength = pgEnum('kitchen_circle_rule_strength', ['hard', 'preference', 'contextual']);
+export const kitchenCirclePreferenceStrength = pgEnum('kitchen_circle_preference_strength', ['cannot_eat', 'never_plan', 'prefer_less', 'favourite']);
+export const kitchenCircleReaction = pgEnum('kitchen_circle_reaction', ['looks_good', 'not_for_me']);
+export const kitchenCircleRecipeSource = pgEnum('kitchen_circle_recipe_source', ['catalog', 'household', 'ai_draft']);
+export const kitchenCircleProposalStatus = pgEnum('kitchen_circle_proposal_status', ['pending', 'applied', 'discarded', 'superseded']);
+export const kitchenCircleProposalItemStatus = pgEnum('kitchen_circle_proposal_item_status', ['proposed', 'applied', 'stale']);
+export const kitchenCircleChatRole = pgEnum('kitchen_circle_chat_role', ['member', 'assistant']);
+export const kitchenCircleActionStatus = pgEnum('kitchen_circle_action_status', [
+  'applied', 'needs_confirmation', 'needs_clarification', 'confirmed', 'rejected', 'failed', 'expired',
+]);
+export const kitchenCircleCartStatus = pgEnum('kitchen_circle_cart_status', ['preview', 'superseded', 'cart_written', 'payment_pending', 'ordered', 'failed']);
+export const kitchenCircleFeedbackOutcome = pgEnum('kitchen_circle_feedback_outcome', ['loved', 'change', 'skipped', 'moved']);
+export const kitchenCircleGroceryScope = pgEnum('kitchen_circle_grocery_scope', ['week', 'day']);
+export const kitchenCircleGroceryStatus = pgEnum('kitchen_circle_grocery_status', ['draft', 'finalized', 'discarded']);
+export const kitchenCircleGroceryLineKind = pgEnum('kitchen_circle_grocery_line_kind', ['recipe', 'pantry', 'optional', 'manual']);
+export const kitchenCircleGroceryLineStatus = pgEnum('kitchen_circle_grocery_line_status', ['buy', 'skipped', 'already_have']);
+
+/** A solo or shared household which owns its KitchenCircle plans and rules. */
+export const households = pgTable('households', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  defaultServings: integer('default_servings').notNull().default(1),
+  timezone: varchar('timezone', { length: 64 }).notNull().default('Asia/Kolkata'),
+  // Send each day's menu and recipe to the household's cook automatically (evening before, morning of, and on changes).
+  cookAutoSend: boolean('cook_auto_send').notNull().default(true),
+  // Which cook gets it when there's more than one; null = the household's only (or first) cook.
+  designatedCookUserId: uuid('designated_cook_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_households_owner').on(t.ownerUserId)]);
+
+/** Membership is deliberately separate from the owner column for portable household permissions. */
+export const householdMembers = pgTable('household_members', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: kitchenCircleMemberRole('role').notNull().default('member'),
+  language: varchar('language', { length: 20 }).notNull().default('en'),
+  joinedAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.userId] }), index('idx_household_members_user').on(t.userId)]);
+
+/** Private, member-authored planning preferences; never exposes private MoodFood history. */
+export const memberFoodPreferences = pgTable('member_food_preferences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  strength: kitchenCirclePreferenceStrength('strength').notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  value: varchar('value', { length: 255 }).notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [unique().on(t.householdId, t.userId, t.strength, t.category, t.value), index('idx_member_food_preferences_member').on(t.householdId, t.userId)]);
+
+/** Account-bound invitations by email or phone; public cook links intentionally use a separate Phase 8 model. */
+export const householdInvites = pgTable('household_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  invitedByUserId: uuid('invited_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  email: varchar('email', { length: 255 }),
+  /** E.164, normalised like sign-up phones; exactly one of email/phone is set. */
+  phone: varchar('phone', { length: 20 }),
+  role: kitchenCircleMemberRole('role').notNull().default('member'),
+  token: uuid('token').notNull().defaultRandom().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [index('idx_household_invites_household').on(t.householdId), index('idx_household_invites_email').on(t.email), index('idx_household_invites_phone').on(t.phone)]);
+
+/** Explicit recurring constraints; one-off slot changes remain in planner activity. */
+export const householdRules = pgTable('household_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  createdByUserId: uuid('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  weekday: integer('weekday'),
+  strength: kitchenCircleRuleStrength('strength').notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  constraint: jsonb('constraint').$type<Record<string, unknown>>().notNull(),
+  /** Null = recurs every week; a Monday date = applies to that week only (“just this week”). */
+  appliesToWeekStart: date('applies_to_week_start', { mode: 'string' }),
+  active: boolean('active').notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_household_rules_household').on(t.householdId)]);
+
+/** Stable recipe identity; executable ingredients and method live in immutable versions. */
+export const recipes = pgTable('recipes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: varchar('title', { length: 255 }).notNull(),
+  source: kitchenCircleRecipeSource('source').notNull().default('catalog'),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+});
+export const recipeVersions = pgTable('recipe_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  recipeId: uuid('recipe_id').notNull().references(() => recipes.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  defaultServings: integer('default_servings').notNull(),
+  ingredients: jsonb('ingredients').$type<Array<{ name: string; canonicalName?: string; quantity: number; unit: string; optional?: boolean }>>().notNull(),
+  steps: jsonb('steps').$type<string[]>().notNull(),
+  prepMinutes: integer('prep_minutes'),
+  cookMinutes: integer('cook_minutes'),
+  cuisine: varchar('cuisine', { length: 50 }),
+  effort: varchar('effort', { length: 20 }),
+  freshnessClass: varchar('freshness_class', { length: 20 }),
+  dietaryTags: jsonb('dietary_tags').$type<string[]>().notNull().default([]),
+  allergens: jsonb('allergens').$type<string[]>().notNull().default([]),
+  /** Who asserted the dietary/allergen tags: `catalog` (curated), `household` (self-declared), or `ai` (unverified). */
+  dietaryProvenance: varchar('dietary_provenance', { length: 20 }).notNull().default('household'),
+  substitutions: jsonb('substitutions').$type<Array<{ ingredient: string; alternatives: string[] }>>().notNull().default([]),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [unique().on(t.recipeId, t.version)]);
+export const householdRecipes = pgTable('household_recipes', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  recipeId: uuid('recipe_id').notNull().references(() => recipes.id, { onDelete: 'cascade' }),
+  private: boolean('private').notNull().default(true),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.recipeId] })]);
+
+/** One plan per household per Monday–Sunday calendar week. */
+export const mealPlans = pgTable('meal_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  startsOn: date('starts_on', { mode: 'string' }).notNull(),
+  weekEnd: date('week_end', { mode: 'string' }).notNull(),
+  version: integer('version').notNull().default(1),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [unique().on(t.householdId, t.weekStart), index('idx_meal_plans_household_week').on(t.householdId, t.weekStart)]);
+
+/** One shared daily meal decision, optionally bound to an immutable recipe version. */
+export const mealSlots = pgTable('meal_slots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  planId: uuid('plan_id').notNull().references(() => mealPlans.id, { onDelete: 'cascade' }),
+  plannedFor: date('planned_for', { mode: 'string' }).notNull(),
+  state: kitchenCircleSlotState('state').notNull().default('blank'),
+  mealTitle: varchar('meal_title', { length: 255 }),
+  recipeVersionId: uuid('recipe_version_id').references(() => recipeVersions.id, { onDelete: 'set null' }),
+  servings: integer('servings').notNull(),
+  notes: text('notes'),
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  lockedByUserId: uuid('locked_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [unique().on(t.planId, t.plannedFor), index('idx_meal_slots_plan_day').on(t.planId, t.plannedFor)]);
+
+/** A member's lightweight response to a proposed or unlocked meal. */
+export const slotReactions = pgTable('slot_reactions', {
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reaction: kitchenCircleReaction('reaction').notNull(),
+  reason: varchar('reason', { length: 500 }),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.slotId, t.userId] })]);
+
+/** Each member controls their own attendance for a planned household meal. Missing means attending by default. */
+export const slotAttendance = pgTable('slot_attendance', {
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: kitchenCircleAttendanceStatus('status').notNull(),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.slotId, t.userId] }), index('idx_slot_attendance_user').on(t.userId)]);
+
+/** Household overrides on top of the built-in staple list (`DEFAULT_PANTRY`): add a staple or remove a default. */
+export const householdPantryDefaults = pgTable('household_pantry_defaults', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  canonicalName: varchar('canonical_name', { length: 120 }).notNull(),
+  inPantry: boolean('in_pantry').notNull(),
+  updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.canonicalName] })]);
+
+/**
+ * A grocery requirement computed once from bound recipe versions. Later plan edits never rewrite it;
+ * drafts accept manual line edits, finalized snapshots are fully immutable.
+ */
+export const grocerySnapshots = pgTable('grocery_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').notNull().references(() => mealPlans.id, { onDelete: 'cascade' }),
+  scope: kitchenCircleGroceryScope('scope').notNull(),
+  scopeDate: date('scope_date', { mode: 'string' }),
+  referenceDate: date('reference_date', { mode: 'string' }).notNull(),
+  status: kitchenCircleGroceryStatus('status').notNull().default('draft'),
+  /** `split` separates buy-now from buy-later perishables; `all_now` orders everything anyway. */
+  freshnessMode: varchar('freshness_mode', { length: 10 }).notNull().default('split'),
+  budgetPaise: integer('budget_paise'),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+  finalizedByUserId: uuid('finalized_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_grocery_snapshots_household').on(t.householdId, t.createdAt.desc()), index('idx_grocery_snapshots_plan').on(t.planId)]);
+
+/** One aggregate ingredient requirement with a full day/recipe source trace. */
+export const grocerySnapshotLines = pgTable('grocery_snapshot_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  snapshotId: uuid('snapshot_id').notNull().references(() => grocerySnapshots.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+  canonicalName: varchar('canonical_name', { length: 120 }).notNull(),
+  displayName: varchar('display_name', { length: 120 }).notNull(),
+  dimension: varchar('dimension', { length: 10 }),
+  baseQuantity: doublePrecision('base_quantity'),
+  quantity: doublePrecision('quantity'),
+  unit: varchar('unit', { length: 20 }),
+  originalQuantity: doublePrecision('original_quantity'),
+  originalUnit: varchar('original_unit', { length: 20 }),
+  kind: kitchenCircleGroceryLineKind('kind').notNull(),
+  status: kitchenCircleGroceryLineStatus('status').notNull(),
+  required: boolean('required').notNull(),
+  freshnessGroup: varchar('freshness_group', { length: 10 }).notNull().default('buy_now'),
+  unitConflict: boolean('unit_conflict').notNull().default(false),
+  firstNeededOn: date('first_needed_on', { mode: 'string' }),
+  sources: jsonb('sources').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  manuallyChanged: boolean('manually_changed').notNull().default(false),
+  productNote: varchar('product_note', { length: 255 }),
+  estimatedPricePaise: integer('estimated_price_paise'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_grocery_snapshot_lines_snapshot').on(t.snapshotId, t.position)]);
+
+/**
+ * Which plan days a snapshot buys for. At most one active, non-override coverage per day prevents
+ * buying the same meal twice; discarding a draft releases its coverage.
+ */
+export const groceryCoverage = pgTable('grocery_coverage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  snapshotId: uuid('snapshot_id').notNull().references(() => grocerySnapshots.id, { onDelete: 'cascade' }),
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  plannedFor: date('planned_for', { mode: 'string' }).notNull(),
+  /** The version and servings bought for; compared with the live slot to detect later plan changes. */
+  recipeVersionId: uuid('recipe_version_id').notNull(),
+  servings: integer('servings').notNull(),
+  override: boolean('override').notNull().default(false),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [
+  index('idx_grocery_coverage_snapshot').on(t.snapshotId),
+  uniqueIndex('uq_grocery_coverage_active_slot').on(t.slotId).where(sql`${t.override} = false and ${t.releasedAt} is null`),
+]);
+
+/** An auto-fill suggestion for a plan. It never touches slots until a member applies it. */
+export const mealPlanProposals = pgTable('meal_plan_proposals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  planId: uuid('plan_id').notNull().references(() => mealPlans.id, { onDelete: 'cascade' }),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  status: kitchenCircleProposalStatus('status').notNull().default('pending'),
+  seed: integer('seed').notNull().default(0),
+  summary: text('summary').notNull(),
+  unfilled: jsonb('unfilled').$type<Array<{ slotId: string; plannedFor: string; reason: string }>>().notNull().default([]),
+  ignoredRules: jsonb('ignored_rules').$type<string[]>().notNull().default([]),
+  plannerVersion: varchar('planner_version', { length: 40 }).notNull(),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [index('idx_meal_plan_proposals_plan').on(t.planId, t.createdAt.desc())]);
+
+/** One proposed day. `slotUpdatedAt` detects edits made after the proposal so apply never overwrites them. */
+export const mealPlanProposalItems = pgTable('meal_plan_proposal_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  proposalId: uuid('proposal_id').notNull().references(() => mealPlanProposals.id, { onDelete: 'cascade' }),
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  plannedFor: date('planned_for', { mode: 'string' }).notNull(),
+  recipeId: uuid('recipe_id').notNull(),
+  recipeVersionId: uuid('recipe_version_id').notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  source: varchar('source', { length: 20 }).notNull(),
+  score: doublePrecision('score').notNull(),
+  reasons: jsonb('reasons').$type<string[]>().notNull().default([]),
+  breakdown: jsonb('breakdown').$type<Record<string, number>>().notNull().default({}),
+  alternatives: jsonb('alternatives').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  /** Recipes already swapped away from on this day, so a swap never comes back to them. */
+  excludedRecipeIds: jsonb('excluded_recipe_ids').$type<string[]>().notNull().default([]),
+  servings: integer('servings').notNull(),
+  slotUpdatedAt: timestamp('slot_updated_at', { withTimezone: true }).notNull(),
+  status: kitchenCircleProposalItemStatus('status').notNull().default('proposed'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_meal_plan_proposal_items_proposal').on(t.proposalId), unique().on(t.proposalId, t.slotId)]);
+
+/** Owner-managed delivery address for live grocery carts (V1: the owner's linked Instamart account). */
+export const householdDeliverySettings = pgTable('household_delivery_settings', {
+  householdId: uuid('household_id').primaryKey().references(() => households.id, { onDelete: 'cascade' }),
+  provider: varchar('provider', { length: 20 }).notNull().default('instamart'),
+  addressId: varchar('address_id', { length: 100 }).notNull(),
+  addressLabel: varchar('address_label', { length: 255 }).notNull(),
+  setByUserId: uuid('set_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * A pack-optimized cart built from a grocery list. Previews are read-only; only the owner can write the live
+ * cart and place the order, each behind its feature flag and an explicit confirmation.
+ */
+export const groceryCartProposals = pgTable('grocery_cart_proposals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  snapshotId: uuid('snapshot_id').notNull().references(() => grocerySnapshots.id, { onDelete: 'cascade' }),
+  provider: varchar('provider', { length: 20 }).notNull(),
+  addressId: varchar('address_id', { length: 100 }),
+  scope: varchar('scope', { length: 10 }).notNull(),
+  status: kitchenCircleCartStatus('status').notNull().default('preview'),
+  lines: jsonb('lines').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  totals: jsonb('totals').$type<Record<string, unknown>>().notNull().default({}),
+  warnings: jsonb('warnings').$type<string[]>().notNull().default([]),
+  items: jsonb('items').$type<Array<{ spin_id: string; sku_id?: string | null; quantity: number }>>().notNull().default([]),
+  cart: jsonb('cart').$type<Record<string, unknown>>(),
+  order: jsonb('order').$type<Record<string, unknown>>(),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  cartWrittenByUserId: uuid('cart_written_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  cartWrittenAt: timestamp('cart_written_at', { withTimezone: true }),
+  orderedByUserId: uuid('ordered_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  orderedAt: timestamp('ordered_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('idx_grocery_cart_proposals_snapshot').on(t.snapshotId, t.createdAt.desc())]);
+
+/**
+ * Revocable, expiring cook links (a day or the remaining week). Only a SHA-256 of the token is stored;
+ * the link itself is shown once to the member who created it.
+ */
+export const cookLinks = pgTable('cook_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').notNull().references(() => mealPlans.id, { onDelete: 'cascade' }),
+  slotId: uuid('slot_id').references(() => mealSlots.id, { onDelete: 'cascade' }),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+  language: varchar('language', { length: 12 }).notNull().default('en'),
+  transliterate: boolean('transliterate').notNull().default(false),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  lastViewedAt: timestamp('last_viewed_at', { withTimezone: true }),
+  viewCount: integer('view_count').notNull().default(0),
+  createdAt: createdAt(),
+}, (t) => [index('idx_cook_links_household').on(t.householdId, t.createdAt.desc())]);
+
+/** Cached cook-view translations keyed by meal content + language + script; quantities are never cached here. */
+export const cookTranslations = pgTable('cook_translations', {
+  cacheKey: varchar('cache_key', { length: 64 }).primaryKey(),
+  language: varchar('language', { length: 12 }).notNull(),
+  transliterate: boolean('transliterate').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  createdAt: createdAt(),
+});
+
+/** Optional post-meal check-in. Informs future planning; never changes past plans, lists, or carts. */
+export const mealFeedback = pgTable('meal_feedback', {
+  slotId: uuid('slot_id').notNull().references(() => mealSlots.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  outcome: kitchenCircleFeedbackOutcome('outcome').notNull(),
+  note: varchar('note', { length: 500 }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.slotId, t.userId] })]);
+
+/** Per-member KitchenCircle preferences: which planner notifications they get and their cook-view language. */
+export const householdMemberSettings = pgTable('household_member_settings', {
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  notifyChanges: boolean('notify_changes').notNull().default(true),
+  notifyWeekend: boolean('notify_weekend').notNull().default(true),
+  notifyTodayMeal: boolean('notify_today_meal').notNull().default(false),
+  cookLanguage: varchar('cook_language', { length: 12 }).notNull().default('en'),
+  cookTransliterate: boolean('cook_transliterate').notNull().default(false),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.householdId, t.userId] })]);
+
+/** Shared household chat. Visible to owners and members; cooks never see it. */
+export const plannerMessages = pgTable('planner_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').references(() => mealPlans.id, { onDelete: 'set null' }),
+  authorUserId: uuid('author_user_id').references(() => users.id, { onDelete: 'set null' }),
+  role: kitchenCircleChatRole('role').notNull(),
+  body: text('body').notNull(),
+  createdAt: createdAt(),
+}, (t) => [index('idx_planner_messages_household').on(t.householdId, t.createdAt.desc())]);
+
+/**
+ * One typed action card from a chat message. The API's policy decides whether it applied straight away,
+ * needs confirmation, or needs clarification; every outcome stays here for audit.
+ */
+export const plannerActionProposals = pgTable('planner_action_proposals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').references(() => mealPlans.id, { onDelete: 'set null' }),
+  messageId: uuid('message_id').notNull().references(() => plannerMessages.id, { onDelete: 'cascade' }),
+  requestedByUserId: uuid('requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  /** Null for a clarification card, which holds its options in `clarification`. */
+  actionType: varchar('action_type', { length: 40 }),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  status: kitchenCircleActionStatus('status').notNull(),
+  policy: varchar('policy', { length: 40 }).notNull(),
+  policyNote: text('policy_note'),
+  clarification: jsonb('clarification').$type<{ question: string; options: Array<{ label: string; actions: Array<Record<string, unknown>> }> }>(),
+  result: jsonb('result').$type<Record<string, unknown>>(),
+  /** The day's `updated_at` when the card was made; a pending card expires if the day changes first. */
+  slotUpdatedAt: timestamp('slot_updated_at', { withTimezone: true }),
+  resolvedByUserId: uuid('resolved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [index('idx_planner_action_proposals_household').on(t.householdId, t.createdAt.desc()), index('idx_planner_action_proposals_message').on(t.messageId)]);
+
+/** Records material plan changes so collaboration remains understandable and auditable. */
+export const plannerActivities = pgTable('planner_activities', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  planId: uuid('plan_id').references(() => mealPlans.id, { onDelete: 'cascade' }),
+  slotId: uuid('slot_id').references(() => mealSlots.id, { onDelete: 'cascade' }),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  eventType: varchar('event_type', { length: 100 }).notNull(),
+  before: jsonb('before').$type<Record<string, unknown>>(),
+  after: jsonb('after').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [index('idx_planner_activities_household').on(t.householdId, t.createdAt.desc())]);
 
 // ── Profile data ──────────────────────────────────────────────────────────
 

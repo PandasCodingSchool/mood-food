@@ -14,6 +14,7 @@ import {
   Nunito_900Black,
 } from "@expo-google-fonts/nunito";
 import { moodfoodFonts, WebAppFrame } from "@moodfood/ui";
+import { kcFonts } from "../src/features/kitchen-circle/brand";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -58,6 +59,8 @@ export default function RootLayout() {
     Nunito_900Black,
     // MoodFood 2.0 design system (Bricolage Grotesque, Geist, Material Symbols)
     ...moodfoodFonts,
+    // KitchenCircle sub-brand body face (Figtree)
+    ...kcFonts,
   });
 
   if (!fontsLoaded) {
