@@ -94,7 +94,7 @@ def test_dish_matrix_built_into_store_and_loaded(monkeypatch):
 
     monkeypatch.setattr(embeddings, "_matrix", None)
     monkeypatch.setattr(embeddings, "_dish_ids", [])
-    monkeypatch.setattr(embeddings, "_empty_checked_at", 0.0)
+    monkeypatch.setattr(embeddings, "_empty_checked_at", None)
     calls = []
 
     def fake_remote(texts):
@@ -106,7 +106,7 @@ def test_dish_matrix_built_into_store_and_loaded(monkeypatch):
     monkeypatch.setattr(embeddings, "_embed_remote", fake_remote)
 
     assert embeddings.load_dish_matrix() == (None, [])  # nothing stored yet
-    monkeypatch.setattr(embeddings, "_empty_checked_at", 0.0)
+    monkeypatch.setattr(embeddings, "_empty_checked_at", None)
     assert embeddings.build_dish_matrix() is True
     assert embeddings.build_dish_matrix() is True  # current → no second embed call
     assert calls == [len(DISHES)]
