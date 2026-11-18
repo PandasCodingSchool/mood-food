@@ -73,9 +73,15 @@ export function KcWordmark({ size = 34, tagline = true }: { size?: number; tagli
 }
 
 /** Speaker glyph for read-aloud (not in the shared icon font). */
+// Decorative icons: hidden from screen readers. On web react-native-svg passes props to the DOM, where the
+// native names are unknown (React warns), so web gets aria-hidden instead.
+const SVG_HIDDEN = Platform.OS === 'web'
+  ? ({ 'aria-hidden': true } as object)
+  : { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' as const };
+
 export function KcSpeakerIcon({ size = 18, color = kc.chawal }: { size?: number; color?: string }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 24 24" {...SVG_HIDDEN}>
       <Path d="M4 9v6h4l5 4V5L8 9H4z" fill={color} />
       <Path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke={color} strokeWidth={2} strokeLinecap="round" fill="none" />
     </Svg>
@@ -85,7 +91,7 @@ export function KcSpeakerIcon({ size = 18, color = kc.chawal }: { size?: number;
 /** Stop glyph for read-aloud. */
 export function KcStopIcon({ size = 16, color = kc.kadhai }: { size?: number; color?: string }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 24 24" {...SVG_HIDDEN}>
       <Rect x={6} y={6} width={12} height={12} rx={2} fill={color} />
     </Svg>
   );
@@ -94,7 +100,7 @@ export function KcStopIcon({ size = 16, color = kc.kadhai }: { size?: number; co
 /** Microphone glyph (the shared icon font has no mic). */
 export function KcMicIcon({ size = 22, color = kc.chawal }: { size?: number; color?: string }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 24 24" {...SVG_HIDDEN}>
       <Rect x={9} y={3} width={6} height={11} rx={3} fill={color} />
       <Path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" stroke={color} strokeWidth={2} strokeLinecap="round" fill="none" />
     </Svg>

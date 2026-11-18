@@ -27,7 +27,17 @@ export interface SpeechDay {
   steps: string[];
 }
 
-const amount = (q: number) => (Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100));
+const FRACTIONS: Record<number, string> = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+
+/** Kitchen-friendly amount: whole numbers from 10 up, quarters (as ¼ ½ ¾) below, ⅛ for a pinch. Never 0.13. */
+export function kitchenAmount(q: number): string {
+  if (q >= 10) return String(Math.round(q));
+  const quarters = Math.round(q * 4) / 4;
+  if (quarters === 0) return q > 0 ? '⅛' : '0';
+  const whole = Math.floor(quarters);
+  const part = FRACTIONS[quarters - whole] ?? '';
+  return whole && part ? `${whole}${part}` : part || String(whole);
+}
 
 /** The words to read for one part of a day, or null when there's nothing to read. */
 export function speechText(day: SpeechDay, language: string, part: SpeechPart, index = 0): string | null {
@@ -39,7 +49,7 @@ export function speechText(day: SpeechDay, language: string, part: SpeechPart, i
   if (!day.ingredients.length) return null;
   const items = day.ingredients.map((i) => {
     const unit = l.units?.[i.unit] ?? i.unit;
-    const qty = i.quantity == null ? l.toTaste : `${amount(i.quantity)}${unit ? ` ${unit}` : ''}`;
+    const qty = i.quantity == null ? l.toTaste : `${kitchenAmount(i.quantity)}${unit ? ` ${unit}` : ''}`;
     return `${i.quantity == null ? `${i.name} ${qty}` : `${qty} ${i.name}`}${i.optional ? ` (${l.optional})` : ''}`;
   });
   return `${day.title ?? ''}, ${l.for(day.servings)}. ${l.ingredients}: ${items.join(', ')}.`.slice(0, 1500);

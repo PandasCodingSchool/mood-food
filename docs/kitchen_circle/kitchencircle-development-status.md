@@ -2,8 +2,8 @@
 
 > This is the single implementation ledger for KitchenCircle. Update it whenever a phase begins, a meaningful deliverable lands, testing runs, scope changes, or a blocker is discovered.
 >
-> **Last updated:** 2026-10-29
-> **Current milestone:** Phases 0–6 and 9 complete; Phases 7–8 code complete. Pending: visual check of the brand/cook/household UI in the app, Phase 7 live Instamart verification.
+> **Last updated:** 2026-11-18
+> **Current milestone:** Phases 0–6, 8 and 9 complete; Phase 7 code complete. Pending: Phase 7 live Instamart verification (needs the owner's Swiggy link), voice through a real phone microphone.
 
 ## Status key
 
@@ -564,8 +564,8 @@ Both flags default to `false` (`apps/api/src/config/env.ts`, `.env.example`).
 
 ## Phase 8 — Cook experience, translations, notifications, and feedback
 
-**Status:** Code complete — visual check pending  
-**Completion:** 95%
+**Status:** Complete (visual check 2026-11-18)  
+**Completion:** 100%
 
 ### Objective
 
@@ -581,7 +581,7 @@ Make the plan executable in the kitchen and useful over time: a cook can underst
 - [x] **Notifications** (`PlannerNotifierService`, existing in-app + Expo push): `planner_day_changed`, `planner_locked_changed`, `planner_grocery_ready`, `planner_cart_outdated`, `planner_invite` derived from the activity log (no planner write path changed), plus scheduled `planner_weekend_nudge` (Saturday 10:00–20:00 local, once per household per week, when ≥4 days of next week are open) and opt-in `planner_today_meal` (09:00–12:00 local, once a day). Actors are never notified of their own changes; cooks only get day changes; member settings (`household_member_settings`) are respected; one Redis-locked instance per minute; delivery is logged as `notifications_sent`.
 - [x] **Post-meal feedback** (`meal_feedback`): loved it / change something / skipped / moved it, per member per day, only once the day has come. Fed to auto-fill as recipe + weekday + outcome (no identities): loved ranks up (“Your household loved it last time”), skipped/change rank down, and two or more weeknight skips of slow recipes teach the planner to avoid slow dishes on weeknights. Historical plans, lists and carts are never changed.
 - [x] Mobile: cook view panel (brand “COOK VIEW” card, language chips, Haldi transliteration switch), feedback chips on past/today days, “Notify me” settings card.
-- [ ] Visual check of the brand, cook page and feedback UI in the app (blocked this session by an open Swiggy popup in the browser pane).
+- [x] Visual check of the brand, cook page and feedback UI in the app (web, 2026-11-18; see “Phase 8 visual check” below).
 
 ### Fix found while building
 
@@ -1002,3 +1002,20 @@ Still open: the AI recipe step is about 8 s of the 11–12 s tacos turn. Writing
 - So the app and server answers ("didn't catch anything", 422) were correct. The Mac's microphone audio isn't reaching the emulator.
 - macOS logged microphone permission requests at 13:00:45. The emulator was started from a shell inside Claude.app, so macOS attributes the request to that app.
 - Next: allow the microphone for the app that launched the emulator, or relaunch it from Android Studio's Device Manager. Or test voice in the web app in a browser.
+
+## CI fix, Phase 8 visual check, voice end to end, iOS rebuild (2026-11-18)
+
+**CI.** `test_dish_matrix_built_into_store_and_loaded` failed on CI (and on main): `embeddings._empty_checked_at` used `0.0` for "never checked", so with a monotonic clock under 60 s (a fresh runner or container) `load_dish_matrix()` skipped the store and returned `None`. "Never checked" is now `None`. Proven with a simulated 30 s clock (old code fails, new passes).
+
+**Phase 8 visual check (web, guest test account on localhost).** Household creation, home week view, auto-fill, Household screen (Swiggy card, cook card), cook page in Hindi with read-aloud, meal feedback (Loved it → thanks line, kept after reload). Fixed on the way:
+- Cook page and read-aloud amounts: `kitchenAmount()` (API `speech.ts`, same rule in mobile `cook-view.tsx`) shows quarters as ¼ ½ ¾ under 10, whole numbers from 10, ⅛ for a pinch. Before: “0.13 छोटा चम्मच”, “0.38 tsp”.
+- Decorative SVG icons passed native-only accessibility props to the DOM on web (React warning). Web now gets `aria-hidden`.
+- `/kitchen-circle/household` without `householdId` spun forever; it now goes to KitchenCircle home.
+
+**Voice end to end (real speech, no microphone).** macOS `say` clips sent through `POST …/chat/voice`: English (“Haldi, I want pav bhaji on Friday”) and Hindi (“हल्दी, शुक्रवार को पाव भाजी बनाओ”, transcribed as Latin Hinglish) both put Pav Bhaji on Friday; a two-part request marked Saturday out and put Rajma Chawal on Sunday; 4 s of near-silence returned 422 “I didn’t catch anything”. Still untested: the phone's own microphone/recorder.
+
+**iOS.** The generated `ios/` project was stale (generic microphone text). `expo prebuild -p ios` regenerated it with KitchenCircle's microphone text; CocoaPods needs `LANG=en_US.UTF-8` on this Mac (Ruby 4 encoding error otherwise). `LANG=en_US.UTF-8 npx expo run:ios --device "iPhone 17 Pro" --no-bundler` built, installed and opened the dev client (iPhone 17 Pro, iOS 26.5); the built `Info.plist` carries the KitchenCircle microphone text. Speaking into the simulator still depends on the Mac's microphone permission.
+
+**Phase 7.** Instamart tool names checked against the Swiggy docs (`search_products`, `get_addresses` read-only; `update_cart` replaces the cart). `SWIGGY_READ_ONLY=true` blocks every non-read tool before any network call. Blocked: the local database has no linked Swiggy account, so live read-only matching waits for the owner to connect Swiggy in KitchenCircle (Household → Connect Swiggy).
+
+**Tests.** Intelligence pytest 1026 passed, 1 skipped; API unit 65/65 (new `kitchenAmount` test); mobile typecheck clean.

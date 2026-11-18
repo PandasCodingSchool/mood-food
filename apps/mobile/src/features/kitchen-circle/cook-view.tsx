@@ -6,7 +6,17 @@ import { kc } from './brand';
 import { KcSpeakerIcon, KcSpinner, KcStopIcon } from './components';
 import { useReadAloud, type Reading, type SpeakFn } from './read-aloud';
 
-const qty = (value: number | null) => (value == null ? '' : `${Number.isInteger(value) ? value : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} `);
+const FRACTIONS: Record<number, string> = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+/** Same rule as the read-aloud text (api speech.ts kitchenAmount): ¼-step fractions under 10, whole numbers above, ⅛ for a pinch. */
+const kitchenAmount = (q: number) => {
+  if (q >= 10) return String(Math.round(q));
+  const quarters = Math.round(q * 4) / 4;
+  if (quarters === 0) return q > 0 ? '⅛' : '0';
+  const whole = Math.floor(quarters);
+  const part = FRACTIONS[quarters - whole] ?? '';
+  return whole && part ? `${whole}${part}` : part || String(whole);
+};
+const qty = (value: number | null) => (value == null ? '' : `${kitchenAmount(value)} `);
 
 /** Haldi pill switch from the brand kit's cook view. */
 function HaldiSwitch({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {

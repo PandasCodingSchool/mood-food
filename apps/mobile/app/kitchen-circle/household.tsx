@@ -47,7 +47,8 @@ export default function KitchenCircleHouseholdScreen() {
   const [swiggy, setSwiggy] = useState<{ linked: boolean; expiresAt: string | null } | null>(null);
 
   const load = useCallback(async () => {
-    if (!householdId) return;
+    // Opened without a household (a bare or old link): go to KitchenCircle home instead of loading forever.
+    if (!householdId) { router.replace('/kitchen-circle' as never); return; }
     setLoading(true); setError(null);
     try {
       const row = (await listKitchenCircleHouseholds()).find((h) => h.household.id === householdId);
@@ -62,7 +63,7 @@ export default function KitchenCircleHouseholdScreen() {
       }
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not load the household'); }
     finally { setLoading(false); }
-  }, [householdId]);
+  }, [householdId, router]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const run = async (key: string, action: () => Promise<void>) => {
