@@ -1,4 +1,4 @@
-import { Bricolage_Grotesque, Geist, Geist_Mono } from 'next/font/google';
+import { Bricolage_Grotesque, Figtree, Geist, Geist_Mono } from 'next/font/google';
 import localFont from 'next/font/local';
 
 // The app's type system (packages/tokens/src/typography.ts): Bricolage
@@ -6,6 +6,8 @@ import localFont from 'next/font/local';
 export const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['700', '800'], variable: '--font-display' });
 export const body = Geist({ subsets: ['latin'], variable: '--font-body' });
 export const mono = Geist_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-mono' });
+// KitchenCircle's body face (apps/mobile/src/features/kitchen-circle/brand.ts).
+export const kcBody = Figtree({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-kc' });
 
 // Material Symbols subset shared with the app.
 export const iconOutlined = localFont({

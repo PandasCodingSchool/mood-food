@@ -13,16 +13,6 @@ export function SwiggyMark({ size = 'md', inverse }: { size?: 'md' | 'lg'; inver
   );
 }
 
-export function PoweredBySwiggy({ className }: { className?: string }) {
-  return (
-    <div className={['powered', className ?? ''].join(' ')}>
-      <span className="eyebrow">Powered by</span>
-      <SwiggyMark />
-      <span className="powered-note">Your restaurants, riders and payments</span>
-    </div>
-  );
-}
-
 /** MoodFood + Swiggy logo lockup. */
 export function PartnerLockup({ size = 64 }: { size?: number }) {
   return (

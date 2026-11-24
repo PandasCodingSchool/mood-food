@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { Icon } from '@/components/Icon';
 import { API_URL, EARLY_ACCESS_SPOTS } from '@/lib/config';
+import { DOORS, type Door } from '@/lib/home';
 import { refreshWaitlistCount, spotsLeft, useWaitlistCount } from './EarlyAccess';
 
 type State =
@@ -11,9 +12,14 @@ type State =
   | { kind: 'done'; name: string; early: boolean | null }
   | { kind: 'error'; message: string };
 
-/** Early-access sign-up → POST /api/waitlist. The first 100 get free early access. */
+/**
+ * Early-access sign-up → POST /api/waitlist. The first 100 get free early access
+ * to both MoodFood and KitchenCircle. The "which door" choice has no waitlist
+ * column, so it goes to the analytics endpoint after a successful sign-up.
+ */
 export function Waitlist() {
   const [state, setState] = useState<State>({ kind: 'idle' });
+  const [door, setDoor] = useState<Door>('both');
   const left = spotsLeft(useWaitlistCount());
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -29,6 +35,11 @@ export function Waitlist() {
       });
       if (res.ok) {
         // Position = the real count right after joining (includes this sign-up).
+        void fetch(`${API_URL}/analytics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'waitlist_interest', properties: { door } }),
+        }).catch(() => {});
         const after = await refreshWaitlistCount();
         setState({ kind: 'done', name, early: after == null ? null : after <= EARLY_ACCESS_SPOTS });
         return;
@@ -67,6 +78,18 @@ export function Waitlist() {
 
   return (
     <form className="waitlist" onSubmit={submit}>
+      <fieldset className="doors">
+        <legend>What are you most excited about?</legend>
+        {DOORS.map((o) => (
+          <label key={o.id} className="door">
+            <input type="radio" name="door" value={o.id} checked={door === o.id} onChange={() => setDoor(o.id)} />
+            <span>
+              <strong>{o.label}</strong>
+              <span>{o.note}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <div className="field-row">
         <div className="field">
           <label htmlFor="wl-name">Full name</label>
@@ -83,7 +106,7 @@ export function Waitlist() {
         </label>
         <input id="wl-city" name="city" maxLength={255} autoComplete="address-level2" placeholder="Bengaluru" />
       </div>
-      <p className="form-note">We&rsquo;ll only email you about your early access. Mood data is never sold.</p>
+      <p className="form-note">We&rsquo;ll only email you about your early access. Your mood and household data is never sold.</p>
       {state.kind === 'error' ? (
         <p className="form-error" role="alert">
           <Icon name="error" size={18} /> {state.message}
@@ -94,7 +117,7 @@ export function Waitlist() {
         <Icon name="arrow_forward" size={20} />
       </button>
       <p className="form-powered">
-        Orders and delivery powered by <strong>Swiggy</strong>
+        Food and Instamart powered by <strong>Swiggy</strong>
       </p>
     </form>
   );

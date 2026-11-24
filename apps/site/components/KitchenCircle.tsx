@@ -1,5 +1,4 @@
 import Image from 'next/image';
-import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { KC_TAGLINE, KC_WEEK, type RingState } from '@/lib/kitchen-circle';
 
@@ -70,45 +69,5 @@ export function PlanCard() {
         </span>
       </div>
     </div>
-  );
-}
-
-const TEASER_POINTS = [
-  { icon: 'auto_awesome', text: 'Fills the open days around every diet and allergy' },
-  { icon: 'receipt_long', text: 'One grocery list for the week, Instamart-ready' },
-  { icon: 'language', text: "Your cook's menu in their language, read aloud" },
-  { icon: 'chat', text: 'Just tell Haldi what you want, in words or a voice note' },
-] as const;
-
-/** Home-page section introducing KitchenCircle. */
-export function KitchenCircleTeaser() {
-  return (
-    <section id="kitchen-circle" className="kc-wrap">
-      <div className="kc kc-teaser">
-        <div className="kc-teaser-copy">
-          <span className="kc-new">New in MoodFood</span>
-          <KcWordmark size="md" />
-          <h2 className="h2">Cooking at home? Plan the whole week together.</h2>
-          <p className="kc-lede">
-            KitchenCircle is the home-cooking side of MoodFood. Your family plans one week of meals, the groceries add
-            themselves up, and your cook knows what to make tomorrow.
-          </p>
-          <ul className="kc-points">
-            {TEASER_POINTS.map((p) => (
-              <li key={p.text}>
-                <span className="kc-point-icon">
-                  <Icon name={p.icon} size={19} />
-                </span>
-                {p.text}
-              </li>
-            ))}
-          </ul>
-          <Link className="btn kc-btn" href="/kitchen-circle">
-            Explore KitchenCircle <Icon name="arrow_forward" size={20} />
-          </Link>
-        </div>
-        <PlanCard />
-      </div>
-    </section>
   );
 }
