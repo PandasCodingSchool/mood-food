@@ -18,7 +18,7 @@ import {
 export const metadata: Metadata = {
   title: 'KitchenCircle — plan home meals together',
   description:
-    "KitchenCircle, inside MoodFood: plan the week's home cooking with your family and your cook. Auto-fill around every diet, one grocery list, and the cook's menu in their language.",
+    "KitchenCircle: plan the week's home cooking with your family and your cook. Auto-fill around every diet, one grocery list, and the cook's menu in their language.",
   alternates: { canonical: '/kitchen-circle' },
 };
 
@@ -32,7 +32,7 @@ export default function KitchenCirclePage() {
         </div>
         <div className="container kc-hero-body">
           <div className="kc-hero-copy">
-            <p className="eyebrow">New in MoodFood · KitchenCircle</p>
+            <p className="eyebrow">KitchenCircle · this week · cook at home</p>
             <h1 className="display">{KC_TAGLINE}</h1>
             <p className="lede">
               Plan the week&rsquo;s home cooking with your family and your cook. KitchenCircle fills the empty days
@@ -269,8 +269,11 @@ export default function KitchenCirclePage() {
         <section className="container kc-section kc-cta-section">
           <div className="kc-cta">
             <KcWordmark size="lg" />
-            <h2 className="h2">Get KitchenCircle with MoodFood&rsquo;s early access.</h2>
-            <p className="kc-body">The first 100 people on the list get free early access before the public launch.</p>
+            <h2 className="h2">One sign-up. Both doors.</h2>
+            <p className="kc-body">
+              The first 100 people on the list get free early access to KitchenCircle and MoodFood before the public
+              launch.
+            </p>
             <Link className="btn kc-btn btn-lg" href="/#early-access">
               Claim my spot <Icon name="arrow_forward" size={20} />
             </Link>

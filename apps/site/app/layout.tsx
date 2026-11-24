@@ -4,14 +4,14 @@ import type { ReactNode } from 'react';
 import { Footer } from '@/components/Footer';
 import { ThemeRoot } from '@/components/ThemeRoot';
 import { SITE_URL } from '@/lib/config';
-import { body, display, iconFilled, iconOutlined, mono } from './fonts';
+import { body, display, iconFilled, iconOutlined, kcBody, mono } from './fonts';
 import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: 'MoodFood — food that matches your mood', template: '%s · MoodFood' },
+  title: { default: 'MoodFood & KitchenCircle — order the mood, cook the week', template: '%s · MoodFood' },
   description:
-    'MoodFood reads how you feel, the weather outside and the time of day, then picks what you will actually want to eat. Order it on Swiggy in one tap.',
+    'Two ways to eat, one app. MoodFood picks tonight’s dish from your mood, the weather and the hour, and Swiggy delivers it. KitchenCircle plans the week’s home cooking with your family and your cook.',
   applicationName: 'MoodFood',
   openGraph: { type: 'website', siteName: 'MoodFood', locale: 'en_IN' },
   twitter: { card: 'summary_large_image' },
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={[display.variable, body.variable, mono.variable, iconOutlined.variable, iconFilled.variable].join(' ')}
+      className={[display.variable, body.variable, mono.variable, kcBody.variable, iconOutlined.variable, iconFilled.variable].join(' ')}
     >
       <body>
         <ThemeRoot>

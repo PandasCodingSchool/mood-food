@@ -133,7 +133,7 @@ export const KC_GROCERY: Array<{ group: string; items: Array<{ name: string; qty
 export const KC_FAQ: Array<{ q: string; a: string }> = [
   {
     q: 'Is KitchenCircle a separate app?',
-    a: 'No. It lives inside MoodFood. Switch to it from the home screen when you’re planning food at home instead of ordering in.',
+    a: 'It ships in the same app as MoodFood: one download, two ways to eat. Switch to KitchenCircle from the home screen when you’re cooking at home, and to MoodFood when you’re ordering in.',
   },
   {
     q: 'Does my cook need to download anything?',
@@ -149,6 +149,6 @@ export const KC_FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: 'When can I use it?',
-    a: 'KitchenCircle arrives with MoodFood’s early access. Claim a spot and you’ll get both.',
+    a: 'KitchenCircle and MoodFood open together in early access. One sign-up gets you both.',
   },
 ];

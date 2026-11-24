@@ -1,27 +1,24 @@
-import { hueTile } from '@moodfood/tokens';
-import Image from 'next/image';
-import { EarlyAccessPill, SpotsMeter, SpotsText } from '@/components/EarlyAccess';
-import { HeroDemo } from '@/components/HeroDemo';
-import { KitchenCircleTeaser } from '@/components/KitchenCircle';
+import { SpotsMeter } from '@/components/EarlyAccess';
+import { KitchenCircleChapter, MoodFoodChapter } from '@/components/Chapters';
 import { Icon } from '@/components/Icon';
-import { LiveClock } from '@/components/LiveClock';
 import { Nav } from '@/components/Nav';
-import { PartnerLockup, PoweredBySwiggy } from '@/components/PoweredBySwiggy';
+import { SeamHero } from '@/components/SeamHero';
 import { Waitlist } from '@/components/Waitlist';
-import { FAQ, GAMES, HERO_PHOTOS, PERKS, SIGNALS, STEPS, SWIGGY_POINTS, TICKER } from '@/lib/content';
+import { FAQ } from '@/lib/content';
+import { DUAL_TICKER } from '@/lib/home';
 
 function Ticker() {
   const items = (copy: number) =>
-    TICKER.map(([moment, dish]) => (
-      <span key={`${copy}-${dish}`} className="ticker-item">
-        <span className="ticker-moment">{moment}</span>
-        <Icon name="arrow_forward" size={22} className="ticker-arrow" />
-        {dish}
+    DUAL_TICKER.map((t) => (
+      <span key={`${copy}-${t.dish}`} className="ticker-item">
+        <span className={t.tag === 'MoodFood' ? 'ticker-tag ticker-tag-mf' : 'ticker-tag ticker-tag-kc'}>{t.tag}</span>
+        <span className="ticker-moment">{t.moment}</span>
+        {t.dish}
         <span className="ticker-dot" />
       </span>
     ));
   return (
-    <div className="ticker">
+    <div className="ticker ticker-dual">
       <div className="ticker-mask">
         <div className="ticker-track">
           {items(0)}
@@ -37,169 +34,94 @@ function Ticker() {
 export default function Home() {
   return (
     <>
-      <header className="hero hero-home">
-        <div className="hero-wall" aria-hidden>
-          {HERO_PHOTOS.map((p) => (
-            <div key={p} className="hero-wall-cell">
-              <Image src={`/food/${p}.jpg`} alt="" fill sizes="(max-width: 700px) 50vw, 25vw" />
-            </div>
-          ))}
-        </div>
-        <div className="hero-veil" aria-hidden />
-        <div className="container">
-          <Nav current="home" />
-        </div>
-        <div id="top" className="container hero-body">
-          <div className="hero-copy">
-            <EarlyAccessPill />
-            <p className="eyebrow eyebrow-acc hero-kicker">
-              Tired · rainy · <LiveClock />
-            </p>
-            <h1 className="display">Tell us how you feel. We&rsquo;ll handle dinner.</h1>
-            <p className="lede">
-              No more 40-minute scroll. MoodFood picks the dish that fits your mood, your weather and your evening, then
-              Swiggy brings it over.
-            </p>
-            <div className="cta-row">
-              <a className="btn btn-primary btn-lg" href="#early-access">
-                Claim my spot <Icon name="arrow_forward" size={20} />
-              </a>
-              <SpotsText />
-            </div>
-            <PoweredBySwiggy className="hero-powered" />
+      <header className="home-header">
+        <div className="home-bar">
+          <div className="container">
+            <Nav current="home" />
           </div>
-          <HeroDemo />
         </div>
+        <SeamHero />
         <Ticker />
       </header>
 
       <main>
-        <section className="section container">
-          <p className="eyebrow eyebrow-acc">It reads the room</p>
-          <h2 className="h2 narrow">Not just what you like. What you need right now.</h2>
-          <ul className="signals">
-            {SIGNALS.map((s) => (
-              <li key={s.title} className="card signal">
-                <span className="tile tile-lg" style={{ background: hueTile(s.hue) }}>
-                  <Icon name={s.icon} size={28} />
+        <section id="together" className="together">
+          <div className="together-inner">
+            <div className="together-head">
+              <p className="chapter-kicker chapter-kicker-mf">One app · two ways to eat</p>
+              <h2 className="chapter-h">Order when you&rsquo;re tired. Cook when you&rsquo;re together. It remembers both.</h2>
+            </div>
+            <div className="together-grid">
+              <article className="together-card together-mf">
+                <span className="together-tag">MoodFood</span>
+                <h3>Learns your moods</h3>
+                <ul>
+                  <li>Check-ins: tired, happy, stressed</li>
+                  <li>What you ordered, and how you felt after</li>
+                  <li>Rain, heat and 2 AM cravings</li>
+                </ul>
+                <span className="together-flow">Gives → your taste</span>
+              </article>
+              <article className="together-card together-core">
+                <span className="together-heart" aria-hidden>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z" />
+                  </svg>
                 </span>
-                <h3 className="h3">{s.title}</h3>
-                <p className="muted">{s.body}</p>
-                <div className="signal-photo">
-                  <Image src={`/food/${s.photo}.jpg`} alt="" fill sizes="(max-width: 700px) 100vw, 380px" />
-                  <p className="signal-example">
-                    <Icon name="auto_awesome" size={18} />
-                    <span>{s.example}</span>
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section id="how" className="section container">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow eyebrow-acc">How it works</p>
-              <h2 className="h2">Twenty seconds to dinner.</h2>
+                <h3>Your taste</h3>
+                <p>Diets, allergies and the cuisines you love. Set once, kept by both. Allergies are never a suggestion.</p>
+              </article>
+              <article className="together-card together-kc">
+                <span className="together-tag">KitchenCircle</span>
+                <h3>Learns your household</h3>
+                <ul>
+                  <li>Who&rsquo;s eating, every day</li>
+                  <li>House rules: veg Tuesdays, quick weeknights</li>
+                  <li>Loved it, change something, skipped</li>
+                </ul>
+                <span className="together-flow">your taste ← Gives</span>
+              </article>
             </div>
-            <p className="muted section-aside">No endless scrolling. No 40-tab debate. Check in, see your match, eat.</p>
-          </div>
-          <ol className="steps">
-            {STEPS.map((s, i) => (
-              <li key={s.title} className="card step">
-                <span className="step-n">{`0${i + 1}`}</span>
-                <h3 className="h3">{s.title}</h3>
-                <p className="muted">{s.body}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section id="games" className="section band">
-          <div className="container">
-            <p className="eyebrow eyebrow-acc">Decision modes</p>
-            <h2 className="h2 narrow">Can&rsquo;t decide? Play it out.</h2>
-            <p className="muted section-lede">
-              Quick games, each already filtered to your mood, so there&rsquo;s no bad outcome. Swipe, spin, battle it
-              out in a bracket, or cook from what&rsquo;s in the fridge.
-            </p>
-            <ul className="games">
-              {GAMES.map((g) => (
-                <li key={g.title} className="card game">
-                  <span className="tile" style={{ background: hueTile(g.hue) }}>
-                    <Icon name={g.icon} size={24} />
-                  </span>
-                  <div>
-                    <h3 className="h4">
-                      {g.title}
-                      {g.soon ? <span className="tag">Coming soon</span> : null}
-                    </h3>
-                    <p className="muted small">{g.desc}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <p className="together-note">Use one, or both. Each works on its own, and Swiggy powers both.</p>
           </div>
         </section>
 
-        <KitchenCircleTeaser />
+        <MoodFoodChapter />
 
-        <section id="swiggy" className="swiggy-wrap">
-          <div className="swiggy-panel">
-            <div className="swiggy-ring" aria-hidden />
-            <div className="swiggy-copy">
-              <PartnerLockup />
-              <h2 className="display-md">Powered by Swiggy.</h2>
-              <p className="swiggy-lede">
-                MoodFood decides. Swiggy delivers. Same restaurants you already love, same riders, same checkout, now with
-                a brain for what you&rsquo;re in the mood for.
-              </p>
+        <div className="chapter-seam" aria-hidden />
+
+        <KitchenCircleChapter />
+
+        <section id="swiggy" className="swiggy-dual">
+          <div className="swiggy-dual-grid">
+            <div className="swiggy-half swiggy-half-food">
+              <span className="swiggy-half-tag">Powered by Swiggy · Food</span>
+              <h2>Tonight&rsquo;s dish, delivered.</h2>
+              <p>MoodFood picks from Swiggy restaurants near you. Live menus, live prices, and the checkout and riders you trust.</p>
             </div>
-            <ul className="swiggy-points">
-              {SWIGGY_POINTS.map((p) => (
-                <li key={p.title}>
-                  <span className="swiggy-icon">
-                    <Icon name={p.icon} size={24} />
-                  </span>
-                  <div>
-                    <h3 className="h4">{p.title}</h3>
-                    <p>{p.body}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="swiggy-half swiggy-half-im">
+              <span className="swiggy-half-tag">Powered by Swiggy · Instamart</span>
+              <h2>The week&rsquo;s groceries, in one cart.</h2>
+              <p>KitchenCircle turns the plan into real Instamart packs at real prices. Nothing is ordered until the owner checks the cart.</p>
+            </div>
           </div>
         </section>
 
-        <section id="early-access" className="section">
+        <section id="early-access" className="ea-dual">
           {/* Old shared links point at /#waitlist. */}
           <span id="waitlist" className="anchor-alias" aria-hidden />
-          <div className="container">
-            <div className="ea-panel">
-              <div className="ea-glow" aria-hidden />
-              <div className="ea-copy">
-                <p className="eyebrow">Founding members</p>
-                <h2 className="display-md">Claim your early access.</h2>
-                <p className="lede">
-                  MoodFood is coming soon to iPhone and Android. The first 100 people to sign up get free early access
-                  before the public launch.
-                </p>
-                <ul className="perks">
-                  {PERKS.map((p) => (
-                    <li key={p.text}>
-                      <span className="perk-icon">
-                        <Icon name={p.icon} size={19} />
-                      </span>
-                      {p.text}
-                    </li>
-                  ))}
-                </ul>
-                <SpotsMeter />
-              </div>
-              <div className="ea-form">
-                <Waitlist />
-              </div>
+          <div className="ea-dual-grid">
+            <div className="ea-dual-copy">
+              <p className="chapter-kicker chapter-kicker-mf">Founding members</p>
+              <h2 className="chapter-h">One sign-up. Both doors.</h2>
+              <p className="chapter-lede">
+                The first 100 people get free early access to MoodFood and KitchenCircle on iPhone and Android, before the
+                public launch.
+              </p>
+              <SpotsMeter />
+            </div>
+            <div className="ea-form ea-dual-form">
+              <Waitlist />
             </div>
           </div>
         </section>
