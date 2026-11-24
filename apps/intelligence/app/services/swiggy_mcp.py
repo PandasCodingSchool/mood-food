@@ -178,6 +178,7 @@ READ_ONLY_TOOLS = frozenset({
     "get_addresses", "search_restaurants", "search_menu", "get_restaurant_menu",
     "get_food_orders", "get_food_order_details",  # order history for the preference brain
     "get_orders", "your_go_to_items",             # Instamart (grocery) history — separate MCP server
+    "search_products",  # Instamart product search: docs mark it Stage "Discover", Behaviour "read-only" (Oct 2026)
 })
 
 

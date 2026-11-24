@@ -67,6 +67,44 @@ export class IntelligenceService {
     return (await res.json()) as T;
   }
 
+  /**
+   * NDJSON stream: calls `onLine` for each line (e.g. `{"progress": "..."}`) and resolves with the line that carries
+   * `result`. Throws UpstreamError on non-2xx, timeout, an `error` line, or a stream that ends without a result.
+   */
+  async ndjson<T = unknown>(path: string, opts: { body: unknown; timeoutMs: number; requestId?: string }, onLine: (line: Record<string, unknown>) => void): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+    try {
+      const res = await fetch(this.env.AI_SERVICE_URL + path, {
+        method: 'POST', headers: this.headers(opts), body: JSON.stringify(opts.body), signal: controller.signal,
+      });
+      if (!res.ok || !res.body) throw new UpstreamError(`Intelligence service ${res.status} on ${path}`, res.status);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        let newline: number;
+        while ((newline = buffer.indexOf('\n')) >= 0) {
+          const text = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          if (!text) continue;
+          const line = JSON.parse(text) as Record<string, unknown>;
+          if ('result' in line) return line.result as T;
+          if ('error' in line) throw new UpstreamError(`Intelligence stream error on ${path}`);
+          onLine(line);
+        }
+        if (done) throw new UpstreamError(`Intelligence stream ended without a result on ${path}`);
+      }
+    } catch (err) {
+      if (err instanceof UpstreamError) throw err;
+      throw new UpstreamError(isAbort(err) ? `timeout on ${path}` : (err as Error).message);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** Learning-service calls are best-effort: the signals log can be replayed. */
   async tryJson<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T | null> {
     try {

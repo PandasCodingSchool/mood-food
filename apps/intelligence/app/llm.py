@@ -118,13 +118,21 @@ class JsonChat:
         )
 
 
-async def parse_structured(kind: str, model: str, messages: list[dict], schema: type, temperature: Optional[float] = None):
-    """Structured output (Pydantic ``schema``). Raises if the model refuses."""
+async def parse_structured(kind: str, model: str, messages: list[dict], schema: type, temperature: Optional[float] = None,
+                           reasoning_effort: Optional[str] = None):
+    """Structured output (Pydantic ``schema``). Raises if the model refuses. ``reasoning_effort`` is optional and dropped
+    (with a retry) if the model doesn't accept it."""
+    kwargs = {"model": model, "messages": messages, "response_format": schema, **sampling_kwargs(temperature)}
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
     with timed_call(kind, "openai", model) as fields:
-        completion = await _create(
-            async_openai().chat.completions.parse,
-            {"model": model, "messages": messages, "response_format": schema, **sampling_kwargs(temperature)},
-        )
+        try:
+            completion = await _create(async_openai().chat.completions.parse, kwargs)
+        except BadRequestError as exc:
+            if "reasoning_effort" not in kwargs or "reasoning" not in str(exc):
+                raise
+            kwargs.pop("reasoning_effort")
+            completion = await _create(async_openai().chat.completions.parse, kwargs)
         if completion.usage:
             fields["tokens"] = completion.usage.total_tokens
     parsed = completion.choices[0].message.parsed

@@ -172,3 +172,22 @@ def test_suggested_page(lab_client):
     at = _app(PAGES / "8_Suggested.py", lab_client)
     _button(at, "✨ Suggest").click().run()
     assert not at.exception and any(m.label == "Suggestions logged" for m in at.metric)
+
+
+def test_kitchen_circle_planner_lab(lab_client, monkeypatch):
+    # Node-backed tabs must degrade to a notice, never crash, when the API isn't reachable.
+    monkeypatch.setenv("LAB_NODE_API_URL", "http://127.0.0.1:9")
+    at = _app(PAGES / "9_KitchenCircle.py", lab_client)
+    assert not at.exception
+    _button(at, "Propose the week").click().run()
+    assert not at.exception
+    assert any("Proposed" in s.value for s in at.success)
+    _button(at, "Simulate").click().run()
+    _button(at, "Interpret").click().run()
+    _button(at, "Optimize packs").click().run()
+    _button(at, "Preview cook view").click().run()
+    _button(at, "Aggregate sample week").click().run()
+    assert any("Needs the MoodFood API" in i.value for i in at.info)
+    _button(at, "Load notification copy").click().run()
+    _button(at, "Compare proposals").click().run()
+    assert not at.exception

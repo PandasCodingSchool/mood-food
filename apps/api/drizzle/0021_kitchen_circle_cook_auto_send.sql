@@ -1,0 +1,3 @@
+ALTER TABLE "households" ADD COLUMN "cook_auto_send" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "households" ADD COLUMN "designated_cook_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "households" ADD CONSTRAINT "households_designated_cook_user_id_users_id_fk" FOREIGN KEY ("designated_cook_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

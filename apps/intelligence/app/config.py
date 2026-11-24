@@ -10,6 +10,22 @@ class Settings(BaseSettings):
     openai_mini_model: str = "gpt-6-luna"
     # Vision + structured output (food-photo moderation, recipes).
     openai_vision_model: str = "gpt-6-luna"
+    # KitchenCircle chat: the agent that decides and calls tools, and the (cheapest) model that writes its replies.
+    kitchen_circle_agent_model: str = "gpt-6-luna"
+    # Replies: cheapest model that writes them correctly. Measured 2026-10-28 on the same outcomes: gpt-5-nano ($0.05/$0.40)
+    # invented facts at minimal reasoning and returned empty at low; gpt-6-luna ($0.10/$0.50) with reasoning off was ~1.3 s
+    # and correct every time. gpt-4.1-nano is deprecated.
+    kitchen_circle_reply_model: str = "gpt-6-luna"
+    kitchen_circle_reply_reasoning: str = "none"
+    # Sent as reasoning_effort with the agent's tools ("" to omit for models that don't take it).
+    kitchen_circle_agent_reasoning: str = "none"
+    # Recipe writing: reasoning off is ~1/3 faster with the same structured output ("" = model default).
+    kitchen_circle_recipe_reasoning: str = "none"
+    # Voice in the chat: cheapest transcription model on OpenAI's pricing page (2026-10-28: $0.003/min).
+    kitchen_circle_transcribe_model: str = "gpt-4o-mini-transcribe"
+    # Read-aloud for the cook view (recipe + ingredients in the cook's language).
+    kitchen_circle_tts_model: str = "gpt-4o-mini-tts"
+    kitchen_circle_tts_voice: str = "coral"
     # Some current models reject `temperature`; scripts/openai_smoke.py tells you.
     openai_supports_temperature: bool = True
     llm_timeout_s: float = 30.0
